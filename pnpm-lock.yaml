@@ -105,6 +105,10 @@ importers:
       three:
         specifier: 0.171.0
         version: 0.171.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.171.0
+        version: 0.171.0
 
   packages/shared: {}
 

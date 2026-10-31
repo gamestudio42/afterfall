@@ -26,7 +26,7 @@ pnpm dev          # http://localhost:5173
 | `pnpm sim [seed] [days]` | Headless game with a scripted player, prints a JSON report |
 | `pnpm sweep [seeds] [first] [open\|fort]` | Win rates of both scripted players over many seeds |
 
-Every push to `main` runs the checks and publishes `apps/web/dist` to GitHub Pages. The build uses relative paths, so it runs from any folder.
+Every push to `main` runs the checks and publishes `apps/web/dist` to GitHub Pages (the `gh-pages` branch). Every pull request from this repository also gets a playable preview at `https://gamestudio42.github.io/afterfall/pr-preview/pr-<number>/`, linked in a comment on the PR and removed when it closes. The build uses relative paths, so it runs from any folder.
 
 ## Controls
 

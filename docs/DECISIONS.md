@@ -9,3 +9,4 @@
 7. **No Web Worker yet.** The simulation costs well under 1 ms per frame. The core is DOM-free, so moving it to a worker later is mechanical.
 8. **Time freezes while an event card is open or before a base is chosen**, so the player is never punished for reading.
 9. **Units are drawn about 1.9× life size** so they read at strategic zoom levels.
+13. **Pages from the `gh-pages` branch, with PR previews.** GitHub Pages serves a single site, so `main` is published to the branch root and each pull request to `pr-preview/pr-<number>/` in the same branch (`rossjrw/pr-preview-action`). The main deploy keeps that folder, and a closed PR removes its own.

@@ -151,3 +151,54 @@ test("the minimap moves the camera where it is clicked", async ({ page }) => {
   expect(target.y).toBeCloseTo(0.2, 1);
   await page.screenshot({ path: "test-results/minimap.png" });
 });
+
+test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }) => {
+  const { syntheticOverpass } = await import("../../packages/world/tests/fixtures/osm");
+  let calls = 0;
+  await page.route("**/api/interpreter", async (route) => {
+    calls++;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(syntheticOverpass()) });
+  });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto("/");
+  await page.getByTestId("new-game").click();
+  await page.getByTestId("map-real").click();
+  await expect(page.getByTestId("place-selected")).toHaveText("São Paulo · Sé");
+  await page.getByTestId("start-real").click();
+  await expect(page.getByTestId("help")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("map-credit")).toContainText("OpenStreetMap");
+  const info = await page.evaluate(() => {
+    const sim = (window as unknown as Win).__afterfall.sim;
+    return { source: sim.city.source?.kind, buildings: sim.city.buildings.length, footprint: !!sim.city.buildings[0].footprint };
+  });
+  expect(info.source).toBe("osm");
+  expect(info.buildings).toBeGreaterThan(80);
+  expect(info.footprint).toBe(true);
+  expect(calls).toBe(1);
+
+  // Choose a base by clicking an imported building.
+  const target = await page.evaluate(() => {
+    const g = (window as unknown as Win).__afterfall;
+    const b = g.sim.city.buildings.find((x: { type: string }) => x.type === "house");
+    const c = b.footprint.reduce((s: { x: number; y: number }, p: { x: number; y: number }) => ({ x: s.x + p.x / b.footprint.length, y: s.y + p.y / b.footprint.length }), { x: 0, y: 0 });
+    g.renderer.rts.jumpTo(c.x, c.y);
+    return { index: b.index, c, h: b.height };
+  });
+  await page.waitForTimeout(400);
+  const p = await page.evaluate((t) => (window as unknown as Win).__afterfall.renderer.toScreen(t.c.x, t.c.y, t.h), target);
+  await page.mouse.click(p.x, p.y);
+  await expect(page.getByTestId("set-base")).toBeVisible();
+  await page.getByTestId("set-base").click();
+  await expect(page.getByTestId("pop")).toHaveText("4");
+  await page.screenshot({ path: "test-results/real-place.png" });
+
+  // Saving keeps the map, so a reload continues on the same place.
+  await page.getByTestId("save").click();
+  await page.waitForTimeout(500);
+  await page.reload();
+  await page.getByTestId("continue").click();
+  await expect(page.getByTestId("map-credit")).toContainText("São Paulo");
+  expect(errors).toEqual([]);
+});

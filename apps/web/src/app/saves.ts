@@ -10,6 +10,8 @@ export interface SaveSlot {
   day: number;
   survivors: number;
   seed: number;
+  /** Name of the real place, for games on imported maps. */
+  place?: string;
   data: string;
 }
 
@@ -39,6 +41,7 @@ export async function putSave(name: string, save: SaveGame): Promise<void> {
     day: save.metadata.day,
     survivors: save.metadata.survivors,
     seed: save.worldSeed,
+    place: save.map?.source?.label,
     data: JSON.stringify(save),
   };
   await tx("readwrite", (s) => s.put(slot));

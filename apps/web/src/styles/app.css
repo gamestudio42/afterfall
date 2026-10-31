@@ -204,3 +204,22 @@ canvas.world.hidden { visibility: hidden; }
   .side-panel { width: 260px; }
   .alerts { width: 240px; }
 }
+
+/* Real places (OpenStreetMap) */
+.menu-card { max-height: calc(100vh - 48px); overflow-y: auto; }
+.tabs { display: flex; gap: 6px; }
+.tabs .chip { flex: 1; padding: 7px 10px; font-size: 13px; }
+.place-picker .small { font-size: 12px; margin: 0; }
+.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.preset-grid .chip, .place-results .chip { text-align: left; border-radius: 8px; padding: 6px 9px; white-space: normal; }
+.place-results { display: flex; flex-direction: column; gap: 4px; }
+.place-picker .row { align-items: center; flex-wrap: wrap; }
+.place-picker input { min-width: 0; }
+.credits-inline { font-size: 11px; color: var(--muted); margin: 0; }
+.credits-inline a, .map-credit a { color: inherit; }
+.map-credit {
+  position: absolute; right: 12px; bottom: 58px; font-size: 11px; color: var(--muted);
+  background: rgba(12, 15, 20, 0.6); padding: 1px 6px; border-radius: 4px;
+}
+@media (max-width: 480px) { .preset-grid { grid-template-columns: 1fr; } }
+.menu-buttons + .menu-buttons { margin-top: 10px; }

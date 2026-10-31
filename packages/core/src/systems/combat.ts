@@ -1,4 +1,5 @@
 import { WEAPONS } from "@afterfall/content";
+import { closestOnPolygon } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
 import type { Entity } from "../state";
 import { emitNoise } from "./infected";
@@ -81,7 +82,8 @@ function windowFire(sim: Simulation, e: Entity): void {
   if (s.ammo === 0) return;
   const weapon = WEAPONS[s.weapon];
   const range = weapon.range * WINDOW_RANGE;
-  const r = sim.city.buildings[s.inside].rect;
+  const def = sim.city.buildings[s.inside];
+  const r = def.rect;
   const cx = r.x + r.w / 2;
   const cy = r.y + r.h / 2;
   let target: Entity | null = null;
@@ -94,8 +96,9 @@ function windowFire(sim: Simulation, e: Entity): void {
     const ox = o.transform.x;
     const oy = o.transform.y;
     // Shoot from the point of the wall closest to the target.
-    const wx = Math.max(r.x, Math.min(r.x + r.w, ox));
-    const wy = Math.max(r.y, Math.min(r.y + r.h, oy));
+    const w = def.footprint ? closestOnPolygon(ox, oy, def.footprint) : { x: Math.max(r.x, Math.min(r.x + r.w, ox)), y: Math.max(r.y, Math.min(r.y + r.h, oy)) };
+    const wx = w.x;
+    const wy = w.y;
     const d = Math.hypot(ox - wx, oy - wy);
     if (d > bestD || (d === bestD && target && o.id > target.id)) return;
     const len = d || 1;

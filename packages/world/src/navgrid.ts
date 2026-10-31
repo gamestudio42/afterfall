@@ -1,4 +1,4 @@
-import type { Vec2 } from "@afterfall/shared";
+import { pointInPolygon, polygonBounds, polygonCentroid, type Vec2 } from "@afterfall/shared";
 import type { CityMap } from "./city";
 import { MinHeap } from "./heap";
 
@@ -63,6 +63,10 @@ export class NavGrid {
   static fromCity(city: CityMap): NavGrid {
     const g = new NavGrid(city.width, city.height, city.cellSize);
     for (const b of city.buildings) {
+      if (b.footprint) {
+        g.stampPolygon(b.footprint, b.index);
+        continue;
+      }
       const x0 = Math.floor(b.rect.x / g.cell);
       const y0 = Math.floor(b.rect.y / g.cell);
       const x1 = Math.ceil((b.rect.x + b.rect.w) / g.cell);
@@ -76,6 +80,32 @@ export class NavGrid {
         }
     }
     return g;
+  }
+
+  /** Marks the cells whose centers fall inside a building outline (at least one cell). */
+  stampPolygon(poly: Vec2[], building: number): number {
+    const r = polygonBounds(poly);
+    const x0 = Math.max(0, Math.floor(r.x / this.cell));
+    const y0 = Math.max(0, Math.floor(r.y / this.cell));
+    const x1 = Math.min(this.cols - 1, Math.floor((r.x + r.w) / this.cell));
+    const y1 = Math.min(this.rows - 1, Math.floor((r.y + r.h) / this.cell));
+    let n = 0;
+    for (let y = y0; y <= y1; y++)
+      for (let x = x0; x <= x1; x++) {
+        if (!pointInPolygon((x + 0.5) * this.cell, (y + 0.5) * this.cell, poly)) continue;
+        const i = this.index(x, y);
+        this.kind[i] = CellKind.Building;
+        this.buildingAt[i] = building;
+        n++;
+      }
+    if (n === 0) {
+      const c = polygonCentroid(poly);
+      const i = this.cellOf(c.x, c.y);
+      this.kind[i] = CellKind.Building;
+      this.buildingAt[i] = building;
+      n = 1;
+    }
+    return n;
   }
 
   inBounds(cx: number, cy: number): boolean {

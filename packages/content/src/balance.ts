@@ -35,8 +35,8 @@ export const BALANCE = {
     { waves: 1, walkers: 6, runners: 0, brutes: 0 },
     { waves: 2, walkers: 7, runners: 2, brutes: 0 },
     { waves: 2, walkers: 14, runners: 4, brutes: 0 },
-    { waves: 3, walkers: 15, runners: 6, brutes: 1 },
-    { waves: 3, walkers: 18, runners: 8, brutes: 2 },
+    { waves: 3, walkers: 18, runners: 7, brutes: 1 },
+    { waves: 3, walkers: 22, runners: 9, brutes: 2 },
   ] as (HordeSpec | null)[],
   /** Nights to survive for victory. */
   nightsToWin: 5,

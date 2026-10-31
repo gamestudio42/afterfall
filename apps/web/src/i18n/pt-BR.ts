@@ -237,6 +237,7 @@ export const ptBR: Record<string, string> = {
   "dir.east": "leste",
   "dir.west": "oeste",
 
+  "minimap.title": "Minimapa: clique ou arraste para mover a câmera",
   "help.title": "Controles",
   "help.camera": "WASD / setas / borda da tela: mover câmera · Q/E ou botão direito + arrastar: girar · Roda: zoom",
   "help.select": "Clique: selecionar · Arrastar: seleção múltipla · Shift: adicionar à seleção",

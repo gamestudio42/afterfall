@@ -19,6 +19,7 @@ pnpm dev          # http://localhost:5173
 | `pnpm test:e2e` | Playwright: browser workflows (starts the dev server) |
 | `pnpm typecheck` | TypeScript over the whole monorepo |
 | `pnpm sim [seed] [days]` | Headless game with a scripted player, prints a JSON report |
+| `pnpm sweep [seeds] [first] [open\|fort]` | Win rates of both scripted players over many seeds |
 
 ## Controls
 

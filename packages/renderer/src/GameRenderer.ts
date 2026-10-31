@@ -3,6 +3,7 @@ import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } fr
 import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
+import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround } from "./cityMeshes";
 
 export type OverlayMode = "none" | "resources" | "danger";
@@ -55,9 +56,7 @@ export class GameRenderer {
   private hemi = new THREE.HemisphereLight(0xbfd4e6, 0x3a3328, 1);
   private hqLight = new THREE.PointLight(0xffb060, 0, 60, 1.6);
   private cityGroup: THREE.Group | null = null;
-  private buildings: THREE.InstancedMesh | null = null;
-  private roofs: THREE.InstancedMesh | null = null;
-  private windows: THREE.InstancedMesh | null = null;
+  private buildings: BuildingBatch | null = null;
   private survivors: THREE.InstancedMesh;
   private heads: THREE.InstancedMesh;
   private packs: THREE.InstancedMesh;
@@ -78,6 +77,7 @@ export class GameRenderer {
   private blueprintIds: EntityId[] = [];
   private markers: THREE.Group = new THREE.Group();
   selection: Selection = { units: [], building: -1, structure: -1 };
+  private selectionOutlineOf = -1;
   buildPreview: BuildPreview | null = null;
   overlay: OverlayMode = "none";
   hoverBuilding = -1;
@@ -136,8 +136,7 @@ export class GameRenderer {
     this.blueprints = this.instanced(box, new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.35, depthWrite: false }), MAX_STRUCTURES, false);
     this.preview = this.instanced(box, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }), 400, false);
 
-    const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
-    this.selectionBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffd34d }));
+    this.selectionBox = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd34d }));
     this.selectionBox.visible = false;
     this.scene.add(this.selectionBox);
 
@@ -157,7 +156,7 @@ export class GameRenderer {
     this.tracers.frustumCulled = false;
     this.scene.add(this.tracers);
 
-    this.windowMat = new THREE.MeshBasicMaterial({ color: 0xffc66b, transparent: true, opacity: 0 });
+    this.windowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
   }
 
   private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number, shadows: boolean): THREE.InstancedMesh {
@@ -175,32 +174,18 @@ export class GameRenderer {
     this.sim = sim;
     if (this.cityGroup) {
       this.scene.remove(this.cityGroup);
-      for (const m of [this.buildings, this.roofs, this.windows]) if (m) this.scene.remove(m);
+    }
+    if (this.buildings) {
+      this.scene.remove(this.buildings.mesh, this.buildings.windows);
+      this.buildings.dispose();
     }
     const city = sim.city;
+    this.selectionOutlineOf = -1;
     this.cityGroup = buildCityGround(city);
     this.scene.add(this.cityGroup);
 
-    const n = city.buildings.length;
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    box.translate(0, 0.5, 0);
-    this.buildings = new THREE.InstancedMesh(box, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }), n);
-    this.roofs = new THREE.InstancedMesh(box, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), n);
-    // Window bands: thin slabs slightly larger than the building on two floors.
-    this.windows = new THREE.InstancedMesh(box, this.windowMat, n);
-    this.buildings.castShadow = this.buildings.receiveShadow = true;
-    this.roofs.castShadow = this.roofs.receiveShadow = true;
-    city.buildings.forEach((b, i) => {
-      const cx = b.rect.x + b.rect.w / 2;
-      const cz = b.rect.y + b.rect.h / 2;
-      tmpM.compose(tmpV.set(cx, 0, cz), tmpQ.identity(), tmpS.set(b.rect.w, b.height, b.rect.h));
-      this.buildings!.setMatrixAt(i, tmpM);
-      tmpM.compose(tmpV.set(cx, b.height, cz), tmpQ.identity(), tmpS.set(b.rect.w - 0.8, 0.5, b.rect.h - 0.8));
-      this.roofs!.setMatrixAt(i, tmpM);
-      tmpM.compose(tmpV.set(cx, Math.min(b.height - 1.6, 1.6), cz), tmpQ.identity(), tmpS.set(b.rect.w + 0.08, 0.7, b.rect.h + 0.08));
-      this.windows!.setMatrixAt(i, tmpM);
-    });
-    this.scene.add(this.buildings, this.roofs, this.windows);
+    this.buildings = new BuildingBatch(city.buildings, this.windowMat);
+    this.scene.add(this.buildings.mesh, this.buildings.windows);
     this.refreshBuildingColors();
     this.rts.setBounds(0, city.width, 0, city.height);
     this.rts.jumpTo(city.width / 2, city.height / 2);
@@ -210,7 +195,9 @@ export class GameRenderer {
   /** Recolors buildings for exploration, functions and overlays. */
   refreshBuildingColors(): void {
     const sim = this.sim;
-    if (!sim || !this.buildings || !this.roofs || !this.windows) return;
+    if (!sim || !this.buildings) return;
+    const roofC = new THREE.Color();
+    const winC = new THREE.Color();
     sim.city.buildings.forEach((def, i) => {
       const st = sim.state.buildings[i];
       tmpC.setHex(BUILDING_TYPES[def.type].color);
@@ -227,15 +214,12 @@ export class GameRenderer {
         if (st.cache) tmpC.lerp(new THREE.Color(0x4ee0c0), 0.5);
       }
       if (i === this.hoverBuilding) tmpC.lerp(new THREE.Color(0xffffff), 0.18);
-      this.buildings!.setColorAt(i, tmpC);
-      this.roofs!.setColorAt(i, tmpC.multiplyScalar(0.7));
+      roofC.copy(tmpC).multiplyScalar(0.7);
       // Windows glow only in settlement buildings.
-      tmpC.setHex(st.fn !== "none" ? 0xffc66b : 0x15171a);
-      this.windows!.setColorAt(i, tmpC);
+      winC.setHex(st.fn !== "none" ? 0xffc66b : 0x15171a);
+      this.buildings!.setColors(i, tmpC, roofC, winC);
     });
-    this.buildings.instanceColor!.needsUpdate = true;
-    this.roofs.instanceColor!.needsUpdate = true;
-    this.windows.instanceColor!.needsUpdate = true;
+    this.buildings.commitColors();
   }
 
   resize(width: number, height: number): void {
@@ -263,8 +247,7 @@ export class GameRenderer {
 
   pickBuilding(ndcX: number, ndcY: number): number {
     if (!this.buildings) return -1;
-    const hit = this.ray(ndcX, ndcY).intersectObject(this.buildings, false)[0];
-    return hit?.instanceId ?? -1;
+    return this.buildings.pick(this.ray(ndcX, ndcY));
   }
 
   pickStructure(ndcX: number, ndcY: number): EntityId {
@@ -335,7 +318,13 @@ export class GameRenderer {
       this.hqLight.position.set(b.entrance.x, 6, b.entrance.y);
       this.hqLight.intensity = (1 - daylight) * 400;
       this.hqMarker.visible = true;
-      this.hqMarker.position.set(b.rect.x + 1.5, b.height + 0.2, b.rect.y + 1.5);
+      // Flag on the roof, near the first corner of the outline.
+      const corner = outlineOf(b)[0];
+      const cx = b.rect.x + b.rect.w / 2;
+      const cy = b.rect.y + b.rect.h / 2;
+      const d = Math.hypot(cx - corner.x, cy - corner.y) || 1;
+      const k = Math.min(1.5, d * 0.4) / d;
+      this.hqMarker.position.set(corner.x + (cx - corner.x) * k, b.height + 0.2, corner.y + (cy - corner.y) * k);
     } else {
       this.hqMarker.visible = false;
       this.hqLight.intensity = 0;
@@ -457,10 +446,26 @@ export class GameRenderer {
   private updateSelection(sim: Simulation): void {
     const i = this.selection.building;
     if (i >= 0) {
-      const b = sim.city.buildings[i];
+      if (i !== this.selectionOutlineOf) {
+        // Outline the building's own shape: bottom and top rings plus the corners.
+        const b = sim.city.buildings[i];
+        const poly = outlineOf(b);
+        const c = { x: b.rect.x + b.rect.w / 2, y: b.rect.y + b.rect.h / 2 };
+        const pts = poly.map((p) => {
+          const d = Math.hypot(p.x - c.x, p.y - c.y) || 1;
+          return { x: p.x + ((p.x - c.x) / d) * 0.3, y: p.y + ((p.y - c.y) / d) * 0.3 };
+        });
+        const top = b.height + 0.4;
+        const v: number[] = [];
+        pts.forEach((p, k) => {
+          const q = pts[(k + 1) % pts.length];
+          v.push(p.x, 0.05, p.y, q.x, 0.05, q.y, p.x, top, p.y, q.x, top, q.y, p.x, 0.05, p.y, p.x, top, p.y);
+        });
+        this.selectionBox.geometry.dispose();
+        this.selectionBox.geometry = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
+        this.selectionOutlineOf = i;
+      }
       this.selectionBox.visible = true;
-      this.selectionBox.position.set(b.rect.x + b.rect.w / 2, 0, b.rect.y + b.rect.h / 2);
-      this.selectionBox.scale.set(b.rect.w + 0.6, b.height + 0.8, b.rect.h + 0.6);
     } else this.selectionBox.visible = false;
   }
 

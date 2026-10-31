@@ -1,3 +1,4 @@
+import type { CityMap } from "@afterfall/world";
 import { Simulation, SAVE_VERSION } from "./simulation";
 import type { Entity, GameState, Task } from "./state";
 
@@ -9,6 +10,8 @@ export interface SaveGame {
   simulationTick: number;
   rngState: number;
   worldState: SerializedState;
+  /** The whole map for imported real places, which cannot be regenerated from a seed. */
+  map?: CityMap;
 }
 
 type SerializedState = Omit<GameState, "entities" | "tasks"> & { entities: Entity[]; tasks: Task[] };
@@ -26,11 +29,12 @@ export function serialize(sim: Simulation, name = "save"): SaveGame {
     version: SAVE_VERSION,
     metadata: { name, createdAt: now, updatedAt: now, day: sim.clock.day, survivors: sim.survivorCount() },
     worldSeed: st.seed,
-    mapId: `procedural:${st.seed}`,
+    mapId: sim.city.source ? `osm:${sim.city.source.lat.toFixed(5)},${sim.city.source.lon.toFixed(5)},${sim.city.source.size}` : `procedural:${st.seed}`,
     simulationTick: st.tick,
     rngState: sim.rng.state,
     // Deep copy so the save does not alias live state.
     worldState: JSON.parse(JSON.stringify(worldState)),
+    ...(sim.city.source ? { map: sim.city } : {}),
   };
 }
 
@@ -64,7 +68,7 @@ export function deserialize(raw: SaveGame | string): Simulation {
     tasks: new Map(ws.tasks.map((t) => [t.id, t])),
     rngState: save.rngState,
   };
-  return new Simulation({ seed: save.worldSeed }, state);
+  return new Simulation({ seed: save.worldSeed, map: save.map }, state);
 }
 
 /** Stable digest of the simulation state, for determinism tests. */

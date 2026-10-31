@@ -39,7 +39,7 @@ function BuildingPanel({ sim, index }: { sim: Simulation; index: number }) {
   const units = useUi((s) => s.selectedUnits);
   const def = sim.city.buildings[index];
   const st = sim.state.buildings[index];
-  const area = Math.round(def.rect.w * def.rect.h);
+  const area = Math.round(def.area);
   const searched = st.searchTotal > 0 ? Math.round((st.searchProgress / st.searchTotal) * 100) : 100;
   const task = st.task >= 0 ? sim.state.tasks.get(st.task) : undefined;
   const repair = [...sim.state.tasks.values()].find((x) => x.type === "repair" && x.building === index);

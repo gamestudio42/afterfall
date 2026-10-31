@@ -9,6 +9,10 @@ The MVP goal: **start a game, choose a base, explore buildings, gather resources
 
 Play it at **[gamestudio42.github.io/afterfall](https://gamestudio42.github.io/afterfall/)**. No installation is needed.
 
+## Play on a real place
+
+**New game → Real place** lets you pick a shortcut (São Paulo, Rio, Porto Alegre, Curitiba, Lisbon, New York, London, Tokyo) or search an address, then downloads that area from OpenStreetMap and turns its streets and buildings into the map. Buildings keep their real shapes; hospitals, police stations, schools, supermarkets and shops come from the map data. Downloaded areas are cached in the browser.
+
 ## Quick start
 
 ```bash
@@ -52,7 +56,7 @@ packages/world      Procedural city generator, navigation grid (A*, distance fie
 packages/core       Deterministic simulation: ECS-lite state, systems, commands, persistence, reports
 packages/renderer   Three.js renderer: RTS camera, instanced buildings/units, day-night lighting, picking
 tests/e2e           Playwright specs
-tools               Headless runner; map-importer placeholder for the OpenStreetMap stage
+tools               Headless runner and balance sweep
 docs                GDD, architecture, systems, roadmap, testing, decisions
 ```
 
@@ -60,4 +64,4 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) to understand how the pieces fi
 
 ## License
 
-Code: AGPL-3.0-only (see `package.json`). Asset licensing will be defined separately. Future OpenStreetMap-derived maps will carry ODbL attribution.
+Code: AGPL-3.0-only (see `package.json`). Asset licensing will be defined separately. Real maps use data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the ODbL; the game shows this attribution while you play on one.

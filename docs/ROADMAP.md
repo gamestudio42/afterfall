@@ -15,10 +15,16 @@
 - [x] Clickable minimap
 - [x] GitHub Actions CI (typecheck, unit tests, build, E2E) and GitHub Pages deploy from `main`
 
+## Done — real maps (OpenStreetMap)
+- [x] Importer in `@afterfall/world` (`cityFromOverpass`): real building outlines, types from tags and points of interest, floors from `building:levels` or `height`, road center lines, parks, doors facing the nearest street, horde entry points where streets leave the map
+- [x] Simulation, navigation and window fire on polygon footprints; saves embed the imported map
+- [x] Extruded footprints in the renderer, outline selection, roads as ribbons, polygon minimap
+- [x] New game: preset places, address search (Nominatim), area size, download from Overpass with browser cache, ODbL attribution in game
+
 ## Next
 1. **Balance with real play.** Collect human playtests; teach the bots to craft ammo; tune toward a target win rate per difficulty.
 2. **Region overlays** (logistics, power).
-3. **Real maps (OpenStreetMap).** `tools/map-importer` (Python) produces a `GameMap` package (buildings, roads, POIs) that `@afterfall/world` turns into the same `CityMap` shape. MapLibre is used only for region picking. Keep ODbL attribution and cache imports, never hitting public Overpass at scale.
+3. **Real maps, next steps.** A map view (MapLibre) to pick the area by dragging, water and rail, multipolygon buildings with courtyards, a road graph for long trips on large areas, and an offline importer for bigger regions.
 4. **Logistics and policies:** hauling between storages, "keep N food" policies, priority UI for tasks.
 5. **Research tree** (survival, construction, energy, defense, society).
 6. **Energy and water networks**, vehicles.

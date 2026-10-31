@@ -19,7 +19,7 @@ USER INPUT ─▶ GameController ─▶ Command queue ─▶ Simulation.tick() �
 |---|---|---|
 | shared | RNG, math, clock | — |
 | content | Game data | shared |
-| world | City generation, NavGrid, SpatialHash, chunks | shared, content |
+| world | City generation, OpenStreetMap import, NavGrid, SpatialHash, chunks | shared, content |
 | core | Simulation, systems, persistence, reports | shared, content, world |
 | renderer | Three.js scene from a Simulation | core, world, content |
 | apps/web | UI, input, loop, saves, i18n | all |

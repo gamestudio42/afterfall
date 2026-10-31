@@ -3,6 +3,8 @@ import { deleteSave, getSave, listSaves, type SaveSlot } from "../app/saves";
 import { useGame, useT } from "../app/hooks";
 import { useUi } from "../app/store";
 import { HelpContent } from "../components/Help";
+import { RealPlacePicker } from "../components/RealPlacePicker";
+import type { CityMap } from "@afterfall/world";
 
 type View = "main" | "new" | "load" | "help";
 
@@ -20,8 +22,15 @@ export function MainMenu() {
     void listSaves().then(setSaves);
   }, [view]);
 
+  const [mapKind, setMapKind] = useState<"procedural" | "real">("procedural");
+
   const start = () => {
     game.newGame(Number(seed) || 1);
+    set({ screen: "game", showHelp: true });
+  };
+
+  const startReal = (map: CityMap) => {
+    game.newGame(map.seed, map);
     set({ screen: "game", showHelp: true });
   };
 
@@ -71,6 +80,26 @@ export function MainMenu() {
         )}
         {view === "new" && (
           <div className="menu-buttons">
+            <div className="tabs" role="tablist">
+              <button role="tab" className={mapKind === "procedural" ? "chip active" : "chip"} onClick={() => setMapKind("procedural")} data-testid="map-procedural">
+                {t("menu.mapProcedural")}
+              </button>
+              <button role="tab" className={mapKind === "real" ? "chip active" : "chip"} onClick={() => setMapKind("real")} data-testid="map-real">
+                {t("menu.mapReal")}
+              </button>
+            </div>
+          </div>
+        )}
+        {view === "new" && mapKind === "real" && (
+          <>
+            <RealPlacePicker onStart={startReal} />
+            <div className="menu-buttons">
+              <button onClick={() => setView("main")}>{t("menu.back")}</button>
+            </div>
+          </>
+        )}
+        {view === "new" && mapKind === "procedural" && (
+          <div className="menu-buttons">
             <label className="field">
               <span>{t("menu.seed")}</span>
               <div className="row">
@@ -94,7 +123,7 @@ export function MainMenu() {
                 <button onClick={() => load(s.name)}>
                   <strong>{s.name}</strong>
                   <small>
-                    {t("menu.saveInfo", { day: s.day, survivors: s.survivors })} · #{s.seed} · {new Date(s.updatedAt).toLocaleString(lang)}
+                    {t("menu.saveInfo", { day: s.day, survivors: s.survivors })} · {s.place ?? `#${s.seed}`} · {new Date(s.updatedAt).toLocaleString(lang)}
                   </small>
                 </button>
                 <button className="chip danger" onClick={() => deleteSave(s.name).then(() => listSaves().then(setSaves))}>

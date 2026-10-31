@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, tickAt } from "@afterfall/shared";
-import { CellKind } from "@afterfall/world";
+import { CellKind, cityFromOverpass } from "@afterfall/world";
+import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
+import { hqPerimeter } from "../src/systems/infected";
 import { createSimulation, deserialize, getReport, serialize, stateHash, type Simulation } from "../src";
 import { enterBuilding } from "../src/systems/util";
 import { autoplay, fortRing, pickBase } from "./autoplay";
@@ -259,5 +261,42 @@ describe("headless scenario", () => {
     expect(r.infectedKilled).toBeGreaterThan(0);
     expect(r.navigationFailures).toBe(0);
     expect(r.averageTickMs).toBeLessThan(5);
+  });
+});
+
+describe("real maps (OpenStreetMap)", () => {
+  const map = cityFromOverpass(syntheticOverpass(), { ...FIXTURE_CENTER, size: 480, label: "Test" });
+
+  it("plays a day on an imported map without navigation failures", () => {
+    const sim = createSimulation({ seed: map.seed, map });
+    autoplay(sim, 1.5);
+    const r = getReport(sim);
+    expect(sim.state.hq).toBeGreaterThanOrEqual(0);
+    expect(r.buildingsSearched).toBeGreaterThan(0);
+    expect(r.hordesSpawned).toBeGreaterThan(0);
+    expect(r.navigationFailures).toBe(0);
+  });
+
+  it("saves and loads with the map embedded", () => {
+    const sim = createSimulation({ seed: map.seed, map });
+    autoplay(sim, 0.3);
+    const save = serialize(sim);
+    expect(save.map?.source?.kind).toBe("osm");
+    expect(save.mapId.startsWith("osm:")).toBe(true);
+    const loaded = deserialize(JSON.parse(JSON.stringify(save)));
+    expect(loaded.city.buildings.length).toBe(sim.city.buildings.length);
+    expect(stateHash(loaded)).toBe(stateHash(sim));
+    sim.runTicks(500);
+    loaded.runTicks(500);
+    expect(stateHash(loaded)).toBe(stateHash(sim));
+  });
+
+  it("infected besiege an imported headquarters from the cells around its outline", () => {
+    const sim = createSimulation({ seed: map.seed, map });
+    sim.enqueue({ type: "setBase", building: pickBase(sim) });
+    sim.tick();
+    const cells = hqPerimeter(sim);
+    expect(cells.length).toBeGreaterThan(8);
+    for (const i of cells) expect(sim.grid.kind[i]).not.toBe(CellKind.Building);
   });
 });

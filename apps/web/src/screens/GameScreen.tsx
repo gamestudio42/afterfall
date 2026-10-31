@@ -1,6 +1,7 @@
 import { useUi } from "../app/store";
 import { BottomBar } from "../components/BottomBar";
 import { HelpModal } from "../components/Help";
+import { MapCredit } from "../components/MapCredit";
 import { Minimap } from "../components/Minimap";
 import { Alerts, Banner, DevOverlay, DragRect, EventModal, OutcomeModal, Toast } from "../components/Overlays";
 import { SidePanel } from "../components/SidePanel";
@@ -15,6 +16,7 @@ export function GameScreen() {
       <Alerts />
       <SidePanel />
       <Minimap />
+      <MapCredit />
       <BottomBar />
       <DragRect />
       <DevOverlay />

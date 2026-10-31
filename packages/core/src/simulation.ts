@@ -55,6 +55,8 @@ const MAX_TICKS_PER_UPDATE = 80;
 export interface SimulationOptions {
   seed: number;
   city?: Omit<CityOptions, "seed">;
+  /** A ready-made map (an imported real place) instead of a generated city. */
+  map?: CityMap;
 }
 
 export class Simulation {
@@ -74,7 +76,7 @@ export class Simulation {
   tickMs = 0;
 
   constructor(opts: SimulationOptions, restored?: GameState) {
-    this.city = generateCity({ seed: opts.seed, ...opts.city });
+    this.city = opts.map ?? generateCity({ seed: opts.seed, ...opts.city });
     this.grid = NavGrid.fromCity(this.city);
     this.fields = new InfectedFields(this);
     if (restored) {
@@ -169,7 +171,7 @@ export class Simulation {
     const lootRng = new Rng(deriveSeed(seed, "loot"));
     const buildings: BuildingState[] = this.city.buildings.map((b) => {
       const def = BUILDING_TYPES[b.type];
-      const area = b.rect.w * b.rect.h * b.floors;
+      const area = b.area * b.floors;
       const units = Math.max(6, Math.round((area / 100) * def.lootDensity * lootRng.range(0.6, 1.25)));
       const loot: ResourceBag = {};
       for (let i = 0; i < units; i++) addToBag(loot, lootRng.weighted(def.loot as Record<ResourceId, number>), 1);
@@ -244,8 +246,19 @@ export class Simulation {
   randomRoadPoint(): Vec2 {
     for (let tries = 0; tries < 50; tries++) {
       const road = this.rng.pick(this.city.roads);
-      const x = road.rect.x + this.rng.range(1, road.rect.w - 1);
-      const y = road.rect.y + this.rng.range(1, road.rect.h - 1);
+      let x: number;
+      let y: number;
+      if (road.path) {
+        const i = this.rng.int(1, road.path.length - 1);
+        const a = road.path[i - 1];
+        const b = road.path[i];
+        const t = this.rng.next();
+        x = a.x + (b.x - a.x) * t;
+        y = a.y + (b.y - a.y) * t;
+      } else {
+        x = road.rect.x + this.rng.range(1, road.rect.w - 1);
+        y = road.rect.y + this.rng.range(1, road.rect.h - 1);
+      }
       if (this.grid.passable(x, y, "infected")) return { x, y };
     }
     return { x: this.city.intersections[0].x, y: this.city.intersections[0].y };
@@ -375,7 +388,7 @@ export class Simulation {
     const b = this.state.buildings[index];
     const def = this.city.buildings[index];
     const fdef = BUILDING_FUNCTIONS[fn];
-    const area = (def.rect.w * def.rect.h * def.floors) / 100;
+    const area = (def.area * def.floors) / 100;
     b.fn = fn;
     b.maxHp = fdef.maxHp;
     b.hp = fdef.maxHp;

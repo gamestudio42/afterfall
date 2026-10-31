@@ -67,6 +67,7 @@ export class InfectedFields {
 export function hqPerimeter(sim: Simulation): number[] {
   const b = sim.city.buildings[sim.state.hq];
   const g = sim.grid;
+  if (b.footprint) return footprintPerimeter(sim, sim.state.hq);
   const x0 = Math.floor(b.rect.x / g.cell) - 1;
   const y0 = Math.floor(b.rect.y / g.cell) - 1;
   const x1 = Math.ceil((b.rect.x + b.rect.w) / g.cell);
@@ -78,6 +79,33 @@ export function hqPerimeter(sim: Simulation): number[] {
       if (!g.inBounds(x, y)) continue;
       const i = g.index(x, y);
       if (g.kind[i] !== CellKind.Building) out.push(i);
+    }
+  return out;
+}
+
+/** Non-building cells next to any cell of an imported building's outline. */
+function footprintPerimeter(sim: Simulation, index: number): number[] {
+  const g = sim.grid;
+  const b = sim.city.buildings[index];
+  const x0 = Math.max(0, Math.floor(b.rect.x / g.cell) - 1);
+  const y0 = Math.max(0, Math.floor(b.rect.y / g.cell) - 1);
+  const x1 = Math.min(g.cols - 1, Math.ceil((b.rect.x + b.rect.w) / g.cell));
+  const y1 = Math.min(g.rows - 1, Math.ceil((b.rect.y + b.rect.h) / g.cell));
+  const out: number[] = [];
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const i = g.index(x, y);
+      if (g.kind[i] === CellKind.Building) continue;
+      let touches = false;
+      for (let dy = -1; dy <= 1 && !touches; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!g.inBounds(x + dx, y + dy)) continue;
+          if (g.buildingAt[g.index(x + dx, y + dy)] === index && g.kind[g.index(x + dx, y + dy)] === CellKind.Building) {
+            touches = true;
+            break;
+          }
+        }
+      if (touches) out.push(i);
     }
   return out;
 }

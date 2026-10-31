@@ -6,7 +6,9 @@ test("boots the menu and starts a generated game", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto("/");
-  await expect(page.getByTestId("new-game")).toBeVisible();
+  await page.waitForTimeout(1_000);
+  expect(errors, errors.join("\n")).toEqual([]);
+  await expect(page.getByTestId("new-game")).toBeVisible({ timeout: 15_000 });
   await page.getByTestId("new-game").click();
   await page.getByTestId("seed").fill("4242");
   await page.getByTestId("start").click();

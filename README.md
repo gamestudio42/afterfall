@@ -4,6 +4,11 @@ An original browser-based 3D survival RTS and colony builder. An outbreak emptie
 
 The MVP goal: **start a game, choose a base, explore buildings, gather resources, strengthen defenses and survive five consecutive nights.**
 
+[![Play in browser](https://img.shields.io/badge/Play_in_browser-e8913a?style=for-the-badge&labelColor=11141a&color=e8913a)](https://gamestudio42.github.io/afterfall/)
+[![CI and Pages](https://img.shields.io/github/actions/workflow/status/gamestudio42/afterfall/pages.yml?branch=main&style=for-the-badge&labelColor=11141a&label=Pages)](https://github.com/gamestudio42/afterfall/actions/workflows/pages.yml)
+
+Play it at **[gamestudio42.github.io/afterfall](https://gamestudio42.github.io/afterfall/)**. No installation is needed.
+
 ## Quick start
 
 ```bash
@@ -20,6 +25,8 @@ pnpm dev          # http://localhost:5173
 | `pnpm typecheck` | TypeScript over the whole monorepo |
 | `pnpm sim [seed] [days]` | Headless game with a scripted player, prints a JSON report |
 | `pnpm sweep [seeds] [first] [open\|fort]` | Win rates of both scripted players over many seeds |
+
+Every push to `main` runs the checks and publishes `apps/web/dist` to GitHub Pages. The build uses relative paths, so it runs from any folder.
 
 ## Controls
 

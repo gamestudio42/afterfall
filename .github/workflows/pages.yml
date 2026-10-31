@@ -14,7 +14,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Merging a PR fires "push" on main and "pull_request closed" at the same
+  # time; key PR runs by number so the cleanup never cancels the main deploy.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

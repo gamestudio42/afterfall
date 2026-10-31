@@ -218,6 +218,19 @@ describe("infected and combat (phase 5)", () => {
   });
 });
 
+describe("events", () => {
+  it("resolves a pending event while simulation time is frozen", () => {
+    const sim = started();
+    const tick = sim.state.tick;
+    sim.state.pendingEvent = { eventId: "radio", tick };
+    sim.enqueue({ type: "resolveEvent", choice: 0 });
+
+    expect(sim.update(1000, 0)).toBe(0);
+    expect(sim.state.pendingEvent).toBeNull();
+    expect(sim.state.tick).toBe(tick);
+  });
+});
+
 describe("determinism and persistence", () => {
   it("two runs with the same seed and commands are identical", () => {
     const a = createSimulation({ seed: 77 });

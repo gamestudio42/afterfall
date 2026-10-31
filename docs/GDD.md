@@ -5,11 +5,14 @@ A real-time strategy colony survival game set in a city emptied by an outbreak. 
 
 Genre references: city builders, wave-defense RTS and survival sandboxes. AFTERFALL is an original game: its code, names, content, art and UI are its own.
 
+The fantasy and the four pillars are in [PILLARS.md](PILLARS.md). The playtest
+protocol and the current balance baseline are in [PLAYTEST.md](PLAYTEST.md).
+
 ## Core loop
 1. **Choose a headquarters.** Any building can become the HQ. It holds 6 beds and 600 storage and keeps half of what was inside.
 2. **Day (06:00–17:00): scavenge and build.** Send survivors into buildings. Disturbing a building releases the infected hiding inside. Searching reveals loot, which survivors carry home (20 weight each). Workers automatically pick up construction, conversion, repair, farm and workshop jobs.
 3. **Dusk (17:00–20:00): get home.** Scavengers are recalled at 17:00 (policy). Lookouts man the towers.
-4. **Night (20:00–06:00): hold.** Survivors sleep in beds. Hordes enter from the city edge at 21:00, 23:30 and 02:00, and some roaming infected are drawn to the settlement at 20:00. Infected follow a distance field to the HQ, breaking the weakest walls in their path. When the base is attacked, armed sleepers wake up and defend.
+4. **Night (20:00–06:00): hold.** Survivors sleep in beds. Hordes enter from the city edge in waves from 21:00; later nights add waves at 23:30 and 02:00. Some roaming infected are drawn to the settlement at 20:00. Infected follow a distance field to the HQ, breaking the weakest walls in their path. When the base is attacked, armed sleepers wake up and defend.
 5. **Dawn: count the cost.** Medicine cures infections and treats the wounded, morale settles, the game autosaves and the surviving horde retreats.
 
 Victory: dawn of day 6 (five nights). Defeat: the HQ falls or everyone dies.
@@ -38,3 +41,7 @@ See `packages/content/src/balance.ts`. Two scripted players are used for regress
 - **fort**: picks a compact HQ and also rings it with walls and a gate on day one.
 
 Over seeds 1 to 40, open wins about 72% and fort about 78%. Most defeats happen on night 5, so the last night is the climax. Neither bot builds a workshop, so ammo is their binding constraint; a player who crafts ammo should do better.
+
+The last recorded sweep (2026-10-31, `main` at `02c8d10`, `pnpm sweep 40 1`)
+gave **open 29/40 (72.5%)** and **fort 31/40 (77.5%)**. This is a scripted
+regression baseline, not human playtest evidence; see [PLAYTEST.md](PLAYTEST.md).

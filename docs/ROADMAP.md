@@ -22,7 +22,7 @@
 - [x] New game: preset places, address search (Nominatim), area size, download from Overpass with browser cache, ODbL attribution in game
 
 ## Next
-1. **Balance with real play.** Collect human playtests; teach the bots to craft ammo; tune toward a target win rate per difficulty.
+1. **Balance with real play.** Follow [PLAYTEST.md](PLAYTEST.md) to collect human playtests; teach the bots to craft ammo; tune toward a target win rate per difficulty.
 2. **Region overlays** (logistics, power).
 3. **Real maps, next steps.** A map view (MapLibre) to pick the area by dragging, water and rail, multipolygon buildings with courtyards, a road graph for long trips on large areas, and an offline importer for bigger regions.
 4. **Logistics and policies:** hauling between storages, "keep N food" policies, priority UI for tasks.

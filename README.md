@@ -42,8 +42,8 @@
 3. **Build and adapt.** Walls, gates, watchtowers, gardens and wells go up on the streets; buildings
    become shelters, storage or a workshop that turns metal into ammo. Automatic survivors pick up the
    jobs on their own.
-4. **Hold the night.** Hordes enter from the edge of the city at 21:00, 23:30 and 02:00 and break
-   the weakest wall on their way to the base. Gunfire kills fast but its noise draws more of them.
+4. **Hold the night.** Night hordes enter in waves from 21:00, with later nights adding 23:30 and 02:00,
+   and break the weakest wall on their way to the base. Gunfire kills fast but its noise draws more of them.
 5. **Count the cost at dawn.** Medicine cures bites before the infected turn, morale settles, the
    game autosaves and the surviving horde retreats. Reach the sixth dawn to win; lose the base and
    it is over.
@@ -119,7 +119,8 @@ removed when it closes. The build uses relative paths, so it runs from any folde
 The simulation lives in `packages/core`, a deterministic TypeScript package with a seeded RNG that never
 touches Three.js or the DOM. `packages/world` generates the city or imports it from OpenStreetMap, the
 Three.js renderer and the React interface only send commands and read state. See the
-[game design](docs/GDD.md), [architecture](docs/ARCHITECTURE.md), [systems](docs/SYSTEMS.md),
+[game design](docs/GDD.md), [pillars](docs/PILLARS.md), [playtest protocol](docs/PLAYTEST.md),
+[architecture](docs/ARCHITECTURE.md), [systems](docs/SYSTEMS.md),
 [roadmap](docs/ROADMAP.md), [testing](docs/TESTING.md), [decisions](docs/DECISIONS.md) and the
 [rules for agents](docs/AGENTS.md).
 

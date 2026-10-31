@@ -125,12 +125,14 @@ Three.js renderer and the React interface only send commands and read state. See
 
 ## Licence
 
-AFTERFALL is free software under the GNU Affero General Public License, version 3 only
-(`AGPL-3.0-only`, declared in [`package.json`](package.json)). If you run a modified version for other
-people, including as a website or over a network, you must offer them its source under the same
-licence. Copyright (c) 2026 Marcel Savegnago.
+AFTERFALL is free software under the GNU Affero General Public License, version 3 or any later
+version ([`AGPL-3.0-or-later`](LICENSE)), following the
+[Game Studio 42](https://github.com/gamestudio42) default for complete games. If you run a modified
+version for other people, including as a website or over a network, you must offer them its source
+under the same licence. Copyright (c) 2026 Marcel Savegnago.
 
 Its code, city generator, rules and procedural art are original; the game draws on city builders,
 wave-defence RTS and survival sandboxes as genres, and no code or assets were copied. Asset licensing
 will be defined separately. Real maps use data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright),
-available under the ODbL; the game shows this attribution while you play on one.
+available under the ODbL; the game shows this attribution while you play on one. See [LICENSE](LICENSE) and
+[docs/AGENTS.md](docs/AGENTS.md) for project rules.

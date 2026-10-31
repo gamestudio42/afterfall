@@ -9,18 +9,37 @@
     "build": "pnpm --filter @afterfall/web build",
     "preview": "pnpm --filter @afterfall/web preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-unknown",
+    "format:check": "prettier --check . --ignore-unknown",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:cross-browser": "playwright test tests/e2e/smoke.spec.ts --project=firefox --project=webkit",
+    "audit": "pnpm audit --audit-level=high",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
     "sim": "tsx tools/headless-run.ts",
     "sweep": "tsx tools/balance-sweep.ts"
   },
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.56.1",
     "@types/node": "22.10.2",
+    "@vitest/coverage-v8": "5.0.5",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.7",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
     "tsx": "4.19.2",
     "typescript": "5.7.2",
-    "vitest": "3.0.5"
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.0.5"
   },
   "packageManager": "pnpm@10.28.0",
   "pnpm": {

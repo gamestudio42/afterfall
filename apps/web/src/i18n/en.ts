@@ -237,6 +237,7 @@ export const en: Record<string, string> = {
   "dir.east": "east",
   "dir.west": "west",
 
+  "minimap.title": "Minimap: click or drag to move the camera",
   "help.title": "Controls",
   "help.camera": "WASD / arrows / screen edge: move camera · Q/E or right-drag: rotate · Wheel: zoom",
   "help.select": "Click: select · Drag: box select · Shift: add to selection",

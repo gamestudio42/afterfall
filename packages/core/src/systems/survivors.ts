@@ -1,4 +1,4 @@
-import { BALANCE, RESOURCE_IDS, addToBag, bagTotal, type ResourceId } from "@afterfall/content";
+import { BALANCE, RESOURCE_IDS, WEAPONS, addToBag, bagTotal, type ResourceId } from "@afterfall/content";
 import { TICK_SECONDS } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
 import type { Entity, SurvivorComp } from "../state";
@@ -243,7 +243,11 @@ function sleep(sim: Simulation, e: SurvivorEntity, hour: number): void {
   // Asleep.
   const underAttack = sim.state.tick - sim.state.lastAttackTick < 60;
   const canFight = e.health!.hp > 40 && s.stance !== "passive" && (s.ammo > 0 || s.skills.combat >= 2);
-  if (wake || (underAttack && sim.state.policies.autoDefend && canFight)) {
+  // Armed survivors in a settlement building hold it and fire from the windows.
+  const holding =
+    !wake && s.inside >= 0 && sim.state.buildings[s.inside].fn !== "none" && WEAPONS[s.weapon].usesAmmo &&
+    (s.ammo > 0 || sim.storageNodes().includes(sim.state.buildings[s.inside]));
+  if (wake || (underAttack && sim.state.policies.autoDefend && canFight && !holding)) {
     if (s.inside >= 0) exitBuilding(sim, e);
     if (!wake) {
       s.activity = { type: "defend" };

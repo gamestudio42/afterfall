@@ -26,7 +26,8 @@ const MAX_TRACERS = 96;
 /** Units are drawn larger than life so they read at strategic zoom levels. */
 const UNIT_SCALE = 1.9;
 
-const FUNCTION_TINT: Record<string, number> = {
+/** Tint applied to settlement buildings, by function. */
+export const FUNCTION_TINT: Record<string, number> = {
   hq: 0xe8913a,
   shelter: 0x5f8fc9,
   storage: 0xb08a4f,

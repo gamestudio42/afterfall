@@ -157,6 +157,13 @@ canvas.world.hidden { visibility: hidden; }
 .button-grid button { font-size: 12px; }
 .chips { display: inline-flex; gap: 4px; }
 
+.minimap {
+  position: absolute; left: 12px; bottom: 66px; border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45); cursor: crosshair; touch-action: none;
+}
+.hud:has(.drawer) .minimap { display: none; }
+@media (max-width: 700px) { .minimap { display: none; } }
+
 .bottombar { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; }
 .bottombar > * { pointer-events: auto; }
 .bottombar .bar {

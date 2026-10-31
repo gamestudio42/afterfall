@@ -19,7 +19,7 @@ export interface StructureDefinition {
 }
 
 export const STRUCTURES: Record<StructureKind, StructureDefinition> = {
-  wall: { id: "wall", size: 1, cost: { wood: 3 }, work: 6, maxHp: 600, passableBySurvivors: false, solid: true, height: 2.6, color: 0x7a6a55 },
+  wall: { id: "wall", size: 1, cost: { wood: 2 }, work: 6, maxHp: 600, passableBySurvivors: false, solid: true, height: 2.6, color: 0x7a6a55 },
   gate: { id: "gate", size: 1, cost: { wood: 4, metal: 2 }, work: 10, maxHp: 800, passableBySurvivors: true, solid: true, height: 2.2, color: 0x5d4b36 },
   tower: { id: "tower", size: 2, cost: { wood: 12, metal: 4 }, work: 60, maxHp: 900, passableBySurvivors: false, solid: true, height: 6, color: 0x6b5a45 },
   farm: { id: "farm", size: 4, cost: { wood: 10, water: 5 }, work: 60, maxHp: 120, passableBySurvivors: true, solid: false, height: 0.3, color: 0x6b8e3a },

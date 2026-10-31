@@ -3,6 +3,7 @@ import {
   BUILDING_FUNCTIONS,
   RESOURCE_IDS,
   STRUCTURES,
+  WEAPONS,
   addToBag,
   bagTotal,
   type ResourceBag,
@@ -10,6 +11,7 @@ import {
 import type { Vec2 } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
 import type { Simulation } from "../simulation";
+import { TOWER_RANGE_BONUS } from "./combat";
 import type { Entity, EntityId, SurvivorComp, Task, TaskType } from "../state";
 import {
   MINUTES_PER_TICK,
@@ -324,6 +326,16 @@ function guard(sim: Simulation, e: SurvivorEntity, task: Task, site: Vec2): void
   if (s.mounted === tower.id) {
     // Runners keep posted guards supplied.
     if (s.weapon !== "crowbar" && s.ammo < 6 && sim.state.tick % 600 === e.id % 600) s.ammo += sim.withdraw("ammo", 24 - s.ammo);
+    // The base is under attack out of this tower's reach: climb down and help.
+    if (
+      sim.state.policies.autoDefend &&
+      sim.state.tick % 50 === e.id % 50 &&
+      sim.state.tick - sim.state.lastAttackTick < 30 &&
+      !infectedNear(sim, site.x, site.y, WEAPONS[s.weapon].range + TOWER_RANGE_BONUS)
+    ) {
+      releaseFromTask(sim, e);
+      s.activity = { type: "defend" };
+    }
     return;
   }
   if (dist(e, site.x, site.y) > 2.6) {
@@ -337,6 +349,15 @@ function guard(sim: Simulation, e: SurvivorEntity, task: Task, site: Vec2): void
   const t = e.transform!;
   t.x = t.px = (st.cx + size / 2) * sim.grid.cell;
   t.y = t.py = (st.cy + size / 2) * sim.grid.cell;
+}
+
+function infectedNear(sim: Simulation, x: number, y: number, radius: number): boolean {
+  let found = false;
+  sim.infectedHash.query(x, y, radius, (id) => {
+    const o = sim.state.entities.get(id);
+    if (o?.transform && Math.hypot(o.transform.x - x, o.transform.y - y) <= radius) found = true;
+  });
+  return found;
 }
 
 /** Marks wall segments complete as cumulative work passes their thresholds. */

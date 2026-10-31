@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "sim": "tsx tools/headless-run.ts"
+    "sim": "tsx tools/headless-run.ts",
+    "sweep": "tsx tools/balance-sweep.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

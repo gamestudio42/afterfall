@@ -8,9 +8,16 @@
 - [x] Phase 5: walkers, runners and brutes, perception and noise, hordes with weakest-wall pathing, combat with ammo, structure destruction, retreat
 - [x] Phase 6: clock and speeds, night waves, alerts, events, policies, save/load and autosave, victory and defeat, main menu, pt-BR and en
 
+## Done — balance pass and minimap
+- [x] Second scripted player that walls the base in, and a seed sweep tool (`pnpm sweep`)
+- [x] Window fire from settlement buildings, tower guards that help when the attack is out of reach
+- [x] Cheaper walls, stronger nights 4 and 5, a little ammo in homes
+- [x] Clickable minimap
+- [x] GitHub Actions CI (typecheck, unit tests, build, E2E)
+
 ## Next
-1. **Balance pass with real play.** Tune horde sizes, loot density and wall costs. Add a second scripted player that builds walls, for regression.
-2. **Minimap and region overlays** (logistics, power).
+1. **Balance with real play.** Collect human playtests; teach the bots to craft ammo; tune toward a target win rate per difficulty.
+2. **Region overlays** (logistics, power).
 3. **Real maps (OpenStreetMap).** `tools/map-importer` (Python) produces a `GameMap` package (buildings, roads, POIs) that `@afterfall/world` turns into the same `CityMap` shape. MapLibre is used only for region picking. Keep ODbL attribution and cache imports, never hitting public Overpass at scale.
 4. **Logistics and policies:** hauling between storages, "keep N food" policies, priority UI for tasks.
 5. **Research tree** (survival, construction, energy, defense, society).

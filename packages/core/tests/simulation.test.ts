@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, tickAt } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
 import { createSimulation, deserialize, getReport, serialize, stateHash, type Simulation } from "../src";
-import { autoplay, pickBase } from "./autoplay";
+import { enterBuilding } from "../src/systems/util";
+import { autoplay, fortRing, pickBase } from "./autoplay";
 
 function started(seed = 42): Simulation {
   const sim = createSimulation({ seed });
@@ -140,6 +141,46 @@ describe("infected and combat (phase 5)", () => {
     expect(z.infected!.state.type).toBe("chase");
   });
 
+  it("armed survivors inside a settlement building shoot from the windows", () => {
+    const sim = started(9);
+    for (const z of [...sim.infected()]) sim.removeEntity(z.id);
+    const shooter = [...sim.survivors()].find((e) => e.survivor.weapon === "pistol")!;
+    for (const e of [...sim.survivors()]) if (e !== shooter) sim.removeEntity(e.id);
+    // Asleep in the HQ at night, after the first wave has spawned.
+    sim.state.tick = tickAt(1, 23);
+    enterBuilding(sim, shooter, sim.state.hq, true);
+    shooter.survivor.activity = { type: "sleep", building: sim.state.hq, phase: "asleep" };
+    const r = sim.city.buildings[sim.state.hq].rect;
+    const spot = sim.grid.nearestPassable(r.x + r.w / 2, r.y - 6, "infected", 6) ?? sim.grid.nearestPassable(r.x + r.w / 2, r.y + r.h + 6, "infected", 6)!;
+    const z = sim.spawnInfected("walker", spot.x, spot.y, -1);
+    z.infected!.state = { type: "idle" };
+    const ok = runUntil(sim, () => !sim.state.entities.has(z.id), 600);
+    expect(ok).toBe(true);
+    expect(shooter.survivor.inside).toBe(sim.state.hq);
+  });
+
+  it("the scripted fort ring closes the headquarters off", () => {
+    const sim = started(3);
+    const ring = fortRing(sim)!;
+    expect(ring).not.toBeNull();
+    sim.enqueue({ type: "placeStructures", kind: "gate", cells: [ring.gate] });
+    sim.enqueue({ type: "placeStructures", kind: "wall", cells: ring.walls });
+    sim.tick();
+    for (const e of [...sim.structures()]) {
+      e.structure.built = true;
+      e.health = { hp: 600, max: 600 };
+      sim.stampStructure(e);
+    }
+    // With walls and gates impassable, the HQ door cannot reach the map edge.
+    const g = sim.grid;
+    const door = sim.hqEntrance();
+    const field = g.distanceField([g.cellOf(door.x, door.y)], (i) =>
+      g.kind[i] === CellKind.Free || g.kind[i] === CellKind.Soft ? 1 : Infinity,
+    );
+    expect(field[g.index(0, 0)]).toBe(Infinity);
+    expect(field[g.index(g.cols - 1, g.rows - 1)]).toBe(Infinity);
+  });
+
   it("hordes damage and can destroy structures", () => {
     const sim = started(6);
     for (const z of [...sim.infected()]) sim.removeEntity(z.id);
@@ -201,6 +242,14 @@ describe("determinism and persistence", () => {
 });
 
 describe("headless scenario", () => {
+  it("a scripted player who walls the base in survives five nights (seed 3)", () => {
+    const sim = createSimulation({ seed: 3 });
+    autoplay(sim, 6, undefined, { fortify: true });
+    const r = getReport(sim);
+    expect(r.outcome).toBe("victory:survived");
+    expect(r.structuresBuilt).toBeGreaterThan(30);
+  });
+
   it("runs five days and reports consistent statistics", () => {
     const sim = createSimulation({ seed: 12345 });
     autoplay(sim, 5);

@@ -117,7 +117,7 @@ test("build a wall from the build menu", async ({ page }) => {
   await page.waitForTimeout(400);
   await page.getByTestId("open-build").click();
   await page.getByTestId("build-wall").click();
-  const box = await page.locator("canvas").boundingBox();
+  const box = await page.locator("canvas:not(.minimap)").boundingBox();
   const cx = box!.width / 2;
   const cy = box!.height / 2 + 80;
   await page.mouse.move(cx - 150, cy);
@@ -133,4 +133,21 @@ test("language can be switched to English", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "English" }).click();
   await expect(page.getByTestId("new-game")).toHaveText("New game");
+});
+
+test("the minimap moves the camera where it is clicked", async ({ page }) => {
+  await startGame(page);
+  const minimap = page.getByTestId("minimap");
+  await expect(minimap).toBeVisible();
+  const box = (await minimap.boundingBox())!;
+  // Click near the top-left corner of the map.
+  await page.mouse.click(box.x + box.width * 0.15, box.y + box.height * 0.2);
+  await page.waitForTimeout(1500);
+  const target = await page.evaluate(() => {
+    const g = (window as unknown as Win).__afterfall;
+    return { x: g.renderer.rts.target.x / g.sim.city.width, y: g.renderer.rts.target.z / g.sim.city.height };
+  });
+  expect(target.x).toBeCloseTo(0.15, 1);
+  expect(target.y).toBeCloseTo(0.2, 1);
+  await page.screenshot({ path: "test-results/minimap.png" });
 });

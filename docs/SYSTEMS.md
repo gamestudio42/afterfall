@@ -9,4 +9,5 @@
 | Combat | `systems/combat.ts` | Auto-targeting of the nearest visible infected, ammo, accuracy by skill, tower bonus, noise, XP. Armed survivors inside a settlement building fire from its windows (80% range, 85% accuracy) and restock from it when it stores ammo; at night they hold the building instead of going out. |
 | Economy | `systems/economy.ts` | Meals at 07:00 and 19:00, wells, dawn medicine, morale drift, low-stock and idle alerts. |
 | Events | `systems/events.ts` | Possible event at 09:00 with conditions, weights and cooldowns. Choices apply data-defined effects. A pending event auto-resolves with the last choice after 2 game hours. |
+| OSM import | `world/src/osm.ts` | Projects Overpass JSON to meters, keeps buildings fully inside the area (nearest 700 to the center), classifies them, picks doors on free cells closest to a street, drops buildings whose door cannot be reached from the map border, and turns border crossings into horde entry points. |
 | Outcome | `systems/outcome.ts` | Victory at dawn of day 6. Defeat when the HQ falls or everyone dies. |

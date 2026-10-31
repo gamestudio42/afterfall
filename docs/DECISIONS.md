@@ -9,3 +9,6 @@
 7. **No Web Worker yet.** The simulation costs well under 1 ms per frame. The core is DOM-free, so moving it to a worker later is mechanical.
 8. **Time freezes while an event card is open or before a base is chosen**, so the player is never punished for reading.
 9. **Units are drawn about 1.9× life size** so they read at strategic zoom levels.
+10. **Real maps are imported in the browser, not by an offline tool.** The game is a static site on GitHub Pages, so the player's browser asks Overpass for one small area (400 to 600 m square) when they start, and keeps the answer in IndexedDB. One request per new game is light use of the public servers; nothing is fetched in bulk. Search uses Nominatim only on an explicit search.
+11. **One building path for both map kinds.** Procedural rectangles and real footprints go through the same extruded-outline renderer. The grid stamps footprints by cell center; door, perimeter and window-fire code use the outline when there is one and the rectangle otherwise, so procedural balance is unchanged.
+12. **Every real map gets a supermarket and a police station.** If the area has none, a mid-sized shop, office or warehouse near the center is promoted, because food and ammo depend on them.

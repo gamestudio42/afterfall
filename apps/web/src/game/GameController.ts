@@ -1,5 +1,6 @@
 import { STRUCTURES, type StructureKind } from "@afterfall/content";
 import { Simulation, deserialize, serialize, type Command, type EntityId } from "@afterfall/core";
+import type { CityMap } from "@afterfall/world";
 import { GameRenderer } from "@afterfall/renderer";
 import { CellKind } from "@afterfall/world";
 import { putSave } from "../app/saves";
@@ -42,8 +43,9 @@ export class GameController {
   // Lifecycle
   // -------------------------------------------------------------------
 
-  newGame(seed: number): void {
-    this.attach(new Simulation({ seed }));
+  /** Starts a game on a generated city, or on an imported real map when one is given. */
+  newGame(seed: number, map?: CityMap): void {
+    this.attach(new Simulation({ seed: map?.seed ?? seed, map }));
   }
 
   load(data: string): void {

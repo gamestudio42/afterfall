@@ -35,15 +35,33 @@ export function Minimap() {
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
     ctx.fillStyle = "#2a2f27";
     ctx.fillRect(0, 0, city.width, city.height);
+    const fillPoly = (poly: { x: number; y: number }[]) => {
+      ctx.beginPath();
+      poly.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.fill();
+    };
     ctx.fillStyle = "#3c6b3a";
-    for (const p of city.parks) ctx.fillRect(p.rect.x, p.rect.y, p.rect.w, p.rect.h);
+    for (const p of city.parks) p.polygon ? fillPoly(p.polygon) : ctx.fillRect(p.rect.x, p.rect.y, p.rect.w, p.rect.h);
     ctx.fillStyle = "#4a4d52";
-    for (const r of city.roads) ctx.fillRect(r.rect.x, r.rect.y, r.rect.w, r.rect.h);
+    ctx.strokeStyle = "#4a4d52";
+    ctx.lineCap = ctx.lineJoin = "round";
+    for (const r of city.roads) {
+      if (!r.path) {
+        ctx.fillRect(r.rect.x, r.rect.y, r.rect.w, r.rect.h);
+        continue;
+      }
+      ctx.lineWidth = Math.max(r.width ?? 8, 2 / scale);
+      ctx.beginPath();
+      r.path.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.stroke();
+    }
     city.buildings.forEach((b, i) => {
       const st = sim.state.buildings[i];
       ctx.fillStyle = st.fn !== "none" ? hex(FUNCTION_TINT[st.fn] ?? 0xffffff) : hex(BUILDING_TYPES[b.type].color);
       ctx.globalAlpha = st.fn !== "none" ? 1 : st.searchProgress >= st.searchTotal ? 0.4 : 0.75;
-      ctx.fillRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+      if (b.footprint) fillPoly(b.footprint);
+      else ctx.fillRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
     });
     ctx.globalAlpha = 1;
     if (sim.state.hq >= 0) {

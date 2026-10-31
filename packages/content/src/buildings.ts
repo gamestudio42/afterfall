@@ -37,12 +37,12 @@ export type BuildingFunction = "none" | "hq" | "shelter" | "storage" | "workshop
 export const BUILDING_TYPES: Record<BuildingType, BuildingTypeDefinition> = {
   house: {
     id: "house", floors: [1, 2], color: 0xc9b79c,
-    loot: { food: 4, water: 3, wood: 3, medicine: 1, metal: 1 }, lootDensity: 9,
+    loot: { food: 4, water: 3, wood: 3, medicine: 1, metal: 1, ammo: 1 }, lootDensity: 9,
     infected: [0, 2], survivorChance: 0.08, adaptations: ["shelter", "storage"],
   },
   apartment: {
     id: "apartment", floors: [3, 6], color: 0xb0a395,
-    loot: { food: 4, water: 3, wood: 2, medicine: 1, metal: 1 }, lootDensity: 4,
+    loot: { food: 4, water: 3, wood: 2, medicine: 1, metal: 1, ammo: 0.5 }, lootDensity: 4,
     infected: [1, 5], survivorChance: 0.15, adaptations: ["shelter", "storage"],
   },
   shop: {

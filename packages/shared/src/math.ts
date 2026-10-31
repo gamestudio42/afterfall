@@ -16,12 +16,7 @@ export const dist = (ax: number, ay: number, bx: number, by: number) => Math.hyp
 export const dist2 = (ax: number, ay: number, bx: number, by: number) => (bx - ax) ** 2 + (by - ay) ** 2;
 
 export function rectsOverlap(a: Rect, b: Rect, margin = 0): boolean {
-  return (
-    a.x - margin < b.x + b.w &&
-    a.x + a.w + margin > b.x &&
-    a.y - margin < b.y + b.h &&
-    a.y + a.h + margin > b.y
-  );
+  return a.x - margin < b.x + b.w && a.x + a.w + margin > b.x && a.y - margin < b.y + b.h && a.y + a.h + margin > b.y;
 }
 
 export function pointInRect(px: number, py: number, r: Rect): boolean {

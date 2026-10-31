@@ -90,7 +90,9 @@ test("start a game, choose a base, scavenge and save", async ({ page }) => {
   await page.getByTestId("speed-4").click();
 
   await expect
-    .poll(() => page.evaluate((t) => (window as unknown as Win).__afterfall.sim.state.buildings[t].searchProgress, target), { timeout: 60_000 })
+    .poll(() => page.evaluate((t) => (window as unknown as Win).__afterfall.sim.state.buildings[t].searchProgress, target), {
+      timeout: 60_000,
+    })
     .toBeGreaterThan(0);
 
   await page.getByTestId("save").click();
@@ -126,7 +128,9 @@ test("resolve a pending event while time is frozen", async ({ page }) => {
   await expect(page.getByTestId("event-modal")).toHaveCount(0);
 
   await page.getByTestId("speed-4").click();
-  await expect.poll(() => page.evaluate(() => (window as unknown as Win).__afterfall.sim.state.tick), { timeout: 10_000 }).toBeGreaterThan(stillFrozen);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as Win).__afterfall.sim.state.tick), { timeout: 10_000 })
+    .toBeGreaterThan(stillFrozen);
 });
 
 test("build a wall from the build menu", async ({ page }) => {
@@ -209,7 +213,13 @@ test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }
   const target = await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
     const b = g.sim.city.buildings.find((x: { type: string }) => x.type === "house");
-    const c = b.footprint.reduce((s: { x: number; y: number }, p: { x: number; y: number }) => ({ x: s.x + p.x / b.footprint.length, y: s.y + p.y / b.footprint.length }), { x: 0, y: 0 });
+    const c = b.footprint.reduce(
+      (s: { x: number; y: number }, p: { x: number; y: number }) => ({
+        x: s.x + p.x / b.footprint.length,
+        y: s.y + p.y / b.footprint.length,
+      }),
+      { x: 0, y: 0 },
+    );
     g.renderer.rts.jumpTo(c.x, c.y);
     return { index: b.index, c, h: b.height };
   });

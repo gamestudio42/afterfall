@@ -81,7 +81,11 @@ describe("construction and community (phase 4)", () => {
     const hq = sim.hqEntrance();
     const target = sim.state.buildings
       .filter((b) => b.fn === "none")
-      .sort((a, b) => Math.hypot(sim.city.buildings[a.index].entrance.x - hq.x, sim.city.buildings[a.index].entrance.y - hq.y) - Math.hypot(sim.city.buildings[b.index].entrance.x - hq.x, sim.city.buildings[b.index].entrance.y - hq.y))[0];
+      .sort(
+        (a, b) =>
+          Math.hypot(sim.city.buildings[a.index].entrance.x - hq.x, sim.city.buildings[a.index].entrance.y - hq.y) -
+          Math.hypot(sim.city.buildings[b.index].entrance.x - hq.x, sim.city.buildings[b.index].entrance.y - hq.y),
+      )[0];
     target.hiddenInfected = 0;
     const wood = sim.totals().wood;
     sim.enqueue({ type: "convert", building: target.index, fn: "shelter" });
@@ -101,7 +105,11 @@ describe("construction and community (phase 4)", () => {
     const cells: [number, number][] = [];
     for (let x = cx - 3; x <= cx + 3; x++) cells.push([x, cy]);
     sim.enqueue({ type: "placeStructures", kind: "wall", cells });
-    const ok = runUntil(sim, () => [...sim.structures()].length > 0 && [...sim.structures()].every((s) => s.structure.built), 6 * 60 * TICKS_PER_GAME_MINUTE);
+    const ok = runUntil(
+      sim,
+      () => [...sim.structures()].length > 0 && [...sim.structures()].every((s) => s.structure.built),
+      6 * 60 * TICKS_PER_GAME_MINUTE,
+    );
     expect(ok).toBe(true);
     const built = [...sim.structures()];
     expect(built.length).toBeGreaterThan(3);
@@ -153,7 +161,9 @@ describe("infected and combat (phase 5)", () => {
     enterBuilding(sim, shooter, sim.state.hq, true);
     shooter.survivor.activity = { type: "sleep", building: sim.state.hq, phase: "asleep" };
     const r = sim.city.buildings[sim.state.hq].rect;
-    const spot = sim.grid.nearestPassable(r.x + r.w / 2, r.y - 6, "infected", 6) ?? sim.grid.nearestPassable(r.x + r.w / 2, r.y + r.h + 6, "infected", 6)!;
+    const spot =
+      sim.grid.nearestPassable(r.x + r.w / 2, r.y - 6, "infected", 6) ??
+      sim.grid.nearestPassable(r.x + r.w / 2, r.y + r.h + 6, "infected", 6)!;
     const z = sim.spawnInfected("walker", spot.x, spot.y, -1);
     z.infected!.state = { type: "idle" };
     const ok = runUntil(sim, () => !sim.state.entities.has(z.id), 600);
@@ -213,7 +223,7 @@ describe("infected and combat (phase 5)", () => {
     sim.state.tasks.delete(task.id);
     const p = sim.grid.nearestPassable((cx + 0.5) * g.cell, (cy + (hq.facing.y > 0 ? 2.5 : -1.5)) * g.cell, "infected", 4)!;
     for (let i = 0; i < 4; i++) sim.spawnInfected("brute", p.x, p.y, 99);
-    const ok = runUntil(sim, () => !sim.state.entities.has(wall.id) || (sim.hqBuilding!.hp < sim.hqBuilding!.maxHp), 3000);
+    const ok = runUntil(sim, () => !sim.state.entities.has(wall.id) || sim.hqBuilding!.hp < sim.hqBuilding!.maxHp, 3000);
     expect(ok).toBe(true);
   });
 });

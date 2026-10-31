@@ -55,11 +55,20 @@ export function BottomBar() {
         <div className="drawer policies">
           <label>
             {t("policy.keepAmmo")}
-            <input type="number" min={0} step={10} value={p.keepAmmo} onChange={(e) => game.command({ type: "setPolicy", policy: { keepAmmo: Number(e.target.value) } })} />
+            <input
+              type="number"
+              min={0}
+              step={10}
+              value={p.keepAmmo}
+              onChange={(e) => game.command({ type: "setPolicy", policy: { keepAmmo: Number(e.target.value) } })}
+            />
           </label>
           <label>
             {t("policy.autoRepair")}
-            <select value={p.autoRepairBelow} onChange={(e) => game.command({ type: "setPolicy", policy: { autoRepairBelow: Number(e.target.value) } })}>
+            <select
+              value={p.autoRepairBelow}
+              onChange={(e) => game.command({ type: "setPolicy", policy: { autoRepairBelow: Number(e.target.value) } })}
+            >
               {[0, 0.5, 0.7, 0.9].map((v) => (
                 <option key={v} value={v}>
                   {Math.round(v * 100)}%
@@ -68,24 +77,41 @@ export function BottomBar() {
             </select>
           </label>
           <label className="check">
-            <input type="checkbox" checked={p.recallBeforeDusk} onChange={(e) => game.command({ type: "setPolicy", policy: { recallBeforeDusk: e.target.checked } })} />
+            <input
+              type="checkbox"
+              checked={p.recallBeforeDusk}
+              onChange={(e) => game.command({ type: "setPolicy", policy: { recallBeforeDusk: e.target.checked } })}
+            />
             {t("policy.recall")}
           </label>
           <label className="check">
-            <input type="checkbox" checked={p.autoDefend} onChange={(e) => game.command({ type: "setPolicy", policy: { autoDefend: e.target.checked } })} />
+            <input
+              type="checkbox"
+              checked={p.autoDefend}
+              onChange={(e) => game.command({ type: "setPolicy", policy: { autoDefend: e.target.checked } })}
+            />
             {t("policy.autoDefend")}
           </label>
         </div>
       )}
       <div className="bar">
-        <button className={open === "build" ? "active" : ""} disabled={!started} data-testid="open-build" onClick={() => setOpen(open === "build" ? null : "build")}>
+        <button
+          className={open === "build" ? "active" : ""}
+          disabled={!started}
+          data-testid="open-build"
+          onClick={() => setOpen(open === "build" ? null : "build")}
+        >
           {t("bar.build")}
         </button>
         <div className="squads">
           <span className="muted">{t("bar.squads")}</span>
           {sim.state.squads.length === 0 && <small className="muted">{t("bar.noSquads")}</small>}
           {sim.state.squads.map((s) => (
-            <button key={s.id} className="chip" onClick={() => ui.set({ selectedUnits: [...s.members], selectedBuilding: -1, selectedStructure: -1 })}>
+            <button
+              key={s.id}
+              className="chip"
+              onClick={() => ui.set({ selectedUnits: [...s.members], selectedBuilding: -1, selectedStructure: -1 })}
+            >
               {s.name} · {s.members.length}
             </button>
           ))}

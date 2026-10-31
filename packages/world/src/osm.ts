@@ -177,7 +177,9 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
 
   // Nearest to the center first, so a cap keeps the heart of the area.
   rawBuildings.sort(
-    (a, b) => Math.hypot(a.centroid.x - size / 2, a.centroid.y - size / 2) - Math.hypot(b.centroid.x - size / 2, b.centroid.y - size / 2) || a.osmId - b.osmId,
+    (a, b) =>
+      Math.hypot(a.centroid.x - size / 2, a.centroid.y - size / 2) - Math.hypot(b.centroid.x - size / 2, b.centroid.y - size / 2) ||
+      a.osmId - b.osmId,
   );
   rawBuildings.splice(opts.maxBuildings ?? 700);
 
@@ -280,19 +282,41 @@ function classify(rb: RawBuilding, pois: { p: Vec2; tags: Record<string, string>
   const shop = tags.shop ?? "";
   if (amenity === "hospital" || tags.healthcare === "hospital" || b === "hospital") return "hospital";
   if (amenity === "police" || b === "police") return "police";
-  if (["school", "college", "university", "kindergarten"].includes(amenity) || ["school", "university", "college", "kindergarten"].includes(b)) return "school";
+  if (
+    ["school", "college", "university", "kindergarten"].includes(amenity) ||
+    ["school", "university", "college", "kindergarten"].includes(b)
+  )
+    return "school";
   if (["supermarket", "wholesale", "department_store", "greengrocer", "convenience"].includes(shop) && rb.area > 250) return "supermarket";
   if (shop === "supermarket" || b === "supermarket") return "supermarket";
-  if (["pharmacy", "clinic", "doctors", "dentist"].includes(amenity) || ["chemist", "medical_supply"].includes(shop) || tags.healthcare) return "pharmacy";
+  if (["pharmacy", "clinic", "doctors", "dentist"].includes(amenity) || ["chemist", "medical_supply"].includes(shop) || tags.healthcare)
+    return "pharmacy";
   if (amenity === "fuel") return "gasStation";
-  if (["warehouse", "industrial", "factory", "manufacture", "hangar", "storage_tank", "garages", "garage", "shed", "barn", "service", "transportation"].includes(b)) return "warehouse";
+  if (
+    [
+      "warehouse",
+      "industrial",
+      "factory",
+      "manufacture",
+      "hangar",
+      "storage_tank",
+      "garages",
+      "garage",
+      "shed",
+      "barn",
+      "service",
+      "transportation",
+    ].includes(b)
+  )
+    return "warehouse";
   if (b === "office" || b === "commercial" || tags.office) return "office";
-  if (shop || b === "retail" || b === "kiosk" || ["restaurant", "cafe", "bar", "fast_food", "bank", "pub", "marketplace"].includes(amenity)) return "shop";
+  if (shop || b === "retail" || b === "kiosk" || ["restaurant", "cafe", "bar", "fast_food", "bank", "pub", "marketplace"].includes(amenity))
+    return "shop";
   if (["apartments", "residential", "dormitory", "hotel"].includes(b)) return "apartment";
   if (["house", "detached", "semidetached_house", "terrace", "bungalow", "farm", "cabin"].includes(b)) return "house";
   const levels = Number(tags["building:levels"]);
   if (rb.area < 180) return "house";
-  if (levels >= 3 || rb.area < 600) return levels >= 3 ? "apartment" : (rb.osmId % 5 === 0 ? "shop" : "house");
+  if (levels >= 3 || rb.area < 600) return levels >= 3 ? "apartment" : rb.osmId % 5 === 0 ? "shop" : "house";
   return levels >= 3 ? "office" : "warehouse";
 }
 

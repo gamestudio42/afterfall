@@ -65,7 +65,8 @@ export function survivorSystem(sim: Simulation): void {
       case "flee":
         if (sim.arrived(e)) {
           const node = sim.nearestStorage(e.transform!.x, e.transform!.y, () => true);
-          if (node && dist(e, sim.city.buildings[node.index].entrance.x, sim.city.buildings[node.index].entrance.y) < 3) unloadAndRestock(sim, e, node);
+          if (node && dist(e, sim.city.buildings[node.index].entrance.x, sim.city.buildings[node.index].entrance.y) < 3)
+            unloadAndRestock(sim, e, node);
           s.activity = { type: "idle" };
           s.manual = false;
         }
@@ -245,7 +246,10 @@ function sleep(sim: Simulation, e: SurvivorEntity, hour: number): void {
   const canFight = e.health!.hp > 40 && s.stance !== "passive" && (s.ammo > 0 || s.skills.combat >= 2);
   // Armed survivors in a settlement building hold it and fire from the windows.
   const holding =
-    !wake && s.inside >= 0 && sim.state.buildings[s.inside].fn !== "none" && WEAPONS[s.weapon].usesAmmo &&
+    !wake &&
+    s.inside >= 0 &&
+    sim.state.buildings[s.inside].fn !== "none" &&
+    WEAPONS[s.weapon].usesAmmo &&
     (s.ammo > 0 || sim.storageNodes().includes(sim.state.buildings[s.inside]));
   if (wake || (underAttack && sim.state.policies.autoDefend && canFight && !holding)) {
     if (s.inside >= 0) exitBuilding(sim, e);

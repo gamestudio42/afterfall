@@ -23,8 +23,7 @@ describe("procedural city", () => {
       for (const r of city.roads) expect(rectsOverlap(b.rect, r.rect)).toBe(false);
     }
     for (let i = 0; i < city.buildings.length; i++)
-      for (let j = i + 1; j < city.buildings.length; j++)
-        expect(rectsOverlap(city.buildings[i].rect, city.buildings[j].rect)).toBe(false);
+      for (let j = i + 1; j < city.buildings.length; j++) expect(rectsOverlap(city.buildings[i].rect, city.buildings[j].rect)).toBe(false);
   });
 
   it("gives every building a reachable entrance", () => {

@@ -105,8 +105,7 @@ export function generateCity(opts: CityOptions): CityMap {
   }
   const intersections: Vec2[] = [];
   for (let j = 0; j <= blocksY; j++)
-    for (let i = 0; i <= blocksX; i++)
-      intersections.push({ x: i * pitch + roadWidth / 2, y: j * pitch + roadWidth / 2 });
+    for (let i = 0; i <= blocksX; i++) intersections.push({ x: i * pitch + roadWidth / 2, y: j * pitch + roadWidth / 2 });
 
   const spawnPoints: Vec2[] = [];
   for (let i = 0; i <= blocksX; i++) {
@@ -170,8 +169,18 @@ export function generateCity(opts: CityOptions): CityMap {
     const snap = (v: number) => Math.round(v / cellSize) * cellSize;
     const r = { x: snap(rect.x), y: snap(rect.y), w: Math.max(cellSize * 3, snap(rect.w)), h: Math.max(cellSize * 3, snap(rect.h)) };
     const entrance = {
-      x: facing.x === 0 ? r.x + Math.floor(r.w / 2 / cellSize) * cellSize + cellSize / 2 : facing.x > 0 ? r.x + r.w + cellSize / 2 : r.x - cellSize / 2,
-      y: facing.y === 0 ? r.y + Math.floor(r.h / 2 / cellSize) * cellSize + cellSize / 2 : facing.y > 0 ? r.y + r.h + cellSize / 2 : r.y - cellSize / 2,
+      x:
+        facing.x === 0
+          ? r.x + Math.floor(r.w / 2 / cellSize) * cellSize + cellSize / 2
+          : facing.x > 0
+            ? r.x + r.w + cellSize / 2
+            : r.x - cellSize / 2,
+      y:
+        facing.y === 0
+          ? r.y + Math.floor(r.h / 2 / cellSize) * cellSize + cellSize / 2
+          : facing.y > 0
+            ? r.y + r.h + cellSize / 2
+            : r.y - cellSize / 2,
     };
     const index = buildings.length;
     buildings.push({ id: `b${index}`, index, type, zone, rect: r, area: r.w * r.h, floors, height: floors * 3.2 + 0.6, entrance, facing });
@@ -204,13 +213,28 @@ export function generateCity(opts: CityOptions): CityMap {
     }
     if (b.special) {
       const inset = b.special === "supermarket" ? 8 : 6;
-      addBuilding(b.special, b.zone, { x: bx + inset, y: by + inset, w: blockSize - inset * 2, h: blockSize - inset * 2 - (b.special === "school" ? 10 : 0) }, { x: 0, y: 1 });
+      addBuilding(
+        b.special,
+        b.zone,
+        { x: bx + inset, y: by + inset, w: blockSize - inset * 2, h: blockSize - inset * 2 - (b.special === "school" ? 10 : 0) },
+        { x: 0, y: 1 },
+      );
       continue;
     }
     if (b.zone === "industrial") {
       const half = blockSize / 2;
-      addBuilding(typeForZone("industrial"), b.zone, { x: bx + margin, y: by + margin, w: blockSize - margin * 2, h: half - margin * 2 }, { x: 0, y: -1 });
-      addBuilding(typeForZone("industrial"), b.zone, { x: bx + margin, y: by + half + margin, w: blockSize - margin * 2, h: half - margin * 2 }, { x: 0, y: 1 });
+      addBuilding(
+        typeForZone("industrial"),
+        b.zone,
+        { x: bx + margin, y: by + margin, w: blockSize - margin * 2, h: half - margin * 2 },
+        { x: 0, y: -1 },
+      );
+      addBuilding(
+        typeForZone("industrial"),
+        b.zone,
+        { x: bx + margin, y: by + half + margin, w: blockSize - margin * 2, h: half - margin * 2 },
+        { x: 0, y: 1 },
+      );
       continue;
     }
     const cols = b.zone === "residential" ? rng.pick([2, 3, 3]) : rng.pick([2, 3]);
@@ -235,7 +259,19 @@ export function generateCity(opts: CityOptions): CityMap {
 
   const name = `${rng.pick(CITY_PREFIXES)} ${rng.pick(CITY_SUFFIXES)}`;
   return {
-    seed, name, width, height, cellSize, blockSize, roadWidth, blocksX, blocksY,
-    roads, intersections, buildings, parks: parkDefs, spawnPoints,
+    seed,
+    name,
+    width,
+    height,
+    cellSize,
+    blockSize,
+    roadWidth,
+    blocksX,
+    blocksY,
+    roads,
+    intersections,
+    buildings,
+    parks: parkDefs,
+    spawnPoints,
   };
 }

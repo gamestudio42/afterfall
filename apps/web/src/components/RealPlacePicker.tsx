@@ -63,7 +63,13 @@ export function RealPlacePicker({ onStart }: { onStart: (map: CityMap) => void }
           void search();
         }}
       >
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("osm.searchPlaceholder")} data-testid="place-search" disabled={busy} />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t("osm.searchPlaceholder")}
+          data-testid="place-search"
+          disabled={busy}
+        />
         <button type="submit" className="chip" disabled={busy || !query.trim()}>
           {t("osm.search")}
         </button>
@@ -89,7 +95,11 @@ export function RealPlacePicker({ onStart }: { onStart: (map: CityMap) => void }
           </button>
         ))}
       </div>
-      {status.kind !== "idle" && <p className={status.kind === "error" ? "error" : "muted"} data-testid="place-status">{t(status.key)}</p>}
+      {status.kind !== "idle" && (
+        <p className={status.kind === "error" ? "error" : "muted"} data-testid="place-status">
+          {t(status.key)}
+        </p>
+      )}
       <button className="primary" onClick={() => void start()} disabled={busy} data-testid="start-real">
         {t("osm.start")}
       </button>

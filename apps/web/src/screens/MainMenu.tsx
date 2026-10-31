@@ -81,10 +81,20 @@ export function MainMenu() {
         {view === "new" && (
           <div className="menu-buttons">
             <div className="tabs" role="tablist">
-              <button role="tab" className={mapKind === "procedural" ? "chip active" : "chip"} onClick={() => setMapKind("procedural")} data-testid="map-procedural">
+              <button
+                role="tab"
+                className={mapKind === "procedural" ? "chip active" : "chip"}
+                onClick={() => setMapKind("procedural")}
+                data-testid="map-procedural"
+              >
                 {t("menu.mapProcedural")}
               </button>
-              <button role="tab" className={mapKind === "real" ? "chip active" : "chip"} onClick={() => setMapKind("real")} data-testid="map-real">
+              <button
+                role="tab"
+                className={mapKind === "real" ? "chip active" : "chip"}
+                onClick={() => setMapKind("real")}
+                data-testid="map-real"
+              >
                 {t("menu.mapReal")}
               </button>
             </div>
@@ -123,7 +133,8 @@ export function MainMenu() {
                 <button onClick={() => load(s.name)}>
                   <strong>{s.name}</strong>
                   <small>
-                    {t("menu.saveInfo", { day: s.day, survivors: s.survivors })} · {s.place ?? `#${s.seed}`} · {new Date(s.updatedAt).toLocaleString(lang)}
+                    {t("menu.saveInfo", { day: s.day, survivors: s.survivors })} · {s.place ?? `#${s.seed}`} ·{" "}
+                    {new Date(s.updatedAt).toLocaleString(lang)}
                   </small>
                 </button>
                 <button className="chip danger" onClick={() => deleteSave(s.name).then(() => listSaves().then(setSaves))}>

@@ -118,31 +118,72 @@ export class GameRenderer {
     const ring = new THREE.RingGeometry(0.62, 0.8, 24);
     ring.rotateX(-Math.PI / 2);
     ring.translate(0, 0.12, 0);
-    this.rings = this.instanced(ring, new THREE.MeshBasicMaterial({ color: 0x7dff9a, transparent: true, opacity: 0.9, depthWrite: false }), MAX_UNITS, false);
+    this.rings = this.instanced(
+      ring,
+      new THREE.MeshBasicMaterial({ color: 0x7dff9a, transparent: true, opacity: 0.9, depthWrite: false }),
+      MAX_UNITS,
+      false,
+    );
     const zombie = new THREE.CapsuleGeometry(0.36, 0.8, 3, 7);
     zombie.translate(0, 0.76, 0);
-    this.infected = this.instanced(zombie, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true }), MAX_INFECTED, true);
+    this.infected = this.instanced(
+      zombie,
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true }),
+      MAX_INFECTED,
+      true,
+    );
     const bar = new THREE.PlaneGeometry(1, 0.14);
-    this.hpBg = this.instanced(bar, new THREE.MeshBasicMaterial({ color: 0x1a1a1a, depthTest: false, transparent: true, opacity: 0.8 }), MAX_UNITS + MAX_INFECTED, false);
+    this.hpBg = this.instanced(
+      bar,
+      new THREE.MeshBasicMaterial({ color: 0x1a1a1a, depthTest: false, transparent: true, opacity: 0.8 }),
+      MAX_UNITS + MAX_INFECTED,
+      false,
+    );
     const fg = new THREE.PlaneGeometry(1, 0.14);
     fg.translate(0.5, 0, 0.001);
-    this.hpFg = this.instanced(fg, new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true }), MAX_UNITS + MAX_INFECTED, false);
+    this.hpFg = this.instanced(
+      fg,
+      new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true }),
+      MAX_UNITS + MAX_INFECTED,
+      false,
+    );
     this.hpBg.renderOrder = 10;
     this.hpFg.renderOrder = 11;
 
     const box = new THREE.BoxGeometry(1, 1, 1);
     box.translate(0, 0.5, 0);
-    this.structures = this.instanced(box, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), MAX_STRUCTURES, true);
-    this.blueprints = this.instanced(box, new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.35, depthWrite: false }), MAX_STRUCTURES, false);
-    this.preview = this.instanced(box, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }), 400, false);
+    this.structures = this.instanced(
+      box,
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }),
+      MAX_STRUCTURES,
+      true,
+    );
+    this.blueprints = this.instanced(
+      box,
+      new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.35, depthWrite: false }),
+      MAX_STRUCTURES,
+      false,
+    );
+    this.preview = this.instanced(
+      box,
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }),
+      400,
+      false,
+    );
 
     this.selectionBox = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd34d }));
     this.selectionBox.visible = false;
     this.scene.add(this.selectionBox);
 
     const flag = new THREE.Group();
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8, 6).translate(0, 4, 0), new THREE.MeshStandardMaterial({ color: 0xdddddd }));
-    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.5).translate(1.3, 7.1, 0), new THREE.MeshStandardMaterial({ color: 0xe8913a, side: THREE.DoubleSide }));
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 8, 6).translate(0, 4, 0),
+      new THREE.MeshStandardMaterial({ color: 0xdddddd }),
+    );
+    const cloth = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.6, 1.5).translate(1.3, 7.1, 0),
+      new THREE.MeshStandardMaterial({ color: 0xe8913a, side: THREE.DoubleSide }),
+    );
     flag.add(pole, cloth);
     this.hqMarker = new THREE.Mesh();
     this.hqMarker.add(flag);
@@ -152,7 +193,10 @@ export class GameRenderer {
     const tg = new THREE.BufferGeometry();
     tg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(MAX_TRACERS * 6), 3));
     tg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(MAX_TRACERS * 6), 3));
-    this.tracers = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.tracers = new THREE.LineSegments(
+      tg,
+      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
     this.tracers.frustumCulled = false;
     this.scene.add(this.tracers);
 
@@ -296,7 +340,7 @@ export class GameRenderer {
     // Sun travels east to west between 06:00 and 18:00.
     const dayT = (h - 6) / 12;
     const elev = Math.sin(Math.PI * Math.min(1, Math.max(0, dayT)));
-    const daylight = Math.min(1, Math.max(0, (Math.min(h - 5.3, 19.2 - h)) / 1.6));
+    const daylight = Math.min(1, Math.max(0, Math.min(h - 5.3, 19.2 - h) / 1.6));
     const az = Math.PI * dayT;
     const tgt = this.rts.target;
     this.sun.position.set(tgt.x + Math.cos(az) * 160, 30 + elev * 200, tgt.z + 70);
@@ -372,7 +416,8 @@ export class GameRenderer {
           this.rings.setMatrixAt(sr++, tmpM);
         }
         const h = e.health!;
-        if (selected.has(e.id) || h.hp < h.max) addBar(x, y + 2.2 * UNIT_SCALE, z, h.hp / h.max, h.hp > 60 ? 0x5fd36b : h.hp > 30 ? 0xf0c040 : 0xe0503c);
+        if (selected.has(e.id) || h.hp < h.max)
+          addBar(x, y + 2.2 * UNIT_SCALE, z, h.hp / h.max, h.hp > 60 ? 0x5fd36b : h.hp > 30 ? 0xf0c040 : 0xe0503c);
       } else if (e.infected) {
         if (zi >= MAX_INFECTED) continue;
         const def = INFECTED[e.infected.kind];
@@ -380,7 +425,11 @@ export class GameRenderer {
         tmpQ.setFromAxisAngle(UP, -t.heading + Math.PI / 2);
         const lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.18 + sway);
         tmpQ.multiply(lean);
-        tmpM.compose(tmpV.set(x, 0, z), tmpQ, tmpS.set(def.scale * UNIT_SCALE, def.scale * UNIT_SCALE * (1 + sway * 0.1), def.scale * UNIT_SCALE));
+        tmpM.compose(
+          tmpV.set(x, 0, z),
+          tmpQ,
+          tmpS.set(def.scale * UNIT_SCALE, def.scale * UNIT_SCALE * (1 + sway * 0.1), def.scale * UNIT_SCALE),
+        );
         this.infected.setMatrixAt(zi, tmpM);
         tmpC.setHex(def.color);
         if (this.overlay === "danger") tmpC.lerp(new THREE.Color(0xff3020), 0.5);

@@ -175,8 +175,8 @@ export const ptBR: Record<string, string> = {
   "policy.autoRepair": "Reparar estruturas abaixo de",
   "policy.recall": "Recolher exploradores às 17h",
   "policy.autoDefend": "Acordar defensores em ataques",
-  "saved": "Jogo salvo",
-  "saveFailed": "Não foi possível salvar o jogo.",
+  saved: "Jogo salvo",
+  saveFailed: "Não foi possível salvar o jogo.",
 
   "banner.chooseBase": "Escolha um edifício para ser a sede da sua comunidade.",
   "banner.chooseBaseHint": "Prédios grandes e centrais têm mais espaço, mas são mais difíceis de cercar.",
@@ -259,7 +259,8 @@ export const ptBR: Record<string, string> = {
   "help.camera": "WASD / setas / borda da tela: mover câmera · Q/E ou botão direito + arrastar: girar · Roda: zoom",
   "help.select": "Clique: selecionar · Arrastar: seleção múltipla · Shift: adicionar à seleção",
   "help.orders": "Botão direito: mover / explorar edifício / atacar infectado",
-  "help.keys": "Espaço: pausar · 1–4: velocidade (com Shift) · Ctrl+1–9: formar esquadrão · 1–9: selecionar esquadrão · F: focar · H: voltar à base · Esc: cancelar · F3: diagnóstico",
+  "help.keys":
+    "Espaço: pausar · 1–4: velocidade (com Shift) · Ctrl+1–9: formar esquadrão · 1–9: selecionar esquadrão · F: focar · H: voltar à base · Esc: cancelar · F3: diagnóstico",
   "help.goal": "Objetivo: sobreviva a cinco noites. Explore de dia, construa defesas e volte antes de escurecer.",
   "help.close": "Entendi",
 };

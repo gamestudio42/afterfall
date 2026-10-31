@@ -34,12 +34,7 @@ export interface AutoplayOptions {
   fortify?: boolean;
 }
 
-export function autoplay(
-  sim: Simulation,
-  days: number,
-  onTick?: (sim: Simulation) => void,
-  options: AutoplayOptions = {},
-): void {
+export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulation) => void, options: AutoplayOptions = {}): void {
   if (sim.state.hq < 0) {
     sim.enqueue({ type: "setBase", building: pickBase(sim, options.fortify ? 220 : 500) });
     sim.tick();
@@ -76,9 +71,11 @@ export function autoplay(
       const hq = sim.hqEntrance();
       const near = sim.state.buildings
         .filter((b) => b.fn === "none" && b.hiddenInfected === 0 && b.searchProgress >= b.searchTotal)
-        .sort((a, b) =>
-          Math.hypot(sim.city.buildings[a.index].entrance.x - hq.x, sim.city.buildings[a.index].entrance.y - hq.y) -
-          Math.hypot(sim.city.buildings[b.index].entrance.x - hq.x, sim.city.buildings[b.index].entrance.y - hq.y))[0];
+        .sort(
+          (a, b) =>
+            Math.hypot(sim.city.buildings[a.index].entrance.x - hq.x, sim.city.buildings[a.index].entrance.y - hq.y) -
+            Math.hypot(sim.city.buildings[b.index].entrance.x - hq.x, sim.city.buildings[b.index].entrance.y - hq.y),
+        )[0];
       if (near) {
         sim.enqueue({ type: "convert", building: near.index, fn: "shelter" });
         converted = true;
@@ -90,7 +87,14 @@ export function autoplay(
       const cx = Math.floor(hqDef.entrance.x / g.cell);
       const cy = Math.floor(hqDef.entrance.y / g.cell);
       const dy = hqDef.facing.y > 0 ? 3 : -5;
-      sim.enqueue({ type: "placeStructures", kind: "tower", cells: [[cx - 4, cy + dy], [cx + 3, cy + dy]] });
+      sim.enqueue({
+        type: "placeStructures",
+        kind: "tower",
+        cells: [
+          [cx - 4, cy + dy],
+          [cx + 3, cy + dy],
+        ],
+      });
       builtDefenses = true;
     }
     if (!fortified && sim.state.tick > 40) {

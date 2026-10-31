@@ -17,7 +17,9 @@ for (const fortify of modes) {
     autoplay(sim, 6, undefined, { fortify });
     const r = getReport(sim);
     if (r.outcome?.startsWith("victory")) wins++;
-    rows.push(`${seed}:${r.outcome ?? "-"}@d${r.day} s${r.survivorsAlive} k${r.infectedKilled} w${Math.round(r.stock.wood ?? 0)} a${Math.round(r.stock.ammo ?? 0)} b${r.structuresBuilt}`);
+    rows.push(
+      `${seed}:${r.outcome ?? "-"}@d${r.day} s${r.survivorsAlive} k${r.infectedKilled} w${Math.round(r.stock.wood ?? 0)} a${Math.round(r.stock.ammo ?? 0)} b${r.structuresBuilt}`,
+    );
   }
   console.log(`${fortify ? "fort" : "open"} wins ${wins}/${count}`);
   console.log(rows.join("\n"));

@@ -13,7 +13,7 @@
 - [x] Window fire from settlement buildings, tower guards that help when the attack is out of reach
 - [x] Cheaper walls, stronger nights 4 and 5, a little ammo in homes
 - [x] Clickable minimap
-- [x] GitHub Actions CI (typecheck, unit tests, build, E2E)
+- [x] GitHub Actions CI (typecheck, unit tests, build, E2E) and GitHub Pages deploy from `main`
 
 ## Next
 1. **Balance with real play.** Collect human playtests; teach the bots to craft ammo; tune toward a target win rate per difficulty.

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "license": "AGPL-3.0-only",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "pnpm --filter @afterfall/web dev",
     "build": "pnpm --filter @afterfall/web build",

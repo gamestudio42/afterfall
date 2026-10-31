@@ -147,6 +147,16 @@ export class NavGrid {
     this.version++;
   }
 
+  /** Reserves cells for an unbuilt structure without changing passability. */
+  reserveStructure(cells: number[], structureId: number): void {
+    for (const i of cells) this.structureAt[i] = structureId;
+  }
+
+  /** Clears a reservation only when the cell still belongs to that structure. */
+  releaseStructure(cells: number[], structureId: number): void {
+    for (const i of cells) if (this.structureAt[i] === structureId) this.structureAt[i] = -1;
+  }
+
   /** Cells covered by a square footprint whose top-left cell is (cx, cy). */
   footprint(cx: number, cy: number, size: number): number[] {
     const out: number[] = [];

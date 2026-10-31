@@ -85,7 +85,10 @@ export class Simulation {
       this.rng.state = restored.rngState;
       for (const e of restored.entities.values()) {
         const s = e.structure;
-        if (s && (s.built || s.kind === "farm")) this.stampStructure(e);
+        if (!s) continue;
+        // Built structures change passability; blueprints only reserve their cells.
+        if (s.built) this.stampStructure(e);
+        else this.grid.reserveStructure(s.cells, e.id);
       }
     } else {
       this.rng = new Rng(deriveSeed(opts.seed, "sim"));

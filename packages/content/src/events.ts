@@ -41,18 +41,41 @@ export const EVENTS: GameEventDefinition[] = [
     cooldownDays: 2,
     choices: [
       { key: "event.refugees.all", effects: [{ type: "addSurvivors", count: 3, infectedChance: 0.35 }] },
-      { key: "event.refugees.healthy", effects: [{ type: "addSurvivors", count: 2 }, { type: "morale", amount: -6 }] },
+      {
+        key: "event.refugees.healthy",
+        effects: [
+          { type: "addSurvivors", count: 2 },
+          { type: "morale", amount: -6 },
+        ],
+      },
       { key: "event.refugees.refuse", effects: [{ type: "morale", amount: -10 }] },
     ],
   },
   {
     id: "trader",
-    conditions: [{ type: "minDay", day: 2 }, { type: "resourceAtLeast", resource: "food", amount: 20 }],
+    conditions: [
+      { type: "minDay", day: 2 },
+      { type: "resourceAtLeast", resource: "food", amount: 20 },
+    ],
     weight: 2,
     cooldownDays: 2,
     choices: [
-      { key: "event.trader.ammo", requires: { resource: "food", amount: 20 }, effects: [{ type: "resource", resource: "food", amount: -20 }, { type: "resource", resource: "ammo", amount: 40 }] },
-      { key: "event.trader.meds", requires: { resource: "water", amount: 15 }, effects: [{ type: "resource", resource: "water", amount: -15 }, { type: "resource", resource: "medicine", amount: 6 }] },
+      {
+        key: "event.trader.ammo",
+        requires: { resource: "food", amount: 20 },
+        effects: [
+          { type: "resource", resource: "food", amount: -20 },
+          { type: "resource", resource: "ammo", amount: 40 },
+        ],
+      },
+      {
+        key: "event.trader.meds",
+        requires: { resource: "water", amount: 15 },
+        effects: [
+          { type: "resource", resource: "water", amount: -15 },
+          { type: "resource", resource: "medicine", amount: 6 },
+        ],
+      },
       { key: "event.trader.decline", effects: [] },
     ],
   },
@@ -72,17 +95,36 @@ export const EVENTS: GameEventDefinition[] = [
     weight: 1,
     cooldownDays: 4,
     choices: [
-      { key: "event.storm.ok", effects: [{ type: "damageStructures", fraction: 0.15 }, { type: "resource", resource: "water", amount: 12 }] },
+      {
+        key: "event.storm.ok",
+        effects: [
+          { type: "damageStructures", fraction: 0.15 },
+          { type: "resource", resource: "water", amount: 12 },
+        ],
+      },
     ],
   },
   {
     id: "accident",
-    conditions: [{ type: "minDay", day: 2 }, { type: "minPopulation", count: 3 }],
+    conditions: [
+      { type: "minDay", day: 2 },
+      { type: "minPopulation", count: 3 },
+    ],
     weight: 1,
     cooldownDays: 3,
     choices: [
-      { key: "event.accident.treat", requires: { resource: "medicine", amount: 2 }, effects: [{ type: "resource", resource: "medicine", amount: -2 }] },
-      { key: "event.accident.rest", effects: [{ type: "injureRandom", amount: 45 }, { type: "morale", amount: -4 }] },
+      {
+        key: "event.accident.treat",
+        requires: { resource: "medicine", amount: 2 },
+        effects: [{ type: "resource", resource: "medicine", amount: -2 }],
+      },
+      {
+        key: "event.accident.rest",
+        effects: [
+          { type: "injureRandom", amount: 45 },
+          { type: "morale", amount: -4 },
+        ],
+      },
     ],
   },
 ];

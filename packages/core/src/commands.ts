@@ -31,9 +31,7 @@ export type Command =
   | { type: "setPolicy"; policy: Partial<Policies> };
 
 function units(sim: Simulation, ids: EntityId[]) {
-  return ids
-    .map((id) => sim.state.entities.get(id))
-    .filter((e): e is NonNullable<typeof e> => !!e?.survivor);
+  return ids.map((id) => sim.state.entities.get(id)).filter((e): e is NonNullable<typeof e> => !!e?.survivor);
 }
 
 /** Spreads a group around a point so they do not stack on one cell. */

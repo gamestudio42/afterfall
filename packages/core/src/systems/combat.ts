@@ -96,7 +96,9 @@ function windowFire(sim: Simulation, e: Entity): void {
     const ox = o.transform.x;
     const oy = o.transform.y;
     // Shoot from the point of the wall closest to the target.
-    const w = def.footprint ? closestOnPolygon(ox, oy, def.footprint) : { x: Math.max(r.x, Math.min(r.x + r.w, ox)), y: Math.max(r.y, Math.min(r.y + r.h, oy)) };
+    const w = def.footprint
+      ? closestOnPolygon(ox, oy, def.footprint)
+      : { x: Math.max(r.x, Math.min(r.x + r.w, ox)), y: Math.max(r.y, Math.min(r.y + r.h, oy)) };
     const wx = w.x;
     const wy = w.y;
     const d = Math.hypot(ox - wx, oy - wy);

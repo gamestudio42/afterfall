@@ -52,7 +52,9 @@ export function serialize(sim: Simulation, name = "save"): SaveGame {
     version: SAVE_VERSION,
     metadata: { name, createdAt: now, updatedAt: now, day: sim.clock.day, survivors: sim.survivorCount() },
     worldSeed: st.seed,
-    mapId: sim.city.source ? `osm:${sim.city.source.lat.toFixed(5)},${sim.city.source.lon.toFixed(5)},${sim.city.source.size}` : `procedural:${st.seed}`,
+    mapId: sim.city.source
+      ? `osm:${sim.city.source.lat.toFixed(5)},${sim.city.source.lon.toFixed(5)},${sim.city.source.size}`
+      : `procedural:${st.seed}`,
     simulationTick: st.tick,
     rngState: sim.rng.state,
     // Deep copy so the save does not alias live state.

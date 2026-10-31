@@ -29,28 +29,75 @@ export function syntheticOverpass(size = 480): OverpassResponse {
   const half = size * 0.75;
   const pitch = 70;
   for (let k = -4; k <= 4; k++) {
-    way([[-half, k * pitch], [half, k * pitch]], { highway: k === 0 ? "secondary" : "residential" });
-    way([[k * pitch, -half], [k * pitch, half]], { highway: "residential" });
+    way(
+      [
+        [-half, k * pitch],
+        [half, k * pitch],
+      ],
+      { highway: k === 0 ? "secondary" : "residential" },
+    );
+    way(
+      [
+        [k * pitch, -half],
+        [k * pitch, half],
+      ],
+      { highway: "residential" },
+    );
   }
   // Footpaths are ignored.
-  way([[-20, -20], [20, 20]], { highway: "footway" });
+  way(
+    [
+      [-20, -20],
+      [20, 20],
+    ],
+    { highway: "footway" },
+  );
 
   for (let bx = -3; bx < 3; bx++)
     for (let by = -3; by < 3; by++) {
       const x0 = bx * pitch + 8;
       const y0 = by * pitch + 8;
       if (bx === 1 && by === 1) {
-        way([[x0, y0], [x0 + 50, y0], [x0 + 50, y0 + 50], [x0, y0 + 50]], { leisure: "park" }, true);
+        way(
+          [
+            [x0, y0],
+            [x0 + 50, y0],
+            [x0 + 50, y0 + 50],
+            [x0, y0 + 50],
+          ],
+          { leisure: "park" },
+          true,
+        );
         continue;
       }
       if (bx === -1 && by === -1) {
         // A large tall block.
-        way([[x0, y0], [x0 + 54, y0], [x0 + 54, y0 + 54], [x0, y0 + 54]], { building: "apartments", "building:levels": "6" }, true);
+        way(
+          [
+            [x0, y0],
+            [x0 + 54, y0],
+            [x0 + 54, y0 + 54],
+            [x0, y0 + 54],
+          ],
+          { building: "apartments", "building:levels": "6" },
+          true,
+        );
         continue;
       }
       if (bx === 0 && by === 0) {
         // An L-shaped school.
-        way([[x0, y0], [x0 + 50, y0], [x0 + 50, y0 + 20], [x0 + 20, y0 + 20], [x0 + 20, y0 + 50], [x0, y0 + 50]], { building: "school" }, true);
+        way(
+          [
+            [x0, y0],
+            [x0 + 50, y0],
+            [x0 + 50, y0 + 20],
+            [x0 + 20, y0 + 20],
+            [x0 + 20, y0 + 50],
+            [x0, y0 + 50],
+          ],
+          { building: "school" },
+          true,
+        );
         continue;
       }
       for (let i = 0; i < 3; i++)
@@ -59,7 +106,16 @@ export function syntheticOverpass(size = 480): OverpassResponse {
           const y = y0 + j * 30;
           const tags: Record<string, string> = { building: (bx + by + i) % 4 === 0 ? "yes" : "house" };
           if ((bx + i) % 3 === 0) tags["building:levels"] = String(2 + ((i + j) % 4));
-          way([[x, y], [x + 14, y], [x + 14, y + 20], [x, y + 20]], tags, true);
+          way(
+            [
+              [x, y],
+              [x + 14, y],
+              [x + 14, y + 20],
+              [x, y + 20],
+            ],
+            tags,
+            true,
+          );
         }
     }
   // Points of interest inside buildings.

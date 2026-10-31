@@ -22,6 +22,7 @@ export interface UiState {
   dragRect: { x0: number; y0: number; x1: number; y1: number } | null;
   showHelp: boolean;
   showDev: boolean;
+  outcomeAck: boolean;
   toast: string | null;
   set: (patch: Partial<UiState>) => void;
 }
@@ -50,6 +51,7 @@ export const useUi = create<UiState>((set) => ({
   dragRect: null,
   showHelp: false,
   showDev: false,
+  outcomeAck: false,
   toast: null,
   set: (patch) => set(patch),
 }));

@@ -42,7 +42,10 @@ export function Minimap() {
       ctx.fill();
     };
     ctx.fillStyle = "#3c6b3a";
-    for (const p of city.parks) p.polygon ? fillPoly(p.polygon) : ctx.fillRect(p.rect.x, p.rect.y, p.rect.w, p.rect.h);
+    for (const p of city.parks) {
+      if (p.polygon) fillPoly(p.polygon);
+      else ctx.fillRect(p.rect.x, p.rect.y, p.rect.w, p.rect.h);
+    }
     ctx.fillStyle = "#4a4d52";
     ctx.strokeStyle = "#4a4d52";
     ctx.lineCap = ctx.lineJoin = "round";
@@ -82,7 +85,12 @@ export function Minimap() {
     ctx.fillStyle = "#6ff0c8";
     for (const s of sim.survivors()) if (s.survivor.inside < 0) dot(s.transform!.x, s.transform!.y, 1.8);
     // Camera footprint on the ground.
-    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => game.renderer.groundPoint(x, y));
+    const corners = [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ].map(([x, y]) => game.renderer.groundPoint(x, y));
     if (corners.every(Boolean)) {
       ctx.strokeStyle = "rgba(255,255,255,0.85)";
       ctx.lineWidth = 1 / scale;

@@ -97,9 +97,17 @@ function BuildingPanel({ sim, index }: { sim: Simulation; index: number }) {
             <span className={`danger-${danger}`}>{t(`panel.danger.${danger}`)}</span>
           </Row>
           <h4>{t("panel.loot")}</h4>
-          {st.explored ? <Bag bag={st.remainingLoot} empty={<p className="muted small">{t("panel.depleted")}</p>} /> : <p className="muted small">{t("panel.lootUnknown")}</p>}
+          {st.explored ? (
+            <Bag bag={st.remainingLoot} empty={<p className="muted small">{t("panel.depleted")}</p>} />
+          ) : (
+            <p className="muted small">{t("panel.lootUnknown")}</p>
+          )}
           {units.length > 0 && searched < 100 ? (
-            <button className="primary wide" data-testid="scavenge" onClick={() => game.command({ type: "scavenge", units, building: index })}>
+            <button
+              className="primary wide"
+              data-testid="scavenge"
+              onClick={() => game.command({ type: "scavenge", units, building: index })}
+            >
               {t("panel.scavenge")}
             </button>
           ) : (
@@ -128,7 +136,13 @@ function BuildingPanel({ sim, index }: { sim: Simulation; index: number }) {
                 const cost = BUILDING_FUNCTIONS[fn].cost;
                 const ok = Object.entries(cost).every(([r, v]) => totals[r as keyof typeof totals] >= (v ?? 0));
                 return (
-                  <button key={fn} className="convert" disabled={!ok} data-testid={`convert-${fn}`} onClick={() => game.command({ type: "convert", building: index, fn })}>
+                  <button
+                    key={fn}
+                    className="convert"
+                    disabled={!ok}
+                    data-testid={`convert-${fn}`}
+                    onClick={() => game.command({ type: "convert", building: index, fn })}
+                  >
                     <strong>{t(`fn.${fn}`)}</strong>
                     <small>{t(`fn.desc.${fn}`)}</small>
                     <Bag bag={cost} />
@@ -298,7 +312,10 @@ function StructurePanel({ sim, id }: { sim: Simulation; id: number }) {
         )}
         {s.built && task && (
           <Row label={t(`task.${task.type}`)}>
-            {task.assigned.map((w) => sim.state.entities.get(w)?.survivor?.name).filter(Boolean).join(", ") || "—"}
+            {task.assigned
+              .map((w) => sim.state.entities.get(w)?.survivor?.name)
+              .filter(Boolean)
+              .join(", ") || "—"}
           </Row>
         )}
         <button className="wide" onClick={() => game.command({ type: "demolish", structure: id })}>

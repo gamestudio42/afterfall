@@ -175,8 +175,8 @@ export const en: Record<string, string> = {
   "policy.autoRepair": "Repair structures below",
   "policy.recall": "Recall scavengers at 17:00",
   "policy.autoDefend": "Wake defenders during attacks",
-  "saved": "Game saved",
-  "saveFailed": "Could not save the game.",
+  saved: "Game saved",
+  saveFailed: "Could not save the game.",
 
   "banner.chooseBase": "Choose a building to become your community's headquarters.",
   "banner.chooseBaseHint": "Large central buildings hold more, but are harder to wall in.",
@@ -259,7 +259,8 @@ export const en: Record<string, string> = {
   "help.camera": "WASD / arrows / screen edge: move camera · Q/E or right-drag: rotate · Wheel: zoom",
   "help.select": "Click: select · Drag: box select · Shift: add to selection",
   "help.orders": "Right-click: move / explore building / attack infected",
-  "help.keys": "Space: pause · Shift+1–4: speed · Ctrl+1–9: form squad · 1–9: select squad · F: focus · H: return to base · Esc: cancel · F3: diagnostics",
+  "help.keys":
+    "Space: pause · Shift+1–4: speed · Ctrl+1–9: form squad · 1–9: select squad · F: focus · H: return to base · Esc: cancel · F3: diagnostics",
   "help.goal": "Goal: survive five nights. Scavenge by day, build defenses and get home before dark.",
   "help.close": "Got it",
 };

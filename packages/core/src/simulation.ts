@@ -18,27 +18,10 @@ import {
   type ResourceId,
   type WeaponId,
 } from "@afterfall/content";
-import {
-  Rng,
-  SIMULATION_TICK_MS,
-  TICKS_PER_DAY,
-  clockFromTick,
-  deriveSeed,
-  type GameClock,
-  type Vec2,
-} from "@afterfall/shared";
+import { Rng, SIMULATION_TICK_MS, TICKS_PER_DAY, clockFromTick, deriveSeed, type GameClock, type Vec2 } from "@afterfall/shared";
 import { NavGrid, SpatialHash, generateCity, type Agent, type CityMap, type CityOptions } from "@afterfall/world";
 import { applyCommand, type Command } from "./commands";
-import type {
-  AlertSeverity,
-  BuildingState,
-  Entity,
-  EntityId,
-  Fx,
-  GameState,
-  ResourceTotals,
-  Skills,
-} from "./state";
+import type { AlertSeverity, BuildingState, Entity, EntityId, Fx, GameState, ResourceTotals, Skills } from "./state";
 import { infectedSystem, InfectedFields } from "./systems/infected";
 import { movementSystem } from "./systems/movement";
 import { survivorSystem } from "./systems/survivors";
@@ -551,7 +534,13 @@ export class Simulation {
   }
 
   /** Raises an alert at most once per `cooldownTicks` for the same key. */
-  alertOnce(key: string, cooldownTicks: number, params: Record<string, string | number> = {}, severity: AlertSeverity = "warning", pos?: Vec2): void {
+  alertOnce(
+    key: string,
+    cooldownTicks: number,
+    params: Record<string, string | number> = {},
+    severity: AlertSeverity = "warning",
+    pos?: Vec2,
+  ): void {
     const last = this.state.eventCooldowns[`alert:${key}`] ?? -Infinity;
     if (this.state.tick - last < cooldownTicks) return;
     this.state.eventCooldowns[`alert:${key}`] = this.state.tick;

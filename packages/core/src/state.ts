@@ -1,11 +1,4 @@
-import type {
-  BuildingFunction,
-  InfectedKind,
-  ResourceBag,
-  ResourceId,
-  StructureKind,
-  WeaponId,
-} from "@afterfall/content";
+import type { BuildingFunction, InfectedKind, ResourceBag, ResourceId, StructureKind, WeaponId } from "@afterfall/content";
 import type { Vec2 } from "@afterfall/shared";
 
 export type EntityId = number;

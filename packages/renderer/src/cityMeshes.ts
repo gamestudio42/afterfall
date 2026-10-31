@@ -66,7 +66,9 @@ export function buildCityGround(city: CityMap): THREE.Group {
     group.add(blockMesh);
   }
 
-  const roads = city.roads.flatMap((r) => (r.path ? ribbon(r.path, r.width ?? 8, 0.01) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.01)]));
+  const roads = city.roads.flatMap((r) =>
+    r.path ? ribbon(r.path, r.width ?? 8, 0.01) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.01)],
+  );
   const roadMesh = new THREE.Mesh(mergeGeometries(roads), new THREE.MeshStandardMaterial({ color: 0x34363a, roughness: 0.9 }));
   roadMesh.receiveShadow = true;
   group.add(roadMesh);

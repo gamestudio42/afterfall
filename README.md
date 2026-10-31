@@ -104,9 +104,14 @@ pnpm dev        # http://localhost:5173
 
 | Command                                  | Purpose                                                    |
 | ---------------------------------------- | ---------------------------------------------------------- |
+| `pnpm check`                             | Typecheck, lint, format check and unit tests               |
 | `pnpm typecheck`                         | TypeScript over the whole monorepo                         |
-| `pnpm test`                              | Vitest: world generation and simulation tests              |
-| `pnpm test:e2e`                          | Playwright browser workflows (starts the dev server)       |
+| `pnpm lint` / `pnpm format:check`        | ESLint and Prettier checks                                 |
+| `pnpm test` / `pnpm test:coverage`       | Vitest tests; coverage enforces the configured thresholds   |
+| `pnpm run audit`                         | Fail on high or critical dependency advisories             |
+| `pnpm test:e2e`                          | Playwright workflows in Chromium (starts the dev server)   |
+| `pnpm test:e2e:cross-browser`            | WebKit smoke test used by CI                               |
+| `pnpm test:e2e:firefox`                  | Firefox smoke test (needs a WebGL-capable host)            |
 | `pnpm build`                             | Static build in `apps/web/dist`, relative paths            |
 | `pnpm sim [seed] [days]`                 | Headless game with a scripted player, prints a JSON report |
 | `pnpm sweep [seeds] [first] [open\|fort]` | Win rates of both scripted players over many seeds         |

@@ -43,7 +43,12 @@ export function TopBar() {
       </div>
       <div className="resources">
         {RESOURCE_IDS.filter((id) => id !== "firearms" || totals.firearms > 0).map((id) => (
-          <span key={id} className={`res ${id === "food" && totals.food < pop * 2 ? "warn" : ""}`} title={t(`res.${id}`)} data-testid={`res-${id}`}>
+          <span
+            key={id}
+            className={`res ${id === "food" && totals.food < pop * 2 ? "warn" : ""}`}
+            title={t(`res.${id}`)}
+            data-testid={`res-${id}`}
+          >
             <ResDot id={id} />
             <span className="res-name">{t(`res.${id}`)}</span>
             <strong>{Math.floor(totals[id])}</strong>

@@ -1,13 +1,4 @@
-import {
-  BALANCE,
-  BUILDING_FUNCTIONS,
-  RESOURCE_IDS,
-  STRUCTURES,
-  WEAPONS,
-  addToBag,
-  bagTotal,
-  type ResourceBag,
-} from "@afterfall/content";
+import { BALANCE, BUILDING_FUNCTIONS, RESOURCE_IDS, STRUCTURES, WEAPONS, addToBag, bagTotal, type ResourceBag } from "@afterfall/content";
 import type { Vec2 } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
 import type { Simulation } from "../simulation";
@@ -120,7 +111,12 @@ export function taskSystem(sim: Simulation): void {
       let bestScore = -Infinity;
       for (let i = 0; i < idle.length; i++) {
         const e = idle[i];
-        const skill = task.type === "farm" ? e.survivor.skills.farming : task.type === "guard" ? e.survivor.skills.combat : e.survivor.skills.construction;
+        const skill =
+          task.type === "farm"
+            ? e.survivor.skills.farming
+            : task.type === "guard"
+              ? e.survivor.skills.combat
+              : e.survivor.skills.construction;
         const score = skill * 6 - dist(e, site.x, site.y) / 8 + (task.type === "guard" && e.survivor.weapon !== "crowbar" ? 20 : 0);
         if (score > bestScore) {
           bestScore = score;
@@ -241,7 +237,9 @@ export function runTaskActivity(sim: Simulation, e: SurvivorEntity): void {
         a.phase = "work";
         return;
       }
-      const node = sim.nearestStorage(e.transform!.x, e.transform!.y, (b) => RESOURCE_IDS.some((id) => (need[id] ?? 0) > 0 && (b.storage[id] ?? 0) > 0));
+      const node = sim.nearestStorage(e.transform!.x, e.transform!.y, (b) =>
+        RESOURCE_IDS.some((id) => (need[id] ?? 0) > 0 && (b.storage[id] ?? 0) > 0),
+      );
       if (!node) {
         if (canWork) a.phase = "work";
         else releaseFromTask(sim, e);

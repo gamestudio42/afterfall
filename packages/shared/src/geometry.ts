@@ -172,7 +172,7 @@ function lerpAt(a: Vec2, b: Vec2, t: number): Vec2 {
 
 /** Drops points closer than minDist to the previous one and nearly collinear points. */
 export function simplifyPolygon(poly: Vec2[], minDist = 0.4): Vec2[] {
-  let pts = poly.filter((p, i) => i === 0 || Math.hypot(p.x - poly[i - 1].x, p.y - poly[i - 1].y) >= minDist);
+  const pts = poly.filter((p, i) => i === 0 || Math.hypot(p.x - poly[i - 1].x, p.y - poly[i - 1].y) >= minDist);
   if (pts.length > 1 && Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < minDist) pts.pop();
   const out: Vec2[] = [];
   for (let i = 0; i < pts.length; i++) {

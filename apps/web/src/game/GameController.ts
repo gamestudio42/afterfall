@@ -5,6 +5,7 @@ import { GameRenderer } from "@afterfall/renderer";
 import { CellKind } from "@afterfall/world";
 import { putSave } from "../app/saves";
 import { useUi, type Speed } from "../app/store";
+import { translate } from "../i18n";
 
 const CLICK_SLOP = 5;
 const UNIT_PICK_RADIUS = 18;
@@ -62,7 +63,9 @@ export class GameController {
       const e = sim.hqEntrance();
       this.renderer.rts.jumpTo(e.x, e.y);
     }
-    (window as unknown as { __afterfall: GameController }).__afterfall = this;
+    if (import.meta.env.DEV) {
+      (window as unknown as { __afterfall: GameController }).__afterfall = this;
+    }
   }
 
   dispose(): void {
@@ -129,7 +132,10 @@ export class GameController {
     const c = sim.clock;
     if (c.day !== this.lastDay && c.hour >= 6 && sim.state.started) {
       this.lastDay = c.day;
-      void this.save("autosave");
+      void this.save("autosave").catch(() => {
+        const ui = useUi.getState();
+        ui.set({ toast: translate(ui.lang, "saveFailed") });
+      });
     }
   }
 

@@ -3,7 +3,7 @@ import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, tickAt } from
 import { CellKind, cityFromOverpass } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
 import { hqPerimeter } from "../src/systems/infected";
-import { createSimulation, deserialize, getReport, serialize, stateHash, type Simulation } from "../src";
+import { SAVE_VERSION, createSimulation, deserialize, getReport, serialize, stateHash, type Simulation } from "../src";
 import { enterBuilding } from "../src/systems/util";
 import { autoplay, fortRing, pickBase } from "./autoplay";
 
@@ -285,6 +285,33 @@ describe("determinism and persistence", () => {
 
   it("rejects malformed saves", () => {
     expect(() => deserialize("{}")).toThrow();
+  });
+
+  it("rejects saves from a newer version", () => {
+    const save = serialize(started(), "future");
+    save.version = SAVE_VERSION + 1;
+    save.worldState.version = SAVE_VERSION + 1;
+    expect(() => deserialize(save)).toThrow(/newer/);
+  });
+
+  it("rejects an imported save without its embedded map", () => {
+    const map = cityFromOverpass(syntheticOverpass(), { ...FIXTURE_CENTER, size: 480, label: "Test" });
+    const save = serialize(createSimulation({ seed: map.seed, map }), "no-map");
+    delete save.map;
+    expect(() => deserialize(save)).toThrow(/map/i);
+  });
+
+  it("rejects a saved state that does not match its map", () => {
+    const save = serialize(started(), "mismatch");
+    save.worldState.hq = 0;
+    save.worldState.buildings = save.worldState.buildings.slice(1);
+    expect(() => deserialize(save)).toThrow(/match/);
+  });
+
+  it("rejects malformed save internals", () => {
+    const save = serialize(started(), "bad-internals");
+    (save.worldState as unknown as { tasks: unknown }).tasks = {};
+    expect(() => deserialize(save)).toThrow();
   });
 });
 

@@ -19,8 +19,12 @@ export function BottomBar() {
   const p = sim.state.policies;
 
   const save = async () => {
-    await game.save("manual");
-    ui.set({ toast: t("saved") });
+    try {
+      await game.save("manual");
+      ui.set({ toast: t("saved") });
+    } catch {
+      ui.set({ toast: t("saveFailed") });
+    }
     setTimeout(() => useUi.getState().set({ toast: null }), 1800);
   };
 

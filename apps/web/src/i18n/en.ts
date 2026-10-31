@@ -176,6 +176,7 @@ export const en: Record<string, string> = {
   "policy.recall": "Recall scavengers at 17:00",
   "policy.autoDefend": "Wake defenders during attacks",
   "saved": "Game saved",
+  "saveFailed": "Could not save the game.",
 
   "banner.chooseBase": "Choose a building to become your community's headquarters.",
   "banner.chooseBaseHint": "Large central buildings hold more, but are harder to wall in.",

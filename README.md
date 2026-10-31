@@ -108,7 +108,7 @@ pnpm dev        # http://localhost:5173
 | `pnpm typecheck`                         | TypeScript over the whole monorepo                         |
 | `pnpm lint` / `pnpm format:check`        | ESLint and Prettier checks                                 |
 | `pnpm test` / `pnpm test:coverage`       | Vitest tests; coverage enforces the configured thresholds   |
-| `pnpm audit`                             | Fail on high or critical dependency advisories             |
+| `pnpm run audit`                         | Fail on high or critical dependency advisories             |
 | `pnpm test:e2e`                          | Playwright workflows in Chromium (starts the dev server)   |
 | `pnpm test:e2e:cross-browser`            | Firefox and WebKit smoke test                              |
 | `pnpm build`                             | Static build in `apps/web/dist`, relative paths            |

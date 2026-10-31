@@ -34,7 +34,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
-      - run: pnpm audit
+      - run: pnpm run audit
       - run: pnpm test:coverage
       - uses: actions/upload-artifact@v5
         with:

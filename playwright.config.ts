@@ -17,6 +17,7 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...shared,
+        browserName: "chromium",
         launchOptions: {
           executablePath,
           args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
@@ -27,6 +28,7 @@ export default defineConfig({
       name: "firefox",
       use: {
         ...shared,
+        browserName: "firefox",
         launchOptions: {
           firefoxUserPrefs: {
             "webgl.disabled": false,
@@ -35,7 +37,7 @@ export default defineConfig({
         },
       },
     },
-    { name: "webkit", use: { ...shared } },
+    { name: "webkit", use: { ...shared, browserName: "webkit" } },
   ],
   webServer: {
     command: "pnpm --filter @afterfall/web exec vite --port 5173 --strictPort",

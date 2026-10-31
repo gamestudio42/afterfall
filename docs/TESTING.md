@@ -2,7 +2,7 @@
 
 - `pnpm check`: typecheck, ESLint, Prettier check and the unit tests.
 - `pnpm lint` / `pnpm format:check`: required before a PR; CI runs both.
-- `pnpm audit`: fails on high or critical dependency advisories.
+- `pnpm run audit`: fails on high or critical dependency advisories.
 - `pnpm test:coverage`: Vitest with V8 coverage. CI uploads the `coverage` artifact and enforces 68% statements, branches, functions and lines.
 - `pnpm test`: Vitest
   - `packages/world/tests`: city determinism, required landmarks, no building and road overlap, every entrance reachable, paths never cross buildings, gate passability, and the OpenStreetMap importer on a synthetic Overpass answer (rotated streets, an L-shaped school, points of interest): footprints, types, reachable doors, entry points, determinism, and promotion of essential buildings when only a few candidates exist.

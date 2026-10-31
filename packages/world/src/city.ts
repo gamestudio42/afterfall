@@ -6,8 +6,12 @@ export interface BuildingDef {
   index: number;
   type: BuildingType;
   zone: Zone;
-  /** Footprint rectangle in meters. */
+  /** Footprint rectangle in meters (the bounding box when a footprint polygon is set). */
   rect: Rect;
+  /** Real footprint outline, for imported maps. Procedural buildings are just their rect. */
+  footprint?: Vec2[];
+  /** Ground area in m². */
+  area: number;
   floors: number;
   height: number;
   /** A walkable point just outside the door. */
@@ -18,14 +22,31 @@ export interface BuildingDef {
 
 export interface RoadDef {
   id: string;
+  /** Road surface for grid roads; the bounding box for imported ones. */
   rect: Rect;
   horizontal: boolean;
+  /** Center line of an imported road, with its width in meters. */
+  path?: Vec2[];
+  width?: number;
 }
 
 export interface ParkDef {
   id: string;
   rect: Rect;
+  /** Real outline, for imported maps. */
+  polygon?: Vec2[];
   trees: Vec2[];
+}
+
+/** Where a map came from, kept with saves so the same map can be rebuilt. */
+export interface MapSource {
+  kind: "osm";
+  label: string;
+  lat: number;
+  lon: number;
+  /** Side of the square area in meters. */
+  size: number;
+  attribution: string;
 }
 
 export interface CityMap {
@@ -44,6 +65,8 @@ export interface CityMap {
   parks: ParkDef[];
   /** Road ends at the map border, where hordes enter. */
   spawnPoints: Vec2[];
+  /** Set for imported maps; absent for procedural ones. */
+  source?: MapSource;
 }
 
 export interface CityOptions {
@@ -151,7 +174,7 @@ export function generateCity(opts: CityOptions): CityMap {
       y: facing.y === 0 ? r.y + Math.floor(r.h / 2 / cellSize) * cellSize + cellSize / 2 : facing.y > 0 ? r.y + r.h + cellSize / 2 : r.y - cellSize / 2,
     };
     const index = buildings.length;
-    buildings.push({ id: `b${index}`, index, type, zone, rect: r, floors, height: floors * 3.2 + 0.6, entrance, facing });
+    buildings.push({ id: `b${index}`, index, type, zone, rect: r, area: r.w * r.h, floors, height: floors * 3.2 + 0.6, entrance, facing });
   };
 
   const typeForZone = (zone: Zone): BuildingType => {

@@ -85,7 +85,10 @@ export class Simulation {
       this.rng.state = restored.rngState;
       for (const e of restored.entities.values()) {
         const s = e.structure;
-        if (s && (s.built || s.kind === "farm")) this.stampStructure(e);
+        if (!s) continue;
+        // Built structures change passability; blueprints only reserve their cells.
+        if (s.built) this.stampStructure(e);
+        else this.grid.reserveStructure(s.cells, e.id);
       }
     } else {
       this.rng = new Rng(deriveSeed(opts.seed, "sim"));
@@ -104,7 +107,13 @@ export class Simulation {
 
   /** Advances by real elapsed time. Returns ticks processed. */
   update(realDtMs: number, speed: number): number {
-    if (speed <= 0) return 0;
+    // Time can be frozen by a pending event, a pause or a defeat. Commands
+    // must still be applied: resolving an event cannot wait for a tick.
+    if (speed <= 0) {
+      if (this.state.outcome?.type === "defeat") this.commands = [];
+      else this.drainCommands();
+      return 0;
+    }
     this.accumulator += realDtMs * speed;
     let n = 0;
     while (this.accumulator >= SIMULATION_TICK_MS && n < MAX_TICKS_PER_UPDATE * Math.max(1, speed / 2)) {
@@ -125,11 +134,15 @@ export class Simulation {
     return clockFromTick(this.state.tick);
   }
 
-  tick(): void {
-    const t0 = performance.now();
+  private drainCommands(): void {
     const cmds = this.commands;
     this.commands = [];
     for (const c of cmds) applyCommand(this, c);
+  }
+
+  tick(): void {
+    const t0 = performance.now();
+    this.drainCommands();
     if (!this.state.started || (this.state.outcome && this.state.outcome.type === "defeat")) {
       this.tickMs = this.tickMs * 0.95 + (performance.now() - t0) * 0.05;
       return;

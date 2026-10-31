@@ -305,9 +305,10 @@ function ensureEssentials(typed: { rb: RawBuilding; type: BuildingType }[], size
   const center = (t: { rb: RawBuilding }) => Math.hypot(t.rb.centroid.x - size / 2, t.rb.centroid.y - size / 2);
   for (const need of ["supermarket", "police"] as BuildingType[]) {
     if (typed.some((t) => t.type === need)) continue;
-    const pick = typed
+    const candidates = typed
       .filter((t) => (t.type === "shop" || t.type === "office" || t.type === "warehouse") && t.rb.area >= 150 && t.rb.area <= 1500)
-      .sort((a, b) => center(a) - center(b))[Math.min(3, typed.length - 1)];
+      .sort((a, b) => center(a) - center(b));
+    const pick = candidates[Math.min(3, candidates.length - 1)];
     if (pick) pick.type = need;
   }
 }

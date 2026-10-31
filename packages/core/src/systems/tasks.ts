@@ -461,7 +461,7 @@ export function cancelTask(sim: Simulation, task: Task): void {
     for (const id of task.structures) {
       const e = sim.state.entities.get(id);
       if (e && !e.structure!.built) {
-        for (const c of e.structure!.cells) sim.grid.structureAt[c] = -1;
+        sim.grid.releaseStructure(e.structure!.cells, e.id);
         sim.removeEntity(id);
       }
     }
@@ -535,7 +535,7 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
     e.transform!.px = e.transform!.x;
     e.transform!.py = e.transform!.y;
     sim.state.entities.set(id, e);
-    for (const i of fp) sim.grid.structureAt[i] = id;
+    sim.grid.reserveStructure(fp, id);
     ids.push(id);
     for (const r of RESOURCE_IDS) if (def.cost[r]) addToBag(cost, r, def.cost[r]!);
     work += def.work;

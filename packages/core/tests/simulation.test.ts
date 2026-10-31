@@ -218,6 +218,51 @@ describe("infected and combat (phase 5)", () => {
   });
 });
 
+describe("events", () => {
+  it("resolves a pending event while simulation time is frozen", () => {
+    const sim = started();
+    const tick = sim.state.tick;
+    sim.state.pendingEvent = { eventId: "radio", tick };
+    sim.enqueue({ type: "resolveEvent", choice: 0 });
+
+    expect(sim.update(1000, 0)).toBe(0);
+    expect(sim.state.pendingEvent).toBeNull();
+    expect(sim.state.tick).toBe(tick);
+  });
+});
+
+describe("blueprint persistence", () => {
+  it("keeps blueprint cells reserved after loading", () => {
+    const sim = started(3);
+    for (const z of [...sim.infected()]) sim.removeEntity(z.id);
+    const hq = sim.city.buildings[sim.state.hq];
+    const g = sim.grid;
+    const cy = Math.floor(hq.entrance.y / g.cell) + (hq.facing.y > 0 ? 3 : -3);
+    const cx = Math.floor(hq.entrance.x / g.cell);
+    const cells: [number, number][] = [];
+    for (let x = cx - 3; x <= cx + 3; x++) cells.push([x, cy]);
+
+    sim.enqueue({ type: "placeStructures", kind: "wall", cells });
+    sim.tick();
+    const blueprint = [...sim.structures()][0];
+    expect(blueprint?.structure.built).toBe(false);
+
+    const loaded = deserialize(JSON.stringify(serialize(sim, "blueprint")));
+    const restored = [...loaded.structures()][0];
+    expect(restored?.structure.built).toBe(false);
+    for (const c of restored.structure.cells) {
+      expect(loaded.grid.structureAt[c]).toBe(restored.id);
+      expect(loaded.grid.kind[c]).toBe(CellKind.Free);
+    }
+
+    // The reservation must survive a load, so a second structure cannot overlap it.
+    const before = [...loaded.structures()].length;
+    loaded.enqueue({ type: "placeStructures", kind: "wall", cells });
+    loaded.tick();
+    expect([...loaded.structures()].length).toBe(before);
+  });
+});
+
 describe("determinism and persistence", () => {
   it("two runs with the same seed and commands are identical", () => {
     const a = createSimulation({ seed: 77 });

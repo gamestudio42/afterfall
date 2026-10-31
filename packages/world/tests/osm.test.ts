@@ -5,6 +5,18 @@ import { FIXTURE_CENTER, syntheticOverpass } from "./fixtures/osm";
 
 const opts = { ...FIXTURE_CENTER, size: 480, label: "Test" };
 
+/** A dense area that lacks a supermarket and a police station, with only two shops to promote. */
+function sparseEssentialsOverpass() {
+  const data = syntheticOverpass();
+  const elements = data.elements.map((el) => {
+    if (el.type !== "node") return el;
+    if (el.tags?.shop === "supermarket") return { ...el, tags: { shop: "bakery" } };
+    if (el.tags?.amenity === "police") return { ...el, tags: { shop: "clothes" } };
+    return el;
+  });
+  return { elements };
+}
+
 describe("OpenStreetMap import", () => {
   const city = cityFromOverpass(syntheticOverpass(), opts);
   const grid = NavGrid.fromCity(city);
@@ -38,6 +50,13 @@ describe("OpenStreetMap import", () => {
   it("types buildings from tags and points of interest", () => {
     const types = new Set(city.buildings.map((b) => b.type));
     for (const t of ["house", "school", "supermarket", "police", "pharmacy", "apartment"]) expect(types).toContain(t);
+  });
+
+  it("promotes essential buildings when there are few candidates", () => {
+    const sparse = cityFromOverpass(sparseEssentialsOverpass(), opts);
+    const types = new Set(sparse.buildings.map((b) => b.type));
+    expect(types.has("supermarket")).toBe(true);
+    expect(types.has("police")).toBe(true);
   });
 
   it("places every door on a free cell reachable from the map border", () => {

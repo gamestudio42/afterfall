@@ -102,6 +102,33 @@ test("start a game, choose a base, scavenge and save", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("resolve a pending event while time is frozen", async ({ page }) => {
+  await startGame(page, "4242");
+  await page.evaluate(() => {
+    const g = (window as unknown as Win).__afterfall;
+    g.command({ type: "setBase", building: 0 });
+  });
+  await expect(page.getByTestId("pop")).toHaveText("4");
+
+  await page.evaluate(() => {
+    const g = (window as unknown as Win).__afterfall;
+    g.sim.state.pendingEvent = { eventId: "radio", tick: g.sim.state.tick };
+  });
+  await expect(page.getByTestId("event-modal")).toBeVisible();
+  // Give the loop a moment to observe the event, then prove the clock is frozen.
+  await page.waitForTimeout(300);
+  const before = await page.evaluate(() => (window as unknown as Win).__afterfall.sim.state.tick);
+  await page.waitForTimeout(300);
+  const stillFrozen = await page.evaluate(() => (window as unknown as Win).__afterfall.sim.state.tick);
+  expect(stillFrozen).toBe(before);
+
+  await page.getByTestId("choice-0").click();
+  await expect(page.getByTestId("event-modal")).toHaveCount(0);
+
+  await page.getByTestId("speed-4").click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as Win).__afterfall.sim.state.tick), { timeout: 10_000 }).toBeGreaterThan(stillFrozen);
+});
+
 test("build a wall from the build menu", async ({ page }) => {
   await startGame(page, "7");
   await page.evaluate(() => {

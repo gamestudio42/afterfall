@@ -11,7 +11,7 @@ USER INPUT ─▶ GameController ─▶ Command queue ─▶ Simulation.tick() �
 1. **Simulation is independent from rendering.** `@afterfall/core` has no DOM, Three.js or React imports and runs headless in Node.
 2. **Fixed timestep.** One tick = 100 ms of real time at 1× (`SIMULATION_TICK_MS`). Speed changes the number of ticks per frame, never the tick size. Catch-up is capped per frame.
 3. **Determinism.** All randomness goes through a serialized mulberry32 `Rng`. `Math.random()` is never used in the simulation. The same seed and commands give the same `stateHash` (tested).
-4. **Commands, not mutations.** The UI enqueues `Command`s, which are applied at the start of the next tick.
+4. **Commands, not mutations.** The UI enqueues `Command`s, which are applied at the start of the next tick. Queued commands are also drained while time is frozen (a pause or a pending event) so a UI decision never waits for a tick; draining does not advance the clock.
 5. **Data-driven content.** Loot tables, structures, weapons, infected, events and balance live in `@afterfall/content`. Player-facing text lives only in `apps/web/src/i18n`, and the simulation emits keys and parameters.
 
 ## Packages

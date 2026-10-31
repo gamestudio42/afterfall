@@ -176,6 +176,7 @@ export const ptBR: Record<string, string> = {
   "policy.recall": "Recolher exploradores às 17h",
   "policy.autoDefend": "Acordar defensores em ataques",
   "saved": "Jogo salvo",
+  "saveFailed": "Não foi possível salvar o jogo.",
 
   "banner.chooseBase": "Escolha um edifício para ser a sede da sua comunidade.",
   "banner.chooseBaseHint": "Prédios grandes e centrais têm mais espaço, mas são mais difíceis de cercar.",

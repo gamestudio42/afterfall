@@ -12,7 +12,10 @@ export function Alerts() {
   const sim = game.sim!;
   const now = sim.state.tick;
   // Show alerts from the last two game hours, newest first.
-  const recent = sim.state.alerts.filter((a) => now - a.tick < 120 * TICKS_PER_GAME_MINUTE).slice(-6).reverse();
+  const recent = sim.state.alerts
+    .filter((a) => now - a.tick < 120 * TICKS_PER_GAME_MINUTE)
+    .slice(-6)
+    .reverse();
   return (
     <div className="alerts" data-testid="alerts">
       {recent.map((a) => (
@@ -49,7 +52,12 @@ export function EventModal() {
           {def.choices.map((c, i) => {
             const ok = !c.requires || totals[c.requires.resource] >= c.requires.amount;
             return (
-              <button key={c.key} disabled={!ok} onClick={() => game.command({ type: "resolveEvent", choice: i })} data-testid={`choice-${i}`}>
+              <button
+                key={c.key}
+                disabled={!ok}
+                onClick={() => game.command({ type: "resolveEvent", choice: i })}
+                data-testid={`choice-${i}`}
+              >
                 {t(c.key)}
                 {c.requires && <small>{t("event.requires", { amount: c.requires.amount, res: t(`res.${c.requires.resource}`) })}</small>}
               </button>
@@ -67,8 +75,8 @@ export function OutcomeModal() {
   const game = useGame();
   const set = useUi((s) => s.set);
   const sim = game.sim!;
+  const ack = useUi((s) => s.outcomeAck);
   const o = sim.state.outcome;
-  const ack = sim.state.eventCooldowns["ui:outcomeAck"];
   if (!o || ack) return null;
   const r = getReport(sim);
   const victory = o.type === "victory";
@@ -77,10 +85,12 @@ export function OutcomeModal() {
       <div className={`modal outcome ${o.type}`} data-testid="outcome">
         <h2>{victory ? t("outcome.victory") : t("outcome.defeat")}</h2>
         <p>{victory ? t("outcome.victoryText") : t(`outcome.${o.reason}`)}</p>
-        <p className="muted">{t("outcome.stats", { day: r.day, killed: r.infectedKilled, lost: r.survivorsLost, built: r.structuresBuilt })}</p>
+        <p className="muted">
+          {t("outcome.stats", { day: r.day, killed: r.infectedKilled, lost: r.survivorsLost, built: r.structuresBuilt })}
+        </p>
         <div className="modal-actions">
           {victory && (
-            <button className="primary" onClick={() => (sim.state.eventCooldowns["ui:outcomeAck"] = 1)}>
+            <button className="primary" onClick={() => set({ outcomeAck: true })}>
               {t("outcome.continue")}
             </button>
           )}

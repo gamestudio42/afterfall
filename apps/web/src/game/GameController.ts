@@ -58,7 +58,7 @@ export class GameController {
     this.renderer.setSimulation(sim);
     this.lastDay = sim.clock.day;
     const ui = useUi.getState();
-    ui.set({ selectedUnits: [], selectedBuilding: -1, selectedStructure: -1, buildMode: null, speed: 1, lastSpeed: 1 });
+    ui.set({ selectedUnits: [], selectedBuilding: -1, selectedStructure: -1, buildMode: null, speed: 1, lastSpeed: 1, outcomeAck: false });
     if (sim.state.hq >= 0) {
       const e = sim.hqEntrance();
       this.renderer.rts.jumpTo(e.x, e.y);
@@ -180,7 +180,12 @@ export class GameController {
     return { x: ev.clientX - r.left, y: ev.clientY - r.top };
   }
 
-  private on<K extends keyof WindowEventMap>(target: Window | HTMLElement, type: K, fn: (ev: WindowEventMap[K]) => void, opts?: AddEventListenerOptions): void {
+  private on<K extends keyof WindowEventMap>(
+    target: Window | HTMLElement,
+    type: K,
+    fn: (ev: WindowEventMap[K]) => void,
+    opts?: AddEventListenerOptions,
+  ): void {
     target.addEventListener(type, fn as EventListener, opts);
     this.disposers.push(() => target.removeEventListener(type, fn as EventListener));
   }
@@ -192,10 +197,15 @@ export class GameController {
     this.on(window, "mousemove", (e) => this.onMove(e));
     this.on(window, "mouseup", (e) => this.onUp(e));
     this.on(c, "mouseleave", () => (this.mouse.inside = false));
-    this.on(c, "wheel", (e) => {
-      e.preventDefault();
-      this.renderer.rts.zoom(Math.exp(e.deltaY * 0.0012));
-    }, { passive: false });
+    this.on(
+      c,
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        this.renderer.rts.zoom(Math.exp(e.deltaY * 0.0012));
+      },
+      { passive: false },
+    );
     this.on(window, "keydown", (e) => this.onKey(e, true));
     this.on(window, "keyup", (e) => this.onKey(e, false));
     this.on(window, "blur", () => this.keys.clear());
@@ -270,7 +280,7 @@ export class GameController {
     const p = this.local(e);
     if (e.button === 0) {
       const ui = useUi.getState();
-      this.leftDown = { ...p, cell: ui.buildMode ? this.cellAt(p.x, p.y) ?? undefined : undefined };
+      this.leftDown = { ...p, cell: ui.buildMode ? (this.cellAt(p.x, p.y) ?? undefined) : undefined };
     } else if (e.button === 2) {
       this.rightDown = { ...p, rotating: false };
     }
@@ -362,7 +372,11 @@ export class GameController {
     const ui = useUi.getState();
     const unit = this.pickUnit(x, y);
     if (unit >= 0) {
-      const units = add ? (ui.selectedUnits.includes(unit) ? ui.selectedUnits.filter((u) => u !== unit) : [...ui.selectedUnits, unit]) : [unit];
+      const units = add
+        ? ui.selectedUnits.includes(unit)
+          ? ui.selectedUnits.filter((u) => u !== unit)
+          : [...ui.selectedUnits, unit]
+        : [unit];
       ui.set({ selectedUnits: units, selectedBuilding: -1, selectedStructure: -1 });
       return;
     }
@@ -424,7 +438,7 @@ export class GameController {
 
   private buildCells(kind: StructureKind, end: [number, number], start?: [number, number]): [number, number][] {
     const def = STRUCTURES[kind];
-    if (!start || (kind !== "wall")) {
+    if (!start || kind !== "wall") {
       const off = Math.floor(def.size / 2);
       return [[end[0] - off, end[1] - off]];
     }

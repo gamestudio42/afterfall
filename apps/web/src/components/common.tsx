@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { RESOURCE_IDS, type ResourceBag } from "@afterfall/content";
 import { useT } from "../app/hooks";
 
-export const RES_COLORS: Record<string, string> = {
+const RES_COLORS: Record<string, string> = {
   food: "#e3b35a",
   water: "#5fb2e8",
   wood: "#b0834f",

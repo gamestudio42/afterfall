@@ -17,8 +17,7 @@
   A 3D survival RTS and colony builder in a city emptied by an outbreak, in the browser. You lead a
   handful of survivors, turn an abandoned building into a headquarters, scavenge the streets by day
   and fortify before the infected come at night. Play on a generated city or on the real streets of
-  any place in OpenStreetMap. No installation is needed to play. On Linux a desktop build is packaged
-  as a snap (Snap Store listing pending).
+  any place in OpenStreetMap. No installation is needed to play.
 </p>
 
 <p align="center">
@@ -72,6 +71,24 @@ Real place: download any neighbourhood from OpenStreetMap and play on it.
 </tr>
 </table>
 
+<p align="center">
+  <img src="docs/screenshots/scavenge.jpg" alt="A search of the offices: the building warns that infected will come out, and a survivor has been bitten" width="920">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/build.jpg" alt="The build menu open over the headquarters: wall, gate, tower, garden and well" width="920">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/horde.jpg" alt="Infected in the street beside the headquarters" width="920">
+</p>
+
+## Status
+
+The vertical slice is playable: five nights on a generated city, or on any neighbourhood taken
+from OpenStreetMap. Next is balance from human playtests, then logistics and utility networks.
+See the [roadmap](docs/ROADMAP.md).
+
 ## Play
 
 Open **[gamestudio42.github.io/afterfall](https://gamestudio42.github.io/afterfall/)** and choose
@@ -118,13 +135,7 @@ pnpm dev        # http://localhost:5173
 | `pnpm sweep [seeds] [first] [open\|fort]` | Win rates of both scripted players over many seeds         |
 | `pnpm desktop`                           | Build and open the Electron desktop app                    |
 
-Every push to `main` runs the checks and publishes `apps/web/dist` to the `gh-pages` branch
-(GitHub Pages must deploy from that branch). Each pull request publishes a preview at
-`/pr-preview/pr-<number>/` and comments the link; closing the pull request removes it. A pull
-request from a fork only uploads the built site, and a workflow on `main` publishes it after
-checking that the artifact belongs to that pull request. The first run from a new contributor
-waits for approval. The build uses relative paths, so it runs from any folder. The Snap
-workflow builds `snap/snapcraft.yaml`, installs it and runs the desktop smoke test.
+On Linux the same desktop build is packaged as a snap. The Snap Store listing is still pending.
 
 The simulation lives in `packages/core`, a deterministic TypeScript package with a seeded RNG that never
 touches Three.js or the DOM. `packages/world` generates the city or imports it from OpenStreetMap, the
@@ -137,13 +148,10 @@ Three.js renderer and the React interface only send commands and read state. See
 ## Licence
 
 AFTERFALL is free software under the GNU Affero General Public License, version 3 or any later
-version ([`AGPL-3.0-or-later`](LICENSE)), following the
-[Game Studio 42](https://github.com/gamestudio42) default for complete games. If you run a modified
-version for other people, including as a website or over a network, you must offer them its source
-under the same licence. Copyright (c) 2026 Marcel Savegnago.
+version ([`AGPL-3.0-or-later`](LICENSE)). Copyright (c) 2026 Marcel Savegnago. If you run a
+modified version for other people, including as a website or over a network, you must offer
+them its source under the same licence.
 
-Its code, city generator, rules and procedural art are original; the game draws on city builders,
-wave-defence RTS and survival sandboxes as genres, and no code or assets were copied. Asset licensing
-will be defined separately. Real maps use data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright),
-available under the ODbL; the game shows this attribution while you play on one. See [LICENSE](LICENSE) and
-[docs/AGENTS.md](docs/AGENTS.md) for project rules.
+Code, the city generator, the rules and the procedural art are original. Real maps use data
+© [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the
+ODbL; the game shows this attribution while you play on one.

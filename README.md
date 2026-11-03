@@ -116,10 +116,12 @@ pnpm dev        # http://localhost:5173
 | `pnpm sim [seed] [days]`                 | Headless game with a scripted player, prints a JSON report |
 | `pnpm sweep [seeds] [first] [open\|fort]` | Win rates of both scripted players over many seeds         |
 
-Every push to `main` runs the checks and publishes `apps/web/dist` to GitHub Pages. Every pull request
-from this repository also gets a playable preview at
-`https://gamestudio42.github.io/afterfall/pr-preview/pr-<number>/`, linked in a comment on the PR and
-removed when it closes. The build uses relative paths, so it runs from any folder.
+Every push to `main` runs the checks and publishes `apps/web/dist` to the `gh-pages` branch
+(GitHub Pages must deploy from that branch). Each pull request publishes a preview at
+`/pr-preview/pr-<number>/` and comments the link; closing the pull request removes it. A pull
+request from a fork only uploads the built site, and a workflow on `main` publishes it after
+checking that the artifact belongs to that pull request. The first run from a new contributor
+waits for approval. The build uses relative paths, so it runs from any folder.
 
 The simulation lives in `packages/core`, a deterministic TypeScript package with a seeded RNG that never
 touches Three.js or the DOM. `packages/world` generates the city or imports it from OpenStreetMap, the

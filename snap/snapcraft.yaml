@@ -1,0 +1,64 @@
+# AFTERFALL as a snap, built from source: installs the workspace, runs
+# `pnpm --filter @afterfall/desktop dist:dir` and packs release/linux-unpacked. The Snap Store's
+# Builds tab builds and releases it to edge on every push to main; .github/workflows/snap.yml
+# builds the same file and smoke-tests it.
+name: afterfall
+title: AFTERFALL
+base: core22
+adopt-info: afterfall
+icon: snap/gui/icon.png
+summary: Scavenge by day, hold the night and rebuild the city
+description: |
+  Scavenge by day. Hold by night. Rebuild the world.
+  AFTERFALL is a 3D survival RTS and colony builder in a city emptied by an
+  outbreak. Lead a handful of survivors, turn an abandoned building into a
+  headquarters, scavenge the streets by day and fortify before the infected
+  come at night. Play on a generated city or on real OpenStreetMap streets.
+  The interface is in Brazilian Portuguese and English.
+license: AGPL-3.0-or-later
+website: https://gamestudio42.github.io/afterfall/
+source-code: https://github.com/gamestudio42/afterfall
+issues: https://github.com/gamestudio42/afterfall/issues
+contact: talkgamestudio42@gmail.com
+grade: stable
+confinement: strict
+compression: lzo
+
+architectures:
+  - build-on: amd64
+
+apps:
+  afterfall:
+    # Chromium's own sandbox cannot run inside strict confinement; the snap sandbox replaces it.
+    command: app/afterfall --no-sandbox
+    desktop: meta/gui/afterfall.desktop
+    extensions: [gnome]
+    plugs:
+      - browser-support
+      - opengl
+      - audio-playback
+      - network
+    environment:
+      TMPDIR: $XDG_RUNTIME_DIR
+
+parts:
+  afterfall:
+    plugin: nil
+    source: .
+    build-snaps:
+      - node/22/stable
+    stage-packages:
+      - libnspr4
+      - libnss3
+      - libxss1
+    override-pull: |
+      craftctl default
+      craftctl set version="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' apps/desktop/package.json)"
+    override-build: |
+      # The node snap is read-only: install the pinned pnpm next to the build.
+      npm install --prefix "$CRAFT_PART_BUILD/.tools" "$(sed -n 's/^  "packageManager": "\(.*\)",$/\1/p' package.json)"
+      export PATH="$CRAFT_PART_BUILD/.tools/node_modules/.bin:$PATH"
+      pnpm install --frozen-lockfile
+      pnpm --filter @afterfall/desktop dist:dir
+      mkdir -p "$CRAFT_PART_INSTALL/app"
+      cp -a apps/desktop/release/linux-unpacked/. "$CRAFT_PART_INSTALL/app/"

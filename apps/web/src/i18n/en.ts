@@ -25,6 +25,7 @@ export const en: Record<string, string> = {
   "menu.start": "Start",
   "menu.back": "Back",
   "menu.controls": "Controls",
+  "menu.quit": "Quit",
   "menu.language": "Language",
   "menu.noSaves": "No saved games.",
   "menu.delete": "Delete",

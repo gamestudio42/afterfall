@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=AFTERFALL
+Comment=Scavenge by day. Hold by night. Rebuild the world.
+Exec=afterfall
+Icon=${SNAP}/meta/gui/icon.png
+Categories=Game;StrategyGame;
+StartupWMClass=AFTERFALL
+Terminal=false

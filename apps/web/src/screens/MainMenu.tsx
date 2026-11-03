@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { desktop } from "../app/desktop";
 import { deleteSave, getSave, listSaves, type SaveSlot } from "../app/saves";
 import { useGame, useT } from "../app/hooks";
 import { useUi } from "../app/store";
@@ -66,6 +67,11 @@ export function MainMenu() {
               )}
               <button onClick={() => setView("load")}>{t("menu.load")}</button>
               <button onClick={() => setView("help")}>{t("menu.controls")}</button>
+              {desktop && (
+                <button onClick={() => desktop?.quit()} data-testid="quit">
+                  {t("menu.quit")}
+                </button>
+              )}
               <div className="lang-row">
                 <span>{t("menu.language")}</span>
                 <button className={lang === "pt-BR" ? "chip active" : "chip"} onClick={() => set({ lang: "pt-BR" })}>

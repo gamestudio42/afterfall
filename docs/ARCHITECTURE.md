@@ -23,6 +23,7 @@ USER INPUT ─▶ GameController ─▶ Command queue ─▶ Simulation.tick() �
 | core | Simulation, systems, persistence, reports | shared, content, world |
 | renderer | Three.js scene from a Simulation | core, world, content |
 | apps/web | UI, input, loop, saves, i18n | all |
+| apps/desktop | Electron shell that serves the web build offline; packaged as a snap | apps/web |
 
 ## ECS-lite
 `GameState.entities` is a `Map<id, Entity>`, where an entity is an id plus optional components (`transform`, `health`, `mover`, `survivor`, `infected`, `structure`). Systems iterate entities that have what they need. Map-aligned data (buildings) and tasks are plain arrays and maps. Everything is JSON-serializable.

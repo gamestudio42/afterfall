@@ -6,7 +6,15 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/coverage/**", "**/node_modules/**", "playwright-report/**", "test-results/**"],
+    ignores: [
+      "**/dist/**",
+      "**/coverage/**",
+      "**/node_modules/**",
+      "playwright-report/**",
+      "test-results/**",
+      "apps/desktop/game/**",
+      "apps/desktop/release/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -24,6 +32,14 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "@typescript-eslint/consistent-type-imports": ["warn", { prefer: "type-imports" }],
     },
+  },
+  {
+    files: ["apps/desktop/**/*.cjs"],
+    languageOptions: { sourceType: "commonjs", globals: globals.node },
+  },
+  {
+    files: ["apps/desktop/**/*.mjs"],
+    languageOptions: { sourceType: "module", globals: globals.node },
   },
   {
     files: ["apps/web/src/**/*.{ts,tsx}"],

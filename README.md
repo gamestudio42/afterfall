@@ -17,7 +17,8 @@
   A 3D survival RTS and colony builder in a city emptied by an outbreak, in the browser. You lead a
   handful of survivors, turn an abandoned building into a headquarters, scavenge the streets by day
   and fortify before the infected come at night. Play on a generated city or on the real streets of
-  any place in OpenStreetMap. No installation is needed to play.
+  any place in OpenStreetMap. No installation is needed to play. On Linux a desktop build is packaged
+  as a snap (Snap Store listing pending).
 </p>
 
 <p align="center">
@@ -115,13 +116,15 @@ pnpm dev        # http://localhost:5173
 | `pnpm build`                             | Static build in `apps/web/dist`, relative paths            |
 | `pnpm sim [seed] [days]`                 | Headless game with a scripted player, prints a JSON report |
 | `pnpm sweep [seeds] [first] [open\|fort]` | Win rates of both scripted players over many seeds         |
+| `pnpm desktop`                           | Build and open the Electron desktop app                    |
 
 Every push to `main` runs the checks and publishes `apps/web/dist` to the `gh-pages` branch
 (GitHub Pages must deploy from that branch). Each pull request publishes a preview at
 `/pr-preview/pr-<number>/` and comments the link; closing the pull request removes it. A pull
 request from a fork only uploads the built site, and a workflow on `main` publishes it after
 checking that the artifact belongs to that pull request. The first run from a new contributor
-waits for approval. The build uses relative paths, so it runs from any folder.
+waits for approval. The build uses relative paths, so it runs from any folder. The Snap
+workflow builds `snap/snapcraft.yaml`, installs it and runs the desktop smoke test.
 
 The simulation lives in `packages/core`, a deterministic TypeScript package with a seeded RNG that never
 touches Three.js or the DOM. `packages/world` generates the city or imports it from OpenStreetMap, the

@@ -25,6 +25,7 @@ export const ptBR: Record<string, string> = {
   "menu.start": "Começar",
   "menu.back": "Voltar",
   "menu.controls": "Controles",
+  "menu.quit": "Sair",
   "menu.language": "Idioma",
   "menu.noSaves": "Nenhum jogo salvo.",
   "menu.delete": "Apagar",

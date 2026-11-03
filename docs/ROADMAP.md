@@ -14,6 +14,7 @@
 - [x] Cheaper walls, stronger nights 4 and 5, a little ammo in homes
 - [x] Clickable minimap
 - [x] GitHub Actions CI (typecheck, unit tests, build, E2E) and GitHub Pages deploy from `main`
+- [x] Linux desktop shell (Electron) packaged as a snap, with a CI smoke test
 
 ## Done — real maps (OpenStreetMap)
 - [x] Importer in `@afterfall/world` (`cityFromOverpass`): real building outlines, types from tags and points of interest, floors from `building:levels` or `height`, road center lines, parks, doors facing the nearest street, horde entry points where streets leave the map

@@ -3,5 +3,11 @@ dist
 coverage
 playwright-report
 test-results
+apps/desktop/game
+apps/desktop/release
+/parts
+/stage
+/prime
+*.snap
 *.log
 .DS_Store

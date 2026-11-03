@@ -8,7 +8,7 @@
     "dev": "pnpm --filter @afterfall/web dev",
     "build": "pnpm --filter @afterfall/web build",
     "preview": "pnpm --filter @afterfall/web preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/desktop/tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
@@ -21,7 +21,8 @@
     "audit": "pnpm audit --audit-level=high",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
     "sim": "tsx tools/headless-run.ts",
-    "sweep": "tsx tools/balance-sweep.ts"
+    "sweep": "tsx tools/balance-sweep.ts",
+    "desktop": "pnpm --filter @afterfall/desktop start"
   },
   "engines": {
     "node": ">=22",
@@ -45,6 +46,7 @@
   "packageManager": "pnpm@10.28.0",
   "pnpm": {
     "onlyBuiltDependencies": [
+      "electron",
       "esbuild"
     ]
   }

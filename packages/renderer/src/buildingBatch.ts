@@ -35,22 +35,25 @@ export class BuildingBatch {
   constructor(buildings: BuildingDef[], windowMat: THREE.Material) {
     const pos: number[] = [];
     const nrm: number[] = [];
+    const uv: number[] = [];
     const wpos: number[] = [];
     const wnrm: number[] = [];
+    const wuv: number[] = [];
+    const tile = 3;
     const owners: number[] = [];
     for (const b of buildings) {
       const poly = outlineOf(b);
       const start = pos.length / 3;
-      walls(poly, 0, b.height, pos, nrm);
+      walls(poly, 0, b.height, pos, nrm, uv, tile);
       this.wallRanges.push({ start, count: pos.length / 3 - start });
       const roofStart = pos.length / 3;
-      roof(poly, b.height, pos, nrm);
+      roof(poly, b.height, pos, nrm, uv, tile);
       this.roofRanges.push({ start: roofStart, count: pos.length / 3 - roofStart });
       for (let t = start; t < pos.length / 3; t += 3) owners.push(b.index);
       // Window band: a thin ring just outside the walls, on the first floor.
       const wStart = wpos.length / 3;
       const y0 = Math.min(b.height - 1.6, 1.6);
-      walls(inflate(poly, 0.05), y0, y0 + 0.7, wpos, wnrm);
+      walls(inflate(poly, 0.05), y0, y0 + 0.7, wpos, wnrm, wuv, tile);
       this.windowRanges.push({ start: wStart, count: wpos.length / 3 - wStart });
     }
     this.triOwner = Int32Array.from(owners);
@@ -58,6 +61,7 @@ export class BuildingBatch {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
     geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pos.length).fill(1), 3));
     geo.computeBoundingSphere();
     this.mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88 }));
@@ -66,6 +70,7 @@ export class BuildingBatch {
     const wgeo = new THREE.BufferGeometry();
     wgeo.setAttribute("position", new THREE.Float32BufferAttribute(wpos, 3));
     wgeo.setAttribute("normal", new THREE.Float32BufferAttribute(wnrm, 3));
+    wgeo.setAttribute("uv", new THREE.Float32BufferAttribute(wuv, 2));
     wgeo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(wpos.length).fill(0), 3));
     wgeo.computeBoundingSphere();
     this.windows = new THREE.Mesh(wgeo, windowMat);
@@ -75,6 +80,13 @@ export class BuildingBatch {
     paint(this.mesh.geometry, this.wallRanges[i], wall);
     paint(this.mesh.geometry, this.roofRanges[i], roofColor);
     paint(this.windows.geometry, this.windowRanges[i], windowColor);
+  }
+
+  /** Gives the walls and roofs their surface map once the art has loaded. */
+  setMap(tex: THREE.Texture | null): void {
+    const mat = this.mesh.material as THREE.MeshStandardMaterial;
+    mat.map = tex;
+    mat.needsUpdate = true;
   }
 
   commitColors(): void {
@@ -118,7 +130,7 @@ function isCcw(poly: { x: number; y: number }[]): boolean {
 }
 
 /** Wall quads between y0 and y1, wound and lit to face outward. */
-function walls(poly: { x: number; y: number }[], y0: number, y1: number, pos: number[], nrm: number[]): void {
+function walls(poly: { x: number; y: number }[], y0: number, y1: number, pos: number[], nrm: number[], uv: number[], tile: number): void {
   const ccw = isCcw(poly);
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i];
@@ -150,14 +162,27 @@ function walls(poly: { x: number; y: number }[], y0: number, y1: number, pos: nu
       [tri[1], tri[2]] = [tri[2], tri[1]];
       [tri[4], tri[5]] = [tri[5], tri[4]];
     }
-    for (const v of tri) {
+    // Wall UVs run along the facade and up it, in world metres divided by
+    // `tile`, so every building shares one tileable texture with no seams
+    // between its own quads.
+    const across = Math.hypot(ex, ez) / tile;
+    const uvs = [
+      [0, y0 / tile],
+      [across, y0 / tile],
+      [across, y1 / tile],
+      [0, y0 / tile],
+      [across, y1 / tile],
+      [0, y1 / tile],
+    ];
+    tri.forEach((v, i) => {
       pos.push(v[0], v[1], v[2]);
       nrm.push(nx, 0, nz);
-    }
+      uv.push(uvs[i][0], uvs[i][1]);
+    });
   }
 }
 
-function roof(poly: { x: number; y: number }[], y: number, pos: number[], nrm: number[]): void {
+function roof(poly: { x: number; y: number }[], y: number, pos: number[], nrm: number[], uv: number[], tile: number): void {
   const contour = poly.map((p) => new THREE.Vector2(p.x, p.y));
   const tris = THREE.ShapeUtils.triangulateShape(contour, []);
   for (const [i, j, k] of tris) {
@@ -170,6 +195,7 @@ function roof(poly: { x: number; y: number }[], y: number, pos: number[], nrm: n
     for (const p of [a, b, c]) {
       pos.push(p.x, y, p.y);
       nrm.push(0, 1, 0);
+      uv.push(p.x / tile, p.y / tile);
     }
   }
 }

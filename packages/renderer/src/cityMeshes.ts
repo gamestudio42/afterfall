@@ -41,16 +41,39 @@ function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferG
   return g;
 }
 
+/** Materials the ground is built from, so the art pass can give each a map. */
+export interface GroundMaterials {
+  ground: THREE.MeshStandardMaterial;
+  blocks: THREE.MeshStandardMaterial | null;
+  roads: THREE.MeshStandardMaterial | null;
+  parks: THREE.MeshStandardMaterial | null;
+}
+
+/**
+ * Replaces planar UVs with world-space ones, so one tileable texture repeats
+ * every `tile` metres across a merged mesh of many differently sized quads.
+ */
+function worldUv(geo: THREE.BufferGeometry, tile: number): void {
+  const pos = geo.getAttribute("position");
+  const uv = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    uv[i * 2] = pos.getX(i) / tile;
+    uv[i * 2 + 1] = pos.getZ(i) / tile;
+  }
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+}
+
 /** Static ground, roads, sidewalks, lane markings and parks. */
-export function buildCityGround(city: CityMap): THREE.Group {
+export function buildCityGround(city: CityMap): { group: THREE.Group; materials: GroundMaterials } {
   const group = new THREE.Group();
   group.name = "ground";
 
   const margin = 400;
-  const ground = new THREE.Mesh(
-    plane(-margin, -margin, city.width + margin * 2, city.height + margin * 2, -0.05),
-    new THREE.MeshStandardMaterial({ color: 0x4a4d40, roughness: 1 }),
-  );
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x4a4d40, roughness: 1 });
+  const materials: GroundMaterials = { ground: groundMat, blocks: null, roads: null, parks: null };
+  const groundGeo = plane(-margin, -margin, city.width + margin * 2, city.height + margin * 2, -0.05);
+  worldUv(groundGeo, 12);
+  const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
   group.add(ground);
 
@@ -61,7 +84,10 @@ export function buildCityGround(city: CityMap): THREE.Group {
     for (let i = 0; i < city.blocksX; i++)
       blocks.push(plane(city.roadWidth + i * pitch, city.roadWidth + j * pitch, city.blockSize, city.blockSize, 0.06));
   if (blocks.length) {
-    const blockMesh = new THREE.Mesh(mergeGeometries(blocks), new THREE.MeshStandardMaterial({ color: 0x8d897e, roughness: 0.95 }));
+    const blockGeo = mergeGeometries(blocks);
+    worldUv(blockGeo, 3);
+    materials.blocks = new THREE.MeshStandardMaterial({ color: 0x8d897e, roughness: 0.95 });
+    const blockMesh = new THREE.Mesh(blockGeo, materials.blocks);
     blockMesh.receiveShadow = true;
     group.add(blockMesh);
   }
@@ -69,7 +95,10 @@ export function buildCityGround(city: CityMap): THREE.Group {
   const roads = city.roads.flatMap((r) =>
     r.path ? ribbon(r.path, r.width ?? 8, 0.01) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.01)],
   );
-  const roadMesh = new THREE.Mesh(mergeGeometries(roads), new THREE.MeshStandardMaterial({ color: 0x34363a, roughness: 0.9 }));
+  const roadGeo = mergeGeometries(roads);
+  worldUv(roadGeo, 6);
+  materials.roads = new THREE.MeshStandardMaterial({ color: 0x34363a, roughness: 0.9 });
+  const roadMesh = new THREE.Mesh(roadGeo, materials.roads);
   roadMesh.receiveShadow = true;
   group.add(roadMesh);
 
@@ -91,7 +120,10 @@ export function buildCityGround(city: CityMap): THREE.Group {
   // Parks with trees.
   const parks = city.parks.map((p) => (p.polygon ? flatPolygon(p.polygon, 0.04) : plane(p.rect.x, p.rect.y, p.rect.w, p.rect.h, 0.08)));
   if (parks.length) {
-    const parkMesh = new THREE.Mesh(mergeGeometries(parks), new THREE.MeshStandardMaterial({ color: 0x4d6b35, roughness: 1 }));
+    const parkGeo = mergeGeometries(parks);
+    worldUv(parkGeo, 8);
+    materials.parks = new THREE.MeshStandardMaterial({ color: 0x4d6b35, roughness: 1 });
+    const parkMesh = new THREE.Mesh(parkGeo, materials.parks);
     parkMesh.receiveShadow = true;
     group.add(parkMesh);
   }
@@ -113,5 +145,5 @@ export function buildCityGround(city: CityMap): THREE.Group {
     trunks.castShadow = crowns.castShadow = true;
     group.add(trunks, crowns);
   }
-  return group;
+  return { group, materials };
 }

@@ -37,6 +37,21 @@
       "bytes": 75214,
       "sha256": "9b41769eaf73919d806c65e17cbfb589a7c561d4d270134cffe3b400e0a0f52d",
       "generator": "tools/make-textures.ts"
+    },
+    {
+      "name": "spark_atlas",
+      "file": "spark_atlas.png",
+      "width": 768,
+      "height": 640,
+      "bytes": 64656,
+      "sha256": "b898e001ad60c542eee8684702572e5e5b44191734561add885b76464916fe47",
+      "generator": "EffectCraft hit_sparks_final + tools/make-spark-atlas.ts",
+      "grid": {
+        "cols": 6,
+        "rows": 5,
+        "frames": 30,
+        "cell": 128
+      }
     }
   ]
 }

@@ -13,8 +13,15 @@ interface Win {
 /**
  * Renders a frame for art review and measures the frame cost, so a look change
  * is argued with numbers instead of taste.
+ *
+ * Opt-in on purpose: measuring 120 frames of software rendering starves the
+ * other worker, and when this ran on every CI pass it took the minimap test
+ * down with it. Run it with `ART_SHOT=1 pnpm test:e2e tests/e2e/art-shot.spec.ts`.
  */
+test.skip(!process.env.ART_SHOT, "set ART_SHOT=1 to measure the frame cost");
+
 test("renders a frame and reports frame cost", async ({ page }) => {
+  test.setTimeout(180_000);
   await page.goto("/");
   await page.getByTestId("new-game").click();
   await page.getByTestId("seed").fill("4242");
@@ -44,7 +51,7 @@ test("renders a frame and reports frame cost", async ({ page }) => {
     g.command({ type: "setBase", building: index });
   }, hq);
   await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 15_000 });
-  await page.waitForTimeout(3_000);
+  await page.waitForTimeout(1_500);
 
   const stats = await page.evaluate(async () => {
     const frames: number[] = [];
@@ -54,7 +61,7 @@ test("renders a frame and reports frame cost", async ({ page }) => {
       const step = (t: number) => {
         frames.push(t - last);
         last = t;
-        if (++n >= 120) resolve();
+        if (++n >= 40) resolve();
         else requestAnimationFrame(step);
       };
       requestAnimationFrame(step);

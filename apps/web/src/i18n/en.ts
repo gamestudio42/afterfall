@@ -33,6 +33,8 @@ export const en: Record<string, string> = {
   "menu.saveInfo": "Day {day} · {survivors} survivors",
 
   "hud.day": "Day {day}",
+  "hud.mute": "Sound",
+  "hud.volume": "Volume",
   "hud.pop": "Population",
   "hud.beds": "beds",
   "hud.storage": "Storage",

@@ -6,6 +6,7 @@ import { CellKind } from "@afterfall/world";
 import { putSave } from "../app/saves";
 import { useUi, type Speed } from "../app/store";
 import { translate } from "../i18n";
+import { AudioDirector, type DirectorStats } from "@afterfall/audio";
 
 const CLICK_SLOP = 5;
 const UNIT_PICK_RADIUS = 18;
@@ -28,11 +29,17 @@ export class GameController {
   private lastDay = 0;
   fps = 60;
   private disposers: (() => void)[] = [];
+  private audio: AudioDirector | null = null;
+  private audioTried = false;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     this.renderer = new GameRenderer(canvas);
     this.bindInput();
     this.resize();
+    // The browser only unlocks audio after a gesture: create the context on the first one.
+    const unlock = () => void this.ensureAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
     const loop = () => {
       this.raf = requestAnimationFrame(loop);
       this.frame();
@@ -108,6 +115,8 @@ export class GameController {
     // Hold time while a decision is pending so the player can read it.
     const speed = sim.state.pendingEvent || (sim.state.outcome && sim.state.outcome.type === "defeat") ? 0 : ui.speed;
     sim.update(dt * 1000, speed);
+    this.audio?.update({ fx: sim.fx, alerts: sim.state.alerts, listener: this.audioListener() });
+    this.audio?.setAmbience(sim.clock.phase);
     this.updateCamera(dt);
     const r = this.renderer;
     r.selection = { units: ui.selectedUnits, building: ui.selectedBuilding, structure: ui.selectedStructure };
@@ -137,6 +146,45 @@ export class GameController {
         ui.set({ toast: translate(ui.lang, "saveFailed") });
       });
     }
+  }
+
+  // -------------------------------------------------------------------
+  // Audio
+  // -------------------------------------------------------------------
+
+  /** Cria o diretor de audio no primeiro gesto e carrega os sons. */
+  private async ensureAudio(): Promise<void> {
+    if (this.audioTried) return;
+    this.audioTried = true;
+    if (typeof AudioContext === "undefined") return;
+    try {
+      const ctx = new AudioContext();
+      const audio = new AudioDirector(ctx, { baseUrl: import.meta.env.BASE_URL, range: 650 });
+      this.audio = audio;
+      await audio.resume();
+      await audio.load();
+      const uiNow = useUi.getState();
+      audio.setVolume(uiNow.volume);
+      audio.setMuted(uiNow.muted);
+      this.disposers.push(
+        useUi.subscribe((s, prev) => {
+          if (s.volume !== prev.volume) audio.setVolume(s.volume);
+          if (s.muted !== prev.muted) audio.setMuted(s.muted);
+        }),
+      );
+      // Diagnostico so em desenvolvimento: o bundle de producao nao pode expor
+      // nada (pages.yml rejeita a string no dist).
+      if (import.meta.env.DEV) {
+        (window as unknown as { __afterfallAudio?: () => DirectorStats }).__afterfallAudio = () => audio.stats;
+      }
+    } catch {
+      this.audio = null;
+    }
+  }
+
+  /** O centro da tela no mundo: e daqui que o jogador "ouve". */
+  private audioListener(): { x: number; y: number } {
+    return this.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
   }
 
   private updateCamera(dt: number): void {

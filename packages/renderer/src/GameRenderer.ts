@@ -5,6 +5,7 @@ import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround } from "./cityMeshes";
+import { VfxSystem, type FxEvent } from "./vfx";
 
 export type OverlayMode = "none" | "resources" | "danger";
 
@@ -70,6 +71,7 @@ export class GameRenderer {
   private selectionBox: THREE.LineSegments;
   private hqMarker: THREE.Mesh;
   private tracers: THREE.LineSegments;
+  readonly vfx: VfxSystem;
   private tracerAge = new Float32Array(MAX_TRACERS);
   private tracerNext = 0;
   private lastFxSeq = 0;
@@ -201,6 +203,7 @@ export class GameRenderer {
     this.scene.add(this.tracers);
 
     this.windowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
+    this.vfx = new VfxSystem(this.scene);
   }
 
   private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number, shadows: boolean): THREE.InstancedMesh {
@@ -328,6 +331,7 @@ export class GameRenderer {
       this.updatePreview(sim);
       this.updateFx(sim, dt);
     }
+    this.vfx.update(dt, this.rts.camera);
     this.renderer.render(this.scene, this.rts.camera);
   }
 
@@ -546,8 +550,10 @@ export class GameRenderer {
   private updateFx(sim: Simulation, dt: number): void {
     const pos = this.tracers.geometry.getAttribute("position") as THREE.BufferAttribute;
     const col = this.tracers.geometry.getAttribute("color") as THREE.BufferAttribute;
+    const fresh: FxEvent[] = [];
     for (const fx of sim.fx) {
       if (fx.seq <= this.lastFxSeq) continue;
+      fresh.push(fx);
       if (fx.type !== "shot") continue;
       const i = this.tracerNext;
       this.tracerNext = (this.tracerNext + 1) % MAX_TRACERS;
@@ -555,6 +561,7 @@ export class GameRenderer {
       pos.setXYZ(i * 2 + 1, fx.tx, 1.0, fx.ty);
       this.tracerAge[i] = 0.12;
     }
+    this.vfx.emit(fresh);
     this.lastFxSeq = sim.fxSeq;
     for (let i = 0; i < MAX_TRACERS; i++) {
       this.tracerAge[i] = Math.max(0, this.tracerAge[i] - dt);

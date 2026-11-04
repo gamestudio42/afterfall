@@ -33,6 +33,8 @@ export const ptBR: Record<string, string> = {
   "menu.saveInfo": "Dia {day} · {survivors} sobreviventes",
 
   "hud.day": "Dia {day}",
+  "hud.mute": "Som",
+  "hud.volume": "Volume",
   "hud.pop": "População",
   "hud.beds": "camas",
   "hud.storage": "Estoque",

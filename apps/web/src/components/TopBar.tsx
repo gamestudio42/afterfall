@@ -10,6 +10,9 @@ export function TopBar() {
   const t = useT();
   const game = useGame();
   const speed = useUi((s) => s.speed);
+  const volume = useUi((s) => s.volume);
+  const muted = useUi((s) => s.muted);
+  const set = useUi((s) => s.set);
   const sim = game.sim!;
   const c = sim.clock;
   const totals = sim.totals();
@@ -33,6 +36,44 @@ export function TopBar() {
             {s === 0 ? "❚❚" : `${s}×`}
           </button>
         ))}
+      </div>
+      <div className="audio" data-testid="audio">
+        <button
+          className={muted ? "chip active" : "chip"}
+          title={t("hud.mute")}
+          aria-label={t("hud.mute")}
+          data-testid="mute"
+          onClick={() => {
+            const next = !muted;
+            set({ muted: next });
+            try {
+              localStorage.setItem("afterfall.muted", next ? "1" : "0");
+            } catch {
+              /* storage unavailable */
+            }
+          }}
+        >
+          {muted ? "🔇" : "🔊"}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={Math.round(volume * 100)}
+          title={t("hud.volume")}
+          aria-label={t("hud.volume")}
+          data-testid="volume"
+          onChange={(e) => {
+            const next = Number(e.target.value) / 100;
+            set({ volume: next });
+            try {
+              localStorage.setItem("afterfall.volume", String(next));
+            } catch {
+              /* storage unavailable */
+            }
+          }}
+        />
       </div>
       <div className="stat" title={t("hud.pop")}>
         <span className="muted">{t("hud.pop")}</span> <strong data-testid="pop">{pop}</strong>

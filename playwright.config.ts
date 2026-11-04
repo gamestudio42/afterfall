@@ -20,7 +20,17 @@ export default defineConfig({
         browserName: "chromium",
         launchOptions: {
           executablePath,
-          args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+          args: [
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-unsafe-swiftshader",
+            // Without these Chromium throttles requestAnimationFrame in a tab
+            // that is not in the foreground: the simulation, the audio and the
+            // effects stop, and every test that depends on frames turns flaky.
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+          ],
         },
       },
     },

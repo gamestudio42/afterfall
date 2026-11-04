@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@afterfall/audio": "workspace:*",
     "@afterfall/content": "workspace:*",
     "@afterfall/core": "workspace:*",
     "@afterfall/renderer": "workspace:*",

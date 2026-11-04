@@ -24,7 +24,34 @@ export interface UiState {
   showDev: boolean;
   outcomeAck: boolean;
   toast: string | null;
+  /** Volume geral do jogo, 0..1. */
+  volume: number;
+  muted: boolean;
   set: (patch: Partial<UiState>) => void;
+}
+
+function initialNumber(key: string, fallback: number): number {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
+      const v = Number(raw);
+      if (Number.isFinite(v) && v >= 0 && v <= 1) return v;
+    }
+  } catch {
+    /* storage unavailable */
+  }
+  return fallback;
+}
+
+function initialFlag(key: string, fallback: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+  } catch {
+    /* storage unavailable */
+  }
+  return fallback;
 }
 
 function initialLang(): Lang {
@@ -53,5 +80,7 @@ export const useUi = create<UiState>((set) => ({
   showDev: false,
   outcomeAck: false,
   toast: null,
+  volume: initialNumber("afterfall.volume", 0.7),
+  muted: initialFlag("afterfall.muted", false),
   set: (patch) => set(patch),
 }));

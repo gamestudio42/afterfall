@@ -1,6 +1,6 @@
 /**
  * Plays many seeds with both scripted players and prints win rates.
- * Usage: pnpm sweep [seeds=20] [firstSeed=1] [open|fort]
+ * Usage: pnpm sweep [seeds=20] [firstSeed=1] [open|fort] [craft,econ]
  */
 import { createSimulation, getReport } from "../packages/core/src";
 import { autoplay } from "../packages/core/tests/autoplay";
@@ -8,13 +8,16 @@ import { autoplay } from "../packages/core/tests/autoplay";
 const count = Number(process.argv[2] ?? 20);
 const first = Number(process.argv[3] ?? 1);
 const modes = process.argv[4] === "fort" ? [true] : process.argv[4] === "open" ? [false] : [false, true];
+const flags = new Set((process.argv[5] ?? "").split(","));
+const craft = flags.has("craft");
+const economy = flags.has("econ");
 
 for (const fortify of modes) {
   let wins = 0;
   const rows: string[] = [];
   for (let seed = first; seed < first + count; seed++) {
     const sim = createSimulation({ seed });
-    autoplay(sim, 6, undefined, { fortify });
+    autoplay(sim, 6, undefined, { fortify, craft, economy });
     const r = getReport(sim);
     if (r.outcome?.startsWith("victory")) wins++;
     rows.push(

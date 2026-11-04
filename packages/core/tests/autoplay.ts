@@ -1,5 +1,6 @@
 import { TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
+import { STRUCTURES } from "@afterfall/content";
 import type { Simulation } from "../src";
 
 /**
@@ -32,6 +33,10 @@ export function pickBase(sim: Simulation, maxArea = 500): number {
 export interface AutoplayOptions {
   /** Rings the headquarters with a wall line and a gate on day one. */
   fortify?: boolean;
+  /** Also turns a second building into a workshop, so the ammo recipe runs. */
+  craft?: boolean;
+  /** Also builds a farm and a well, and converts a second shelter for beds. */
+  economy?: boolean;
 }
 
 export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulation) => void, options: AutoplayOptions = {}): void {
@@ -43,6 +48,10 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
   const end = sim.state.tick + Math.round(days * TICKS_PER_DAY);
   let builtDefenses = false;
   let converted = false;
+  let workshop = false;
+  let farm = false;
+  let well = false;
+  let secondShelter = false;
   let fortified = !options.fortify;
   while (sim.state.tick < end && !(sim.state.outcome && sim.state.outcome.type === "defeat")) {
     const clock = clockFromTick(sim.state.tick);
@@ -97,6 +106,61 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
       });
       builtDefenses = true;
     }
+    // A second building becomes a workshop: the game itself creates the craft
+    // task (metal -> ammo) and keeps it while ammo is below `keepAmmo`, so the
+    // bot only has to hand over the building.
+    if (options.craft && !workshop && converted && clock.hour >= 11 && clock.hour < 18) {
+      const hqW = sim.hqEntrance();
+      const nearW = sim.state.buildings
+        .filter((b) => b.fn === "none" && b.hiddenInfected === 0 && b.searchProgress >= b.searchTotal)
+        .sort(
+          (a, b) =>
+            Math.hypot(sim.city.buildings[a.index].entrance.x - hqW.x, sim.city.buildings[a.index].entrance.y - hqW.y) -
+            Math.hypot(sim.city.buildings[b.index].entrance.x - hqW.x, sim.city.buildings[b.index].entrance.y - hqW.y),
+        )[0];
+      if (nearW) {
+        sim.enqueue({ type: "convert", building: nearW.index, fn: "workshop" });
+        workshop = true;
+      }
+    }
+    // Farm and well: the game creates the build task and then the production
+    // one; the bot only picks the spot. Without them, any tuning of hunger or
+    // water measures the bot. It only plants when there is spare material:
+    // queueing without wood leaves the task "blocked" and the base stops
+    // building everything else.
+    const stock = sim.totals();
+    const builtKind = (kind: string) => [...sim.state.entities.values()].some((e) => e.structure?.kind === kind && e.structure.built);
+    if (options.economy && !farm && sim.state.tick > 50 && (stock.wood ?? 0) >= 18 && (stock.water ?? 0) >= 8) {
+      const cells = freeSpot(sim, "farm");
+      if (cells) {
+        sim.enqueue({ type: "placeStructures", kind: "farm", cells });
+        farm = true;
+      }
+    }
+    if (options.economy && farm && !well && builtKind("farm") && (stock.wood ?? 0) >= 10 && (stock.metal ?? 0) >= 10) {
+      const cells = freeSpot(sim, "well");
+      if (cells) {
+        sim.enqueue({ type: "placeStructures", kind: "well", cells });
+        well = true;
+      }
+    }
+    if (options.economy && !secondShelter && clock.day >= 2 && clock.hour === 10 && (stock.wood ?? 0) >= 16) {
+      const beds = sim.state.buildings.reduce((n, b) => n + (b.hp > 0 ? b.beds : 0), 0);
+      if (beds < sim.survivorCount()) {
+        const hqS = sim.hqEntrance();
+        const next = sim.state.buildings
+          .filter((b) => b.fn === "none" && b.hiddenInfected === 0 && b.searchProgress >= b.searchTotal)
+          .sort(
+            (a, b) =>
+              Math.hypot(sim.city.buildings[a.index].entrance.x - hqS.x, sim.city.buildings[a.index].entrance.y - hqS.y) -
+              Math.hypot(sim.city.buildings[b.index].entrance.x - hqS.x, sim.city.buildings[b.index].entrance.y - hqS.y),
+          )[0];
+        if (next) {
+          sim.enqueue({ type: "convert", building: next.index, fn: "shelter" });
+          secondShelter = true;
+        }
+      }
+    }
     if (!fortified && sim.state.tick > 40) {
       const ring = fortRing(sim);
       if (ring) {
@@ -108,6 +172,35 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
     sim.tick();
     onTick?.(sim);
   }
+}
+
+/**
+ * Finds a free corner near the base for a structure, without covering a
+ * building door. Returns the anchor cells (top-left corner) or null.
+ */
+export function freeSpot(sim: Simulation, kind: "farm" | "well" | "tower" | "wall" | "gate"): [number, number][] | null {
+  const g = sim.grid;
+  const def = STRUCTURES[kind];
+  const b = sim.city.buildings[sim.state.hq];
+  if (!b) return null;
+  const cx = Math.floor(b.entrance.x / g.cell);
+  const cy = Math.floor(b.entrance.y / g.cell);
+  const entrances = new Set(sim.city.buildings.map((o) => g.cellOf(o.entrance.x, o.entrance.y)));
+  for (let ring = 2; ring <= 14; ring++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        const fp = g.footprint(x, y, def.size);
+        if (fp.length !== def.size * def.size) continue;
+        if (!fp.every((i) => g.kind[i] === CellKind.Free && g.structureAt[i] === -1)) continue;
+        if (def.solid && fp.some((i) => entrances.has(i))) continue;
+        return [[x, y]];
+      }
+    }
+  }
+  return null;
 }
 
 /**

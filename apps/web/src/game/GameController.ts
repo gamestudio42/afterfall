@@ -33,7 +33,7 @@ export class GameController {
   private audioTried = false;
 
   constructor(readonly canvas: HTMLCanvasElement) {
-    this.renderer = new GameRenderer(canvas);
+    this.renderer = new GameRenderer(canvas, { baseUrl: import.meta.env.BASE_URL });
     this.bindInput();
     this.resize();
     // The browser only unlocks audio after a gesture: create the context on the first one.

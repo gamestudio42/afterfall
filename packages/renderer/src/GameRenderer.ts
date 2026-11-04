@@ -4,7 +4,8 @@ import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
-import { buildCityGround } from "./cityMeshes";
+import { buildCityGround, type GroundMaterials } from "./cityMeshes";
+import { loadArtTextures, type ArtTextures } from "./textures";
 import { VfxSystem, type FxEvent } from "./vfx";
 
 export type OverlayMode = "none" | "resources" | "danger";
@@ -86,7 +87,34 @@ export class GameRenderer {
   private time = 0;
   private windowMat: THREE.MeshBasicMaterial;
 
-  constructor(readonly canvas: HTMLCanvasElement) {
+  /**
+   * Hands the loaded maps to the materials that can wear them. Called once per
+   * texture as it arrives, so the city gains detail without waiting on boot.
+   */
+  private applyArt(art: ArtTextures): void {
+    const g = this.groundMats;
+    if (g) {
+      const set = (mat: THREE.MeshStandardMaterial | null, tex: THREE.Texture | null) => {
+        if (!mat || !tex || mat.map === tex) return;
+        mat.map = tex;
+        mat.needsUpdate = true;
+      };
+      set(g.ground, art.grass);
+      set(g.blocks, art.concrete);
+      set(g.roads, art.asphalt);
+      set(g.parks, art.grass);
+    }
+    if (this.buildings) this.buildings.setMap(art.concrete);
+  }
+
+  private groundMats: GroundMaterials | null = null;
+  private art: ArtTextures;
+
+  constructor(
+    readonly canvas: HTMLCanvasElement,
+    opts: { baseUrl?: string } = {},
+  ) {
+    this.art = loadArtTextures(opts.baseUrl ?? "./", (art) => this.applyArt(art));
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -228,10 +256,16 @@ export class GameRenderer {
     }
     const city = sim.city;
     this.selectionOutlineOf = -1;
-    this.cityGroup = buildCityGround(city);
+    const ground = buildCityGround(city);
+    this.cityGroup = ground.group;
+    this.groundMats = ground.materials;
+    this.applyArt(this.art);
     this.scene.add(this.cityGroup);
 
     this.buildings = new BuildingBatch(city.buildings, this.windowMat);
+    // Textures may already have arrived before the city existed: apply the
+    // building map now, and let applyArt handle anything that lands later.
+    this.buildings.setMap(this.art.concrete);
     this.scene.add(this.buildings.mesh, this.buildings.windows);
     this.refreshBuildingColors();
     this.rts.setBounds(0, city.width, 0, city.height);

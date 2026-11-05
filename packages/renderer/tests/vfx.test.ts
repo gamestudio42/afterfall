@@ -179,4 +179,61 @@ describe("efeitos visuais", () => {
       expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.repeat.x).toBeCloseTo(1 / 6, 5);
     });
   });
+
+  describe("death cloud", () => {
+    function mat(vfx: VfxSystem, i = 0): THREE.MeshBasicMaterial {
+      return vfx.pool[i].material as THREE.MeshBasicMaterial;
+    }
+
+    it("plays the 4 by 2 sheet with normal blending", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "death", 3, 4)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).map!.repeat.x).toBeCloseTo(1 / 4, 5);
+      expect(mat(vfx).map!.repeat.y).toBeCloseTo(1 / 2, 5);
+      expect(mat(vfx).blending).toBe(THREE.NormalBlending);
+      expect(mat(vfx).opacity).toBe(1);
+      expect(vfx.pool[0].position.x).toBeCloseTo(3, 5);
+      expect(vfx.pool[0].position.z).toBeCloseTo(4, 5);
+    });
+
+    it("fades by opacity at the end of its life", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "death")]);
+      vfx.debugPin(0.95);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).opacity).toBeGreaterThan(0);
+      expect(mat(vfx).opacity).toBeLessThan(0.3);
+    });
+
+    it("gives the slot back to additive blending for the next spark", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "death")]);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).blending).toBe(THREE.NormalBlending);
+      for (let i = 0; i < 40; i++) vfx.update(0.05, camera);
+      vfx.emit([fx(2, "hit")]);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).blending).toBe(THREE.AdditiveBlending);
+      expect(mat(vfx).opacity).toBe(1);
+    });
+
+    it("falls back to the spark burst while the sheet has not arrived", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      expect(vfx.deathReady).toBe(false);
+      vfx.emit([fx(1, "death")]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).map!.repeat.x).toBeCloseTo(1 / 6, 5);
+      expect(mat(vfx).blending).toBe(THREE.AdditiveBlending);
+    });
+  });
 });

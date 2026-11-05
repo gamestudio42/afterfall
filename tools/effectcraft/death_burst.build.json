@@ -1,0 +1,876 @@
+[
+  {
+    "command": "comp.new",
+    "params": {
+      "name": "death_burst",
+      "width": 256,
+      "height": 256,
+      "frameRate": 30,
+      "duration": 0.6
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "dust1",
+      "size": [86, 86],
+      "fill": "#4a3a30"
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Gaussian Blur",
+      "layers": ["dust1"]
+    }
+  },
+  {
+    "command": "prop.set",
+    "params": {
+      "layer": "dust1",
+      "path": "effects/#1/blurriness",
+      "value": 9
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust1",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [110, 134, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust1",
+      "path": "transform/position",
+      "time": 0.55,
+      "value": [84, 142, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust1",
+      "path": "transform/scale",
+      "time": 0.0,
+      "value": [45, 45, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust1",
+      "path": "transform/scale",
+      "time": 0.2,
+      "value": [105, 105, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust1",
+      "path": "transform/scale",
+      "time": 0.55,
+      "value": [140, 140, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust1",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 95
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust1",
+      "path": "transform/opacity",
+      "time": 0.2,
+      "value": 80
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust1",
+      "path": "transform/opacity",
+      "time": 0.55,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "dust2",
+      "size": [74, 74],
+      "fill": "#3f3129"
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Gaussian Blur",
+      "layers": ["dust2"]
+    }
+  },
+  {
+    "command": "prop.set",
+    "params": {
+      "layer": "dust2",
+      "path": "effects/#1/blurriness",
+      "value": 9
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust2",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [148, 120, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust2",
+      "path": "transform/position",
+      "time": 0.55,
+      "value": [176, 106, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust2",
+      "path": "transform/scale",
+      "time": 0.0,
+      "value": [45, 45, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust2",
+      "path": "transform/scale",
+      "time": 0.2,
+      "value": [105, 105, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust2",
+      "path": "transform/scale",
+      "time": 0.55,
+      "value": [140, 140, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust2",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 95
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust2",
+      "path": "transform/opacity",
+      "time": 0.2,
+      "value": 80
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust2",
+      "path": "transform/opacity",
+      "time": 0.55,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "gore1",
+      "size": [64, 64],
+      "fill": "#5a1e16"
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Gaussian Blur",
+      "layers": ["gore1"]
+    }
+  },
+  {
+    "command": "prop.set",
+    "params": {
+      "layer": "gore1",
+      "path": "effects/#1/blurriness",
+      "value": 9
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore1",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [132, 142, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore1",
+      "path": "transform/position",
+      "time": 0.55,
+      "value": [138, 168, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore1",
+      "path": "transform/scale",
+      "time": 0.0,
+      "value": [45, 45, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore1",
+      "path": "transform/scale",
+      "time": 0.2,
+      "value": [105, 105, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore1",
+      "path": "transform/scale",
+      "time": 0.55,
+      "value": [140, 140, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore1",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 95
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore1",
+      "path": "transform/opacity",
+      "time": 0.2,
+      "value": 80
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore1",
+      "path": "transform/opacity",
+      "time": 0.55,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "gore2",
+      "size": [52, 52],
+      "fill": "#6b2419"
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Gaussian Blur",
+      "layers": ["gore2"]
+    }
+  },
+  {
+    "command": "prop.set",
+    "params": {
+      "layer": "gore2",
+      "path": "effects/#1/blurriness",
+      "value": 9
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore2",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [118, 112, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore2",
+      "path": "transform/position",
+      "time": 0.55,
+      "value": [102, 84, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore2",
+      "path": "transform/scale",
+      "time": 0.0,
+      "value": [45, 45, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore2",
+      "path": "transform/scale",
+      "time": 0.2,
+      "value": [105, 105, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore2",
+      "path": "transform/scale",
+      "time": 0.55,
+      "value": [140, 140, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore2",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 95
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore2",
+      "path": "transform/opacity",
+      "time": 0.2,
+      "value": 80
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "gore2",
+      "path": "transform/opacity",
+      "time": 0.55,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "dust3",
+      "size": [60, 60],
+      "fill": "#544238"
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Gaussian Blur",
+      "layers": ["dust3"]
+    }
+  },
+  {
+    "command": "prop.set",
+    "params": {
+      "layer": "dust3",
+      "path": "effects/#1/blurriness",
+      "value": 9
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust3",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [142, 146, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust3",
+      "path": "transform/position",
+      "time": 0.55,
+      "value": [168, 170, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust3",
+      "path": "transform/scale",
+      "time": 0.0,
+      "value": [45, 45, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust3",
+      "path": "transform/scale",
+      "time": 0.2,
+      "value": [105, 105, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust3",
+      "path": "transform/scale",
+      "time": 0.55,
+      "value": [140, 140, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust3",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 95
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust3",
+      "path": "transform/opacity",
+      "time": 0.2,
+      "value": 80
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "dust3",
+      "path": "transform/opacity",
+      "time": 0.55,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "drop0",
+      "size": [10, 10],
+      "fill": "#7a2a1c"
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop0",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [137.21060994002886, 131.8941834230865, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop0",
+      "path": "transform/position",
+      "time": 0.33,
+      "value": [209.1, 162.3, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop0",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop0",
+      "path": "transform/opacity",
+      "time": 0.15,
+      "value": 90
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop0",
+      "path": "transform/opacity",
+      "time": 0.33,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "drop1",
+      "size": [14, 14],
+      "fill": "#7a2a1c"
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop1",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [130.69812616783253, 137.6291284747093, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop1",
+      "path": "transform/position",
+      "time": 0.33,
+      "value": [155.0, 224.3, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop1",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop1",
+      "path": "transform/opacity",
+      "time": 0.15,
+      "value": 90
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop1",
+      "path": "transform/opacity",
+      "time": 0.33,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "drop2",
+      "size": [10, 10],
+      "fill": "#7a2a1c"
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop2",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [122.15389835951467, 136.11314338645107, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop2",
+      "path": "transform/position",
+      "time": 0.33,
+      "value": [62.5, 218.9, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop2",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop2",
+      "path": "transform/opacity",
+      "time": 0.15,
+      "value": 90
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop2",
+      "path": "transform/opacity",
+      "time": 0.33,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "drop3",
+      "size": [14, 14],
+      "fill": "#7a2a1c"
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop3",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [118.01190432522306, 128.48779585023044, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop3",
+      "path": "transform/position",
+      "time": 0.33,
+      "value": [40.1, 132.3, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop3",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop3",
+      "path": "transform/opacity",
+      "time": 0.15,
+      "value": 90
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop3",
+      "path": "transform/opacity",
+      "time": 0.33,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "drop4",
+      "size": [10, 10],
+      "fill": "#7a2a1c"
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop4",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [121.39115005405982, 120.49512808956432, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop4",
+      "path": "transform/position",
+      "time": 0.33,
+      "value": [61.9, 53.0, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop4",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop4",
+      "path": "transform/opacity",
+      "time": 0.15,
+      "value": 90
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop4",
+      "path": "transform/opacity",
+      "time": 0.33,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "drop5",
+      "size": [14, 14],
+      "fill": "#7a2a1c"
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop5",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [129.74699458816025, 118.15378194894411, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop5",
+      "path": "transform/position",
+      "time": 0.33,
+      "value": [147.6, 17.7, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop5",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop5",
+      "path": "transform/opacity",
+      "time": 0.15,
+      "value": 90
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop5",
+      "path": "transform/opacity",
+      "time": 0.33,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "drop6",
+      "size": [10, 10],
+      "fill": "#7a2a1c"
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop6",
+      "path": "transform/position",
+      "time": 0.0,
+      "value": [136.78731656518082, 123.22683882701425, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop6",
+      "path": "transform/position",
+      "time": 0.33,
+      "value": [205.3, 86.0, 0]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop6",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop6",
+      "path": "transform/opacity",
+      "time": 0.15,
+      "value": 90
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "drop6",
+      "path": "transform/opacity",
+      "time": 0.33,
+      "value": 0
+    }
+  },
+  {
+    "command": "file.save",
+    "params": {
+      "path": "death_burst.ecproj"
+    }
+  }
+]

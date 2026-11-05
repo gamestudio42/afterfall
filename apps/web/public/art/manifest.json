@@ -124,6 +124,22 @@
         "cell": 128
       },
       "coverage": [18.6, 30.45, 24.46, 14.54]
+    },
+    {
+      "name": "death_atlas",
+      "file": "death_atlas.png",
+      "width": 512,
+      "height": 256,
+      "bytes": 92417,
+      "sha256": "55014d604fd8f4560c7087fb1bfba608515f6d187818f96c9a04fd4d63995f5a",
+      "generator": "EffectCraft 0.21.1 tools/effectcraft/death_burst.build.json (every other frame) + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 4,
+        "rows": 2,
+        "frames": 8,
+        "cell": 128
+      },
+      "coverage": [6.23, 11.1, 17.54, 25.5, 30.05, 33.16, 37.12, 39.9]
     }
   ]
 }

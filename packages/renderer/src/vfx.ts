@@ -65,11 +65,26 @@ const MUZZLE_SIZE = 2.6;
 const MUZZLE_REACH = 0.9;
 const MUZZLE_HEIGHT = 1.45;
 
+/**
+ * Death cloud (`tools/effectcraft/death_burst.build.json`): eight frames, every
+ * other frame of a 0.53 s render, 4 by 2. Dark dust and dried blood cannot be
+ * drawn additively (adding dark adds nothing), so this one blends normally.
+ */
+const DEATH_COLS = 4;
+const DEATH_ROWS = 2;
+const DEATH_ACTIVE = 8;
+const DEATH_LIFE = 0.6;
+const DEATH_SIZE = 4.6;
+const DEATH_HEIGHT = 0.9;
+
 interface Sprite {
   /** The frames this burst plays: the spark sheet or the muzzle strip. */
   frames: THREE.Texture[];
-  /** The spark rises and grows as it dies; a muzzle flash holds still. */
-  drifts: boolean;
+  /**
+   * spark: additive, rises, grows and fades in code. muzzle: additive and still,
+   * the strip fades itself. smoke: normal blending, still, faded by opacity.
+   */
+  look: "spark" | "muzzle" | "smoke";
   x: number;
   y: number;
   z: number;
@@ -142,6 +157,7 @@ export class VfxSystem {
   pool: THREE.Mesh[] = [];
   private frameTextures: THREE.Texture[] = [];
   private muzzleFrames: THREE.Texture[] = [];
+  private deathFrames: THREE.Texture[] = [];
   private bursts: Sprite[] = [];
   private pin: number | null = null;
   private readonly sceneRef: THREE.Scene;
@@ -197,9 +213,21 @@ export class VfxSystem {
     this.ensurePool();
   }
 
+  /** Gives deaths their dark cloud. Without it a death plays the spark burst. */
+  setDeathAtlas(atlas: THREE.Texture | null): void {
+    if (!atlas || this.deathFrames.length > 0) return;
+    this.deathFrames = sliceAtlas(atlas, DEATH_COLS, DEATH_ROWS, DEATH_ACTIVE);
+    this.ensurePool();
+  }
+
+  /** Whether deaths already play their own cloud (the sheet loads asynchronously). */
+  get deathReady(): boolean {
+    return this.deathFrames.length > 0;
+  }
+
   private ensurePool(): void {
     if (this.pool.length > 0) return;
-    const first = this.frameTextures[0] ?? this.muzzleFrames[0];
+    const first = this.frameTextures[0] ?? this.muzzleFrames[0] ?? this.deathFrames[0];
     for (let i = 0; i < MAX_SPRITES; i++) {
       const mat = new THREE.MeshBasicMaterial({
         map: first,
@@ -240,10 +268,26 @@ export class VfxSystem {
       if (!burst) continue;
       if (fx.type === "shot" && this.muzzleFrames.length > 0) {
         if (this.bursts.length < MAX_SPRITES) this.bursts.push(this.muzzle(fx));
+      } else if (fx.type === "death" && this.deathFrames.length > 0) {
+        if (this.bursts.length < MAX_SPRITES) {
+          this.bursts.push({
+            frames: this.deathFrames,
+            look: "smoke",
+            x: fx.x,
+            y: DEATH_HEIGHT,
+            z: fx.y,
+            age: 0,
+            life: DEATH_LIFE,
+            size: DEATH_SIZE,
+            r: 1,
+            g: 1,
+            b: 1,
+          });
+        }
       } else if (this.frameTextures.length > 0 && this.bursts.length < MAX_SPRITES) {
         this.bursts.push({
           frames: this.frameTextures,
-          drifts: true,
+          look: "spark",
           x: fx.x,
           y: 1.05,
           z: fx.y,
@@ -328,19 +372,29 @@ export class VfxSystem {
         // 12-compile stutter per burst and enough to starve the frame loop.
         mat.map = frame;
       }
-      this.posVec.set(b.x, b.drifts ? b.y + t * 0.4 : b.y, b.z);
+      const spark = b.look === "spark";
+      this.posVec.set(b.x, spark ? b.y + t * 0.4 : b.y, b.z);
       mesh.position.copy(this.posVec);
       mesh.quaternion.copy(this.cameraQuat);
-      // The muzzle strip animates its own scale; only the spark is grown here.
-      mesh.scale.setScalar(b.drifts ? b.size * (0.6 + t * 1.1) : b.size);
-      // The render ends white-hot and dies out; the tint carries the event and
-      // the additive blend does the fade.
-      // The muzzle strip fades to zero alpha on its own last frame.
-      const fade = !b.drifts || t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
-      // The atlas carries its own white-hot colour; tinting it with the event
-      // colour turned a spark into a dull red dot, so the sprite stays warm and
-      // only the fade moves.
-      mat.color.setRGB(1.0 * fade, 0.94 * fade, 0.82 * fade);
+      // The muzzle and smoke sheets animate their own scale; only the spark is grown here.
+      mesh.scale.setScalar(spark ? b.size * (0.6 + t * 1.1) : b.size);
+      // The muzzle strip reaches zero alpha on its own last frame; the spark and
+      // the smoke still carry alpha at the end of their sheets, so they fade here.
+      const fade = b.look === "muzzle" || t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      // One pool serves both blend modes. Changing `blending` is render state,
+      // not a different shader, so it needs no `needsUpdate` either.
+      if (b.look === "smoke") {
+        mat.blending = THREE.NormalBlending;
+        mat.color.setRGB(1, 1, 1);
+        mat.opacity = fade;
+      } else {
+        mat.blending = THREE.AdditiveBlending;
+        mat.opacity = 1;
+        // Additive: the colour going to black is the fade. The atlas carries its
+        // own white-hot colour; tinting it with the event colour turned a spark
+        // into a dull red dot, so the sprite stays warm and only the fade moves.
+        mat.color.setRGB(1.0 * fade, 0.94 * fade, 0.82 * fade);
+      }
       this.bursts[sw] = b;
       sw++;
     }
@@ -355,7 +409,7 @@ export class VfxSystem {
     const k = len > 1e-6 ? MUZZLE_REACH / len : 0;
     return {
       frames: this.muzzleFrames,
-      drifts: false,
+      look: "muzzle",
       x: fx.x + dx * k,
       y: MUZZLE_HEIGHT,
       z: fx.y + dz * k,

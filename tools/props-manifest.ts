@@ -12,14 +12,19 @@ import { resolve } from "node:path";
 const ART = resolve(import.meta.dirname, "../apps/web/public/art");
 const MANIFEST = resolve(ART, "manifest.json");
 
-const files = readdirSync(resolve(ART, "props")).filter((f) => f.endsWith(".glb"));
+const dirs = ["props", "survivors"];
+const files = dirs.flatMap((dir) =>
+  readdirSync(resolve(ART, dir))
+    .filter((f) => f.endsWith(".glb"))
+    .map((f) => `${dir}/${f}`),
+);
 const manifest = JSON.parse(readFileSync(MANIFEST, "utf8")) as { version: number; assets: Record<string, unknown>[] };
 
 const entries = files.map((file) => {
-  const buf = readFileSync(resolve(ART, "props", file));
+  const buf = readFileSync(resolve(ART, file));
   return {
-    name: `prop_${file.replace(/\.glb$/, "")}`,
-    file: `props/${file}`,
+    name: file.replace(/[\/]/g, "_").replace(/\.glb$/, ""),
+    file,
     kind: "glb",
     bytes: buf.length,
     sha256: createHash("sha256").update(buf).digest("hex"),
@@ -27,6 +32,6 @@ const entries = files.map((file) => {
   };
 });
 
-manifest.assets = [...manifest.assets.filter((a) => !String(a.file).startsWith("props/")), ...entries];
+manifest.assets = [...manifest.assets.filter((a) => !files.some((f) => a.file === f)), ...entries];
 writeFileSync(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(`${entries.length} props in the manifest: ${files.join(", ")}`);

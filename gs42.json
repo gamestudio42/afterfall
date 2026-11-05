@@ -1,0 +1,14 @@
+{
+  "title": "Afterfall",
+  "tagline": {
+    "en": "Scavenge by day, hold by night, rebuild the world.",
+    "pt": "Colete de dia, resista à noite, reconstrua o mundo.",
+    "es": "Recolecta de día, resiste de noche, reconstruye el mundo.",
+    "fr": "Fouillez le jour, tenez la nuit, reconstruisez le monde.",
+    "de": "Sammle am Tag, halte die Nacht, baue die Welt wieder auf."
+  },
+  "cover": "apps/web/public/favicon.svg",
+  "genre": "colony-builder",
+  "tech": ["TypeScript", "Three.js", "React"],
+  "order": 8
+}

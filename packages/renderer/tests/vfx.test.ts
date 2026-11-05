@@ -61,4 +61,53 @@ describe("efeitos visuais", () => {
     vfx.emit(many);
     expect(vfx.active).toBeLessThanOrEqual(720);
   });
+
+  describe("flipbook do estouro", () => {
+    it("constroi um quadro por celula do atlas e um pool escondido", () => {
+      const { scene } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      expect(vfx.pool.length).toBeGreaterThan(0);
+      expect(vfx.pool.every((m) => m.visible === false)).toBe(true);
+      // Each frame texture owns a sixth by a fifth of the sheet.
+      const first = (vfx.pool[0].material as THREE.MeshBasicMaterial).map as THREE.Texture;
+      expect(first.repeat.x).toBeCloseTo(1 / 6, 5);
+      expect(first.repeat.y).toBeCloseTo(1 / 5, 5);
+      expect(first.offset.x).toBeCloseTo(0, 5);
+      expect(first.offset.y).toBeCloseTo(1 - 1 / 5, 5);
+    });
+
+    it("mostra um estouro por evento e o apaga quando a vida acaba", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.emit([fx(1, "death", 0, 0)]);
+      expect(vfx.pool.filter((m) => m.visible).length).toBe(0);
+
+      vfx.update(0.016, camera);
+      expect(vfx.pool.filter((m) => m.visible).length).toBe(1);
+
+      // Pinned to the start of its life, the frame is the first cell.
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      const mat = vfx.pool[0].material as THREE.MeshBasicMaterial;
+      expect(mat.map!.offset.x).toBeCloseTo(0, 5);
+
+      // Pinned near the end, it has moved on to a later cell.
+      vfx.debugPin(0.9);
+      vfx.update(0.016, camera);
+      expect(mat.map!.offset.x).toBeGreaterThan(0);
+
+      // Unpinned and run past its life, it disappears.
+      vfx.debugPin(null);
+      for (let i = 0; i < 200; i++) vfx.update(0.05, camera);
+      expect(vfx.pool.filter((m) => m.visible).length).toBe(0);
+    });
+
+    it("nao ganha estouro repetido do mesmo evento", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.emit([fx(7, "death", 0, 0), fx(7, "death", 0, 0)]);
+      vfx.update(0.016, camera);
+      expect(vfx.pool.filter((m) => m.visible).length).toBe(1);
+    });
+  });
 });

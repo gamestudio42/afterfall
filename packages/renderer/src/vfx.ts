@@ -275,8 +275,10 @@ export class VfxSystem {
       const mat = mesh.material as THREE.MeshBasicMaterial;
       const frame = this.frameTextures[Math.min(ATLAS_ACTIVE - 1, Math.floor(t * ATLAS_ACTIVE))];
       if (mat.map !== frame) {
+        // Swapping between textures does not change the shader: `needsUpdate`
+        // here would recompile the program on every frame change, which is a
+        // 12-compile stutter per burst and enough to starve the frame loop.
         mat.map = frame;
-        mat.needsUpdate = true;
       }
       this.posVec.set(b.x, b.y + t * 0.4, b.z);
       mesh.position.copy(this.posVec);

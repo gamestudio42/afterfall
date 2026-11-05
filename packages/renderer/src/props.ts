@@ -17,6 +17,29 @@ export interface PropPlacement {
 
 const MAX_PER_KIND = 70;
 
+/**
+ * A soft radial glow, drawn once to a canvas. Used as the halo on every lamp
+ * head: an additive quad costs one draw call for the whole city and no shadow,
+ * which is what keeps the night readable without a bloom pass.
+ */
+function glowTexture(): THREE.Texture | null {
+  if (typeof document === "undefined") return null;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgba(255,214,150,1)");
+  g.addColorStop(0.35, "rgba(255,186,110,0.45)");
+  g.addColorStop(1, "rgba(255,170,90,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** Deterministic hash, so the same seed always dresses the same city. */
 function hash(a: number, b: number, seed: number): number {
   let h = a * 374761393 + b * 668265263 + seed * 2147483647;
@@ -110,6 +133,8 @@ export async function loadProps(
   const meshes: THREE.Object3D[] = [];
   let instances = 0;
   let drawCalls = 0;
+  let halo: THREE.InstancedMesh | null = null;
+  const glow = glowTexture();
   const matrix = new THREE.Matrix4();
   const quat = new THREE.Quaternion();
   const pos = new THREE.Vector3();
@@ -155,6 +180,32 @@ export async function loadProps(
         meshes.push(inst);
         instances += list.length;
         drawCalls += 1;
+
+        // Every lamp gets a halo at head height; one instanced mesh for all of
+        // them, so the night gains light that costs a single draw call.
+        if (kind === "lamp" && glow && !halo) {
+          const haloMat = new THREE.MeshBasicMaterial({
+            map: glow,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
+          halo = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), haloMat, list.length);
+          halo.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          halo.frustumCulled = false;
+          list.forEach((pl, i) => {
+            pos.set(pl.x, 5.05, pl.z);
+            quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), pl.rot);
+            scale.setScalar(2.6 * pl.scale);
+            matrix.compose(pos, quat, scale);
+            halo!.setMatrixAt(i, matrix);
+          });
+          halo.instanceMatrix.needsUpdate = true;
+          halo.computeBoundingSphere();
+          meshes.push(halo);
+          drawCalls += 1;
+        }
       });
     }),
   );

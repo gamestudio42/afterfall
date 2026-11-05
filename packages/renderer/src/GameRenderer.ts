@@ -483,7 +483,12 @@ export class GameRenderer {
     const sky = new THREE.Color(0x141d33).lerp(new THREE.Color(0x9fb2c0), daylight);
     if (daylight > 0.05 && daylight < 0.7) sky.lerp(new THREE.Color(0xd08a5a), 0.35 * (1 - Math.abs(daylight - 0.35) / 0.35));
     this.scene.background = sky;
-    (this.scene.fog as THREE.Fog).color.copy(sky);
+    // Night pulls the fog in: the map edge disappears and the streets read as a
+    // place you cannot see the end of, which is the point of the night phase.
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.copy(sky);
+    fog.near = lerp(150, 220, daylight);
+    fog.far = lerp(520, 620, daylight);
     this.windowMat.opacity = (1 - daylight) * 0.95;
     const hq = sim.state.hq;
     if (hq >= 0) {

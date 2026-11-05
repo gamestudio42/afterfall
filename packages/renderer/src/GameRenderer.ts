@@ -5,7 +5,7 @@ import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
-import { buildCityGround, type GroundMaterials } from "./cityMeshes";
+import { buildCityGround, TEXTURED_TINT, type GroundMaterials } from "./cityMeshes";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, type PropScene } from "./props";
 import { VfxSystem, type FxEvent } from "./vfx";
@@ -249,15 +249,17 @@ export class GameRenderer {
   private applyArt(art: ArtTextures): void {
     const g = this.groundMats;
     if (g) {
-      const set = (mat: THREE.MeshStandardMaterial | null, tex: THREE.Texture | null) => {
+      const set = (key: keyof GroundMaterials, tex: THREE.Texture | null) => {
+        const mat = g[key];
         if (!mat || !tex || mat.map === tex) return;
         mat.map = tex;
+        mat.color.setHex(TEXTURED_TINT[key]);
         mat.needsUpdate = true;
       };
-      set(g.ground, art.grass);
-      set(g.blocks, art.concrete);
-      set(g.roads, art.asphalt);
-      set(g.parks, art.grass);
+      set("ground", art.grass);
+      set("blocks", art.concrete);
+      set("roads", art.asphalt);
+      set("parks", art.grass);
     }
     if (this.buildings) this.buildings.setMap(art.concrete);
     this.vfx?.setAtlas(art.spark_atlas);

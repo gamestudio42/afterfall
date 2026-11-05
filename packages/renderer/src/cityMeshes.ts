@@ -41,6 +41,23 @@ function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferG
   return g;
 }
 
+/**
+ * Colour each ground material takes once its map arrives. Three multiplies the
+ * colour by the map, so keeping the flat colour darkened everything twice: the
+ * asphalt landed at sRGB 10 instead of 52 and the roads read as black holes.
+ * Each tint is the flat colour divided by the map's mean (in linear light), so
+ * a textured surface averages out to the colour it had before. A tint can only
+ * darken, so the ground's blue stays at the grass map's own (45 against 64) and
+ * the bare ground reads a little more yellow; the parks keep white because the
+ * grass map is already the park's green.
+ */
+export const TEXTURED_TINT: Record<keyof GroundMaterials, number> = {
+  roads: 0xa7abae,
+  ground: 0xe9c8ff,
+  blocks: 0xc4c4bf,
+  parks: 0xffffff,
+};
+
 /** Materials the ground is built from, so the art pass can give each a map. */
 export interface GroundMaterials {
   ground: THREE.MeshStandardMaterial;

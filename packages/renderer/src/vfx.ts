@@ -216,6 +216,11 @@ export class VfxSystem {
     }
   }
 
+  /** Whether shots already play their own flash (the strip loads asynchronously). */
+  get muzzleReady(): boolean {
+    return this.muzzleFrames.length > 0;
+  }
+
   /** Test hook: pin the burst at a fraction of its life (null resumes). */
   debugPin(fraction: number | null): void {
     this.pin = fraction;

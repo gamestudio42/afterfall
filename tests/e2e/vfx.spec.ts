@@ -30,8 +30,10 @@ test("particles are born from the simulation event and fade when their life ends
     g.sim.emitFx("death", at.x, at.y);
   });
 
+  // The effect is created on the frame that consumes `sim.fx`, and the software
+  // renderer in CI can take seconds per frame once the city is dressed.
   await page.waitForFunction(() => (window as unknown as Win).__afterfall.renderer.vfx.active > 0, null, {
-    timeout: 5_000,
+    timeout: 20_000,
   });
   const alive = await page.evaluate(() => ({
     active: (window as unknown as Win).__afterfall.renderer.vfx.active,

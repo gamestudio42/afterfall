@@ -23,7 +23,7 @@ const manifest = JSON.parse(readFileSync(MANIFEST, "utf8")) as { version: number
 const entries = files.map((file) => {
   const buf = readFileSync(resolve(ART, file));
   return {
-    name: file.replace(/[\/]/g, "_").replace(/\.glb$/, ""),
+    name: file.split("/").join("_").replace(/\.glb$/, ""),
     file,
     kind: "glb",
     bytes: buf.length,

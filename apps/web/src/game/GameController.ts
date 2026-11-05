@@ -72,6 +72,8 @@ export class GameController {
     }
     if (import.meta.env.DEV) {
       (window as unknown as { __afterfall: GameController }).__afterfall = this;
+      // The UI store, so an E2E can select a unit the way the player does.
+      (window as unknown as { __afterfallUi: typeof useUi }).__afterfallUi = useUi;
     }
   }
 

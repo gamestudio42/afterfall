@@ -231,10 +231,15 @@ function UnitsPanel({ sim, ids }: { sim: Simulation; ids: number[] }) {
 
 function SurvivorDetail({ sim, e }: { sim: Simulation; e: Entity }) {
   const t = useT();
+  const game = useGame();
   const s = e.survivor!;
   const h = e.health!;
+  // The portrait is rendered once by the renderer; before it exists the panel
+  // simply has no image, which is the same shape as a machine without WebGL.
+  const portrait = game.renderer.survivorPortrait();
   return (
     <div className="panel-section">
+      {portrait && <img className="portrait" src={portrait} alt={s.name} data-testid="portrait" width={72} height={72} />}
       <p className="activity">{activityLabel(t, sim, e)}</p>
       <Row label={t("panel.health")}>{t("panel.hp", { hp: Math.round(h.hp), max: h.max })}</Row>
       <Meter value={h.hp} max={h.max} color={h.hp > 60 ? "#5fd36b" : h.hp > 30 ? "#f0c040" : "#e0503c"} />

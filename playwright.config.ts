@@ -5,7 +5,7 @@ import { defineConfig } from "@playwright/test";
 const executablePath = process.env.PW_CHROMIUM ?? (existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
 
 const shared = {
-  baseURL: "http://localhost:5173",
+  baseURL: "http://localhost:5273",
   viewport: { width: 1440, height: 900 },
 };
 
@@ -49,10 +49,18 @@ export default defineConfig({
     },
     { name: "webkit", use: { ...shared, browserName: "webkit" } },
   ],
+  // Every context renders WebGL in software on a headless box: seven of them at
+  // once starve each other and the failures look like product bugs (a timeout
+  // waiting for a frame, a dev server that gets killed mid-run).
+  workers: process.env.CI ? 2 : 3,
   webServer: {
-    command: "pnpm --filter @afterfall/web exec vite --port 5173 --strictPort",
-    url: "http://localhost:5173",
-    reuseExistingServer: true,
+    // Port 5273, not 5173: another project on this machine defaults to 5173 and
+    // Playwright happily reuses whatever answers there, which means the suite
+    // can spend a whole run testing somebody else's app and reporting on it.
+    // `--strictPort` keeps that from degrading into a silent second server.
+    command: "pnpm --filter @afterfall/web exec vite --port 5273 --strictPort",
+    url: "http://localhost:5273",
+    reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },
 });

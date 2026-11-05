@@ -316,6 +316,12 @@ canvas.world.hidden {
   height: 9px;
   border-radius: 2px;
 }
+/* Icons are inline SVG, so they only need to line up with the text. */
+.icon {
+  display: inline-block;
+  vertical-align: -2px;
+  flex: none;
+}
 
 .banner {
   position: absolute;

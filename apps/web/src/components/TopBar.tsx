@@ -2,6 +2,7 @@ import { RESOURCE_IDS } from "@afterfall/content";
 import { useFrame, useGame, useT } from "../app/hooks";
 import { useUi, type Speed } from "../app/store";
 import { ResDot } from "./common";
+import { Icon } from "./icons";
 
 const SPEEDS: Speed[] = [0, 1, 2, 4];
 
@@ -76,10 +77,11 @@ export function TopBar() {
         />
       </div>
       <div className="stat" title={t("hud.pop")}>
+        <Icon name="people" size={14} />
         <span className="muted">{t("hud.pop")}</span> <strong data-testid="pop">{pop}</strong>
         <small className={beds < pop ? "warn" : "muted"}>
           {" "}
-          / {beds} {t("hud.beds")}
+          / <Icon name="beds" size={12} /> {beds} {t("hud.beds")}
         </small>
       </div>
       <div className="resources">

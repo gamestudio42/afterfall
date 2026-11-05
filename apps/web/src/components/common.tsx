@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Icon, type IconName } from "./icons";
 import { RESOURCE_IDS, type ResourceBag } from "@afterfall/content";
 import { useT } from "../app/hooks";
 
@@ -13,7 +14,10 @@ const RES_COLORS: Record<string, string> = {
 };
 
 export function ResDot({ id }: { id: string }) {
-  return <i className="res-dot" style={{ background: RES_COLORS[id] }} />;
+  // A silhouette per resource instead of a coloured square: at 14 px the shape
+  // is what tells food apart from medicine, and the colour is a second cue.
+  const name = (id in RES_COLORS ? id : "metal") as IconName;
+  return <Icon name={name} size={14} color={RES_COLORS[id]} />;
 }
 
 export function Bag({ bag, empty }: { bag: ResourceBag; empty?: ReactNode }) {

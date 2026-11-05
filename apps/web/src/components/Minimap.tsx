@@ -78,6 +78,23 @@ export function Minimap() {
       ctx.arc(x, y, r / scale, 0, Math.PI * 2);
       ctx.fill();
     };
+    // Where the hordes come in: the player can plan a wall around a street they
+    // know the infected will use, but only if the map says which streets those
+    // are. A small chevron at every spawn point, pointing inwards.
+    // Only after dusk: during the day the exits are just streets, and a dozen
+    // chevrons on a 180 px map is noise, not information.
+    const raidingHours = sim.clock.phase === "dusk" || sim.clock.phase === "night";
+    ctx.fillStyle = "rgba(255,90,60,0.9)";
+    for (const sp of raidingHours ? (city.spawnPoints ?? []) : []) {
+      const toCenter = Math.atan2(city.height / 2 - sp.y, city.width / 2 - sp.x);
+      const size = 5 / scale;
+      ctx.beginPath();
+      ctx.moveTo(sp.x + Math.cos(toCenter) * size, sp.y + Math.sin(toCenter) * size);
+      ctx.lineTo(sp.x + Math.cos(toCenter + 2.5) * size * 0.8, sp.y + Math.sin(toCenter + 2.5) * size * 0.8);
+      ctx.lineTo(sp.x + Math.cos(toCenter - 2.5) * size * 0.8, sp.y + Math.sin(toCenter - 2.5) * size * 0.8);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.fillStyle = "#c9a36b";
     for (const s of sim.structures()) dot(s.transform!.x, s.transform!.y, 1);
     ctx.fillStyle = "#ff5a3c";

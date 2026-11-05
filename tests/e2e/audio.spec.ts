@@ -48,7 +48,9 @@ test("loads the sound kit and plays an effect the simulation emits", async ({ pa
     g.sim.emitFx("shot", at.x, at.y);
   });
   await page.waitForFunction(() => ((window as unknown as Win).__afterfallAudio?.().played.shot ?? 0) >= 1, null, {
-    timeout: 10_000,
+    // The effect only becomes sound on a rendered frame, and software WebGL can
+    // take a second per frame when the suite runs in parallel.
+    timeout: 20_000,
   });
 
   // Um fx do outro lado do mapa nao toca (atenuacao por distancia).

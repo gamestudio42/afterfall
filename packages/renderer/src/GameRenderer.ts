@@ -185,6 +185,7 @@ export class GameRenderer {
       set(g.parks, art.grass);
     }
     if (this.buildings) this.buildings.setMap(art.concrete);
+    this.vfx?.setAtlas(art.spark_atlas);
   }
 
   private groundMats: GroundMaterials | null = null;
@@ -321,7 +322,7 @@ export class GameRenderer {
     this.scene.add(this.tracers);
 
     this.windowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
-    this.vfx = new VfxSystem(this.scene);
+    this.vfx = new VfxSystem(this.scene, undefined, this.art.spark_atlas);
   }
 
   private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number, shadows: boolean): THREE.InstancedMesh {

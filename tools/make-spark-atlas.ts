@@ -3,8 +3,13 @@
  *
  * The source is the canonical EffectCraft render (`hit_sparks_final`): a 30
  * frame, 400x400 WebM plus its alpha pass, because the video stream carries no
- * alpha of its own. Decoding stays in ffmpeg; this script only resamples, packs
- * and premultiplies.
+ * alpha of its own. Decoding stays in ffmpeg; this script only resamples and
+ * packs.
+ *
+ * The RGB is stored STRAIGHT, not premultiplied: the effects blend additively,
+ * and three's additive blend already multiplies the source by alpha. Storing it
+ * premultiplied squares the alpha, and a 0.2 alpha spark lands at 0.04 and
+ * disappears — which is exactly what the first integration did.
  *
  * Usage (needs ffmpeg on PATH):
  *   ffmpeg -i hit_sparks_final.webm -pix_fmt rgb24 -f rawvideo /tmp/final_rgb.raw
@@ -72,11 +77,9 @@ for (let f = 0; f < FRAMES; f++) {
       }
       const al = a / n / 255;
       const di = ((oy + cy) * W + ox + cx) * 4;
-      // Premultiplied, because the effects blend additively: colour scaled by
-      // alpha is exactly what an additive pass wants and it kills the halo.
-      out[di] = Math.round((r / n) * al);
-      out[di + 1] = Math.round((g / n) * al);
-      out[di + 2] = Math.round((b / n) * al);
+      out[di] = Math.round(r / n);
+      out[di + 1] = Math.round(g / n);
+      out[di + 2] = Math.round(b / n);
       out[di + 3] = Math.round(al * 255);
     }
   }

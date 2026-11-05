@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } from "@afterfall/content";
 import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp } from "@afterfall/shared";
@@ -89,6 +90,64 @@ export class GameRenderer {
   private windowMat: THREE.MeshBasicMaterial;
 
   /**
+   * Loads the survivor model and swaps it in place of the capsules. The capsule
+   * kit stays in the scene as the fallback until the model is ready, and stays
+   * if the file is missing, so a broken asset costs a silhouette and nothing
+   * else.
+   */
+  private async loadUnitModel(): Promise<void> {
+    let gltf;
+    try {
+      gltf = await new GLTFLoader().loadAsync(`${this.artBase}art/survivors/walker.glb`);
+    } catch {
+      return;
+    }
+    gltf.scene.updateMatrixWorld(true);
+    const parts: THREE.InstancedMesh[] = [];
+    let colored: THREE.InstancedMesh | null = null;
+    gltf.scene.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const geo = child.geometry.clone();
+      geo.applyMatrix4(child.matrixWorld);
+      const src = child.material as THREE.MeshStandardMaterial;
+      // The model was authored as an infected (greenish skin, dark rags), so the
+      // role is decided here by name: survivors get skin and a ragged shirt that
+      // takes the squad colour, and only the eyes stay emissive.
+      const name = (src.name ?? "").toLowerCase();
+      const isClothes = name.includes("roupa");
+      const isSkin = name.includes("pele");
+      const mat = new THREE.MeshStandardMaterial({
+        color: isClothes ? new THREE.Color(0xffffff) : isSkin ? new THREE.Color(0xd8ab86) : src.color.clone(),
+        roughness: isSkin ? 0.75 : 0.9,
+        metalness: 0,
+        flatShading: true,
+        // Survivors keep dark eyes: the glow the model shipped with belongs to
+        // the infected, and a squad that glows reads as the enemy.
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 0,
+      });
+      const inst = new THREE.InstancedMesh(geo, mat, MAX_UNITS);
+      inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      // Only the shirt gets an instance colour: an all-zero instanceColor on the
+      // skin makes three multiply every vertex to black, which is exactly how
+      // the first version came out with black heads and hands.
+      if (isClothes) inst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_UNITS * 3), 3);
+      inst.count = 0;
+      inst.castShadow = true;
+      inst.receiveShadow = true;
+      inst.frustumCulled = false;
+      // The shirt carries the squad colour; skin and eyes keep their own.
+      if (isClothes) colored = inst;
+      parts.push(inst);
+      this.scene.add(inst);
+    });
+    if (parts.length === 0) return;
+    for (const m of this.unitFallback) m.visible = false;
+    this.unitParts = parts;
+    this.unitColored = colored;
+  }
+
+  /**
    * Drops the prop kit on the sidewalks. Loading is asynchronous and the city
    * can change while it runs, so a token guards against a stale kit landing on
    * a new map.
@@ -131,6 +190,10 @@ export class GameRenderer {
   private groundMats: GroundMaterials | null = null;
   private art: ArtTextures;
   private propScene: PropScene | null = null;
+  /** Meshes of the survivor model, written with the same matrix as the capsules. */
+  private unitParts: THREE.InstancedMesh[] = [];
+  private unitColored: THREE.InstancedMesh | null = null;
+  private unitFallback: THREE.InstancedMesh[] = [];
   private artBase: string;
   private propToken = 0;
 
@@ -170,6 +233,8 @@ export class GameRenderer {
     const pack = new THREE.BoxGeometry(0.5, 0.55, 0.3);
     pack.translate(0, 1.0, -0.38);
     this.packs = this.instanced(pack, new THREE.MeshStandardMaterial({ color: 0x8a6a3c }), MAX_UNITS, false);
+    this.unitFallback = [this.survivors, this.heads, this.packs];
+    void this.loadUnitModel();
     const ring = new THREE.RingGeometry(0.62, 0.8, 24);
     ring.rotateX(-Math.PI / 2);
     ring.translate(0, 0.12, 0);
@@ -472,7 +537,10 @@ export class GameRenderer {
         this.survivors.setMatrixAt(su, tmpM);
         this.heads.setMatrixAt(su, tmpM);
         const color = s.infected ? 0x9fbf6a : s.manual ? 0x3f7fe0 : 0x4a90b8;
-        this.survivors.setColorAt(su, tmpC.setHex(selected.has(e.id) ? 0x67c4ff : color));
+        const tint = tmpC.setHex(selected.has(e.id) ? 0x67c4ff : color);
+        this.survivors.setColorAt(su, tint);
+        for (const part of this.unitParts) part.setMatrixAt(su, tmpM);
+        this.unitColored?.setColorAt(su, tint);
         su++;
         if (bagTotal(s.carry) > 0) this.packs.setMatrixAt(sp++, tmpM);
         if (selected.has(e.id)) {
@@ -505,12 +573,13 @@ export class GameRenderer {
     }
     this.survivors.count = su;
     this.heads.count = su;
+    for (const part of this.unitParts) part.count = su;
     this.packs.count = sp;
     this.rings.count = sr;
     this.infected.count = zi;
     this.hpBg.count = bars;
     this.hpFg.count = bars;
-    for (const m of [this.survivors, this.heads, this.packs, this.rings, this.infected, this.hpBg, this.hpFg]) {
+    for (const m of [this.survivors, this.heads, this.packs, this.rings, this.infected, this.hpBg, this.hpFg, ...this.unitParts]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }

@@ -53,8 +53,10 @@ whether they already knew the system.
 - Seeds: 1 through 40
 - Result: **open 29/40 (72.5%)**, **fort 31/40 (77.5%)**
 - Notes: the open bot wins most runs but loses several on night 5; the fort
-  bot trades early wall investment for a stronger late position. Neither bot
-  builds a workshop, so ammo remains their binding constraint.
+  bot trades early wall investment for a stronger late position. By default
+  neither bot builds a workshop; the later 20-seed experiments with the
+  `craft` and `econ` options show that ammo is not the binding constraint
+  (see `docs/BALANCE.md`).
 
 This reproduces the targets written in `docs/GDD.md`. It is a regression
 baseline, not evidence that a human player will feel the same difficulty.

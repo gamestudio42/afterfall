@@ -40,7 +40,7 @@ See `packages/content/src/balance.ts`. Two scripted players are used for regress
 - **open**: picks a large central HQ, scavenges, converts a shelter and builds two towers. No walls.
 - **fort**: picks a compact HQ and also rings it with walls and a gate on day one.
 
-Over seeds 1 to 40, open wins about 72% and fort about 78%. Most defeats happen on night 5, so the last night is the climax. Neither bot builds a workshop, so ammo is their binding constraint; a player who crafts ammo should do better.
+Over seeds 1 to 40, open wins about 72% and fort about 78%. Most defeats happen on night 5, so the last night is the climax. The sweep options `craft` and `econ` make the bots build a workshop or a farm, a well and a second shelter. Measured with them, ammo is **not** the bottleneck (a workshop moves wins by at most one seed) and the farm and well cost wins in open play, because they take labour from scavenging. Difficulty has to come from the early economy, structural defence or nights 3–4; the fifth night sets how many survive, not whether you win. See [BALANCE.md](BALANCE.md).
 
 The last recorded sweep (2026-10-31, `main` at `02c8d10`, `pnpm sweep 40 1`)
 gave **open 29/40 (72.5%)** and **fort 31/40 (77.5%)**. This is a scripted

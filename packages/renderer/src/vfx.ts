@@ -23,6 +23,7 @@ export interface FxEvent {
 interface Burst {
   count: number;
   /** Scale of the flipbook burst, in metres. */
+  sprite: number;
   life: number;
   speed: number;
   size: number;
@@ -104,7 +105,8 @@ export class VfxSystem {
    * carries its atlas frame. Baking the UVs into a geometry per frame avoids a
    * custom shader, which is one less thing that can fail silently on a driver.
    */
-  private pool: THREE.Mesh[] = [];
+  /** Exposed for the capture spec: it counts the visible quads. */
+  pool: THREE.Mesh[] = [];
   private frameTextures: THREE.Texture[] = [];
   private bursts: Sprite[] = [];
   private pin: number | null = null;

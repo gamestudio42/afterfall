@@ -112,12 +112,16 @@ export class GameController {
    * take seconds per frame, and a test that waits on frames tests the machine,
    * not the game.
    */
+  /** Rolling cost of the three parts of a frame, for the performance probe. */
+  readonly cost = { simMs: 0, renderMs: 0, totalMs: 0, frames: 0 };
+
   step(dtSeconds = 1 / 60, times = 1): void {
     for (let i = 0; i < times; i++) this.frame(dtSeconds * 1000);
   }
 
   private frame(fixedDtMs?: number): void {
-    const now = performance.now();
+    const frameStart = performance.now();
+    const now = frameStart;
     const dt = Math.min(0.1, (fixedDtMs ?? now - this.last) / 1000);
     this.last = now;
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
@@ -126,13 +130,21 @@ export class GameController {
     const sim = this.sim;
     // Hold time while a decision is pending so the player can read it.
     const speed = sim.state.pendingEvent || (sim.state.outcome && sim.state.outcome.type === "defeat") ? 0 : ui.speed;
+    const simStart = performance.now();
     sim.update(dt * 1000, speed);
+    const simMs = performance.now() - simStart;
     this.audio?.update({ fx: sim.fx, alerts: sim.state.alerts, listener: this.audioListener() });
     this.audio?.setAmbience(sim.clock.phase);
     this.updateCamera(dt);
     const r = this.renderer;
     r.selection = { units: ui.selectedUnits, building: ui.selectedBuilding, structure: ui.selectedStructure };
+    const renderStart = performance.now();
     r.render(dt);
+    const renderMs = performance.now() - renderStart;
+    this.cost.simMs += simMs;
+    this.cost.renderMs += renderMs;
+    this.cost.totalMs += performance.now() - frameStart;
+    this.cost.frames += 1;
 
     this.uiTimer += dt;
     if (this.uiTimer > 0.2) {

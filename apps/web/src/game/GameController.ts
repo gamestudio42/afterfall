@@ -104,9 +104,19 @@ export class GameController {
   // Frame
   // -------------------------------------------------------------------
 
-  private frame(): void {
+  /**
+   * Runs the loop body a fixed number of times with a fixed delta. The E2E specs
+   * use it instead of waiting for requestAnimationFrame: a software renderer can
+   * take seconds per frame, and a test that waits on frames tests the machine,
+   * not the game.
+   */
+  step(dtSeconds = 1 / 60, times = 1): void {
+    for (let i = 0; i < times; i++) this.frame(dtSeconds * 1000);
+  }
+
+  private frame(fixedDtMs?: number): void {
     const now = performance.now();
-    const dt = Math.min(0.1, (now - this.last) / 1000);
+    const dt = Math.min(0.1, (fixedDtMs ?? now - this.last) / 1000);
     this.last = now;
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
     const ui = useUi.getState();

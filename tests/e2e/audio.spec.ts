@@ -42,15 +42,14 @@ test("loads the sound kit and plays an effect the simulation emits", async ({ pa
   expect(loaded.state).toBe("running");
 
   // An fx at the centre of the screen (where the player "listens") must become sound.
+  // The frame is stepped explicitly: the effect only becomes sound on a frame
+  // that consumes `sim.fx`, and waiting on requestAnimationFrame under a software
+  // renderer measures the machine instead of the game.
   await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
     const at = g.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
     g.sim.emitFx("shot", at.x, at.y);
-  });
-  await page.waitForFunction(() => ((window as unknown as Win).__afterfallAudio?.().played.shot ?? 0) >= 1, null, {
-    // The effect only becomes sound on a rendered frame, and software WebGL can
-    // take a second per frame when the suite runs in parallel.
-    timeout: 20_000,
+    g.step(1 / 60, 3);
   });
 
   // Um fx do outro lado do mapa nao toca (atenuacao por distancia).
@@ -58,8 +57,8 @@ test("loads the sound kit and plays an effect the simulation emits", async ({ pa
     const g = (window as unknown as Win).__afterfall;
     const at = g.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
     g.sim.emitFx("melee", at.x + 40_000, at.y + 40_000);
+    g.step(1 / 60, 3);
   });
-  await page.waitForTimeout(400);
 
   const stats = await page.evaluate(() => (window as unknown as Win).__afterfallAudio!());
   expect(stats.played.shot).toBeGreaterThanOrEqual(1);
@@ -67,9 +66,7 @@ test("loads the sound kit and plays an effect the simulation emits", async ({ pa
   expect(errors, errors.join("\n")).toEqual([]);
 
   // A ambiencia entra sozinha na primeira metade do dia.
-  await page.waitForFunction(() => (window as unknown as Win).__afterfallAudio?.().ambience !== null, null, {
-    timeout: 10_000,
-  });
+  await page.evaluate(() => (window as unknown as Win).__afterfall.step(1 / 60, 3));
   const amb = await page.evaluate(() => (window as unknown as Win).__afterfallAudio!());
   expect(amb.ambience).toBe("day");
 

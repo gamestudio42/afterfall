@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 type Win = {
   __afterfall: {
@@ -20,7 +20,7 @@ type Win = {
  */
 test.skip(!process.env.PERF_PROBE, "set PERF_PROBE=1 to measure the frame cost");
 
-async function measure(page: import("@playwright/test").Page, label: string, frames: number) {
+async function measure(page: Page, label: string, frames: number) {
   const stats = await page.evaluate(
     ({ n }) => {
       const g = (window as unknown as Win).__afterfall;

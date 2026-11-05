@@ -20,11 +20,22 @@ const MAX_TOTAL_BYTES = 1024 * 1024;
 interface Entry {
   name: string;
   file: string;
-  width: number;
-  height: number;
+  kind?: "png" | "glb";
+  width?: number;
+  height?: number;
   bytes: number;
   sha256: string;
   generator: string;
+}
+
+/** A GLB starts with the magic "glTF", then a version and the total length. */
+function checkGlb(buf: Buffer): string | null {
+  if (buf.readUInt32LE(0) !== 0x46546c67) return "not a GLB (bad magic)";
+  const version = buf.readUInt32LE(4);
+  const declared = buf.readUInt32LE(8);
+  if (version !== 2) return `GLB version ${version}, expected 2`;
+  if (declared !== buf.length) return `GLB declares ${declared} bytes, file has ${buf.length}`;
+  return null;
 }
 
 const problems: string[] = [];
@@ -49,6 +60,12 @@ for (const entry of manifest.assets) {
 
   const sha = createHash("sha256").update(buf).digest("hex");
   if (sha !== entry.sha256) problems.push(`${entry.name}: sha256 ${sha.slice(0, 12)} does not match ${entry.sha256.slice(0, 12)}`);
+
+  if (entry.kind === "glb" || entry.file.endsWith(".glb")) {
+    const err = checkGlb(buf);
+    if (err) problems.push(`${entry.name}: ${err}`);
+    continue;
+  }
 
   let header;
   try {

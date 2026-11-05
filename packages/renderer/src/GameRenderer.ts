@@ -6,6 +6,7 @@ import { RtsCamera } from "./camera";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround, type GroundMaterials } from "./cityMeshes";
 import { loadArtTextures, type ArtTextures } from "./textures";
+import { loadProps, placeProps, type PropScene } from "./props";
 import { VfxSystem, type FxEvent } from "./vfx";
 
 export type OverlayMode = "none" | "resources" | "danger";
@@ -88,6 +89,26 @@ export class GameRenderer {
   private windowMat: THREE.MeshBasicMaterial;
 
   /**
+   * Drops the prop kit on the sidewalks. Loading is asynchronous and the city
+   * can change while it runs, so a token guards against a stale kit landing on
+   * a new map.
+   */
+  private dressStreets(sim: Simulation): void {
+    for (const m of this.propScene?.meshes ?? []) this.scene.remove(m);
+    this.propScene = null;
+    const token = ++this.propToken;
+    const placements = placeProps(sim.city, this.sim!.grid, sim.city.seed ?? 1);
+    void loadProps(this.artBase, placements, (kit) => {
+      if (token !== this.propToken) {
+        for (const m of kit.meshes) m.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+        return;
+      }
+      for (const m of kit.meshes) this.scene.add(m);
+      this.propScene = kit;
+    });
+  }
+
+  /**
    * Hands the loaded maps to the materials that can wear them. Called once per
    * texture as it arrives, so the city gains detail without waiting on boot.
    */
@@ -109,12 +130,16 @@ export class GameRenderer {
 
   private groundMats: GroundMaterials | null = null;
   private art: ArtTextures;
+  private propScene: PropScene | null = null;
+  private artBase: string;
+  private propToken = 0;
 
   constructor(
     readonly canvas: HTMLCanvasElement,
     opts: { baseUrl?: string } = {},
   ) {
-    this.art = loadArtTextures(opts.baseUrl ?? "./", (art) => this.applyArt(art));
+    this.artBase = opts.baseUrl ?? "./";
+    this.art = loadArtTextures(this.artBase, (art) => this.applyArt(art));
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -268,6 +293,7 @@ export class GameRenderer {
     this.buildings.setMap(this.art.concrete);
     this.scene.add(this.buildings.mesh, this.buildings.windows);
     this.refreshBuildingColors();
+    this.dressStreets(sim);
     this.rts.setBounds(0, city.width, 0, city.height);
     this.rts.jumpTo(city.width / 2, city.height / 2);
     this.lastFxSeq = sim.fxSeq;

@@ -52,6 +52,54 @@
         "frames": 30,
         "cell": 128
       }
+    },
+    {
+      "name": "prop_barrier",
+      "file": "props/barrier.glb",
+      "kind": "glb",
+      "bytes": 2000,
+      "sha256": "3da0172ef6c6ff66d0eae638360ace49f3925a3aca78cb1817f182cfbd4167cc",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "prop_car",
+      "file": "props/car.glb",
+      "kind": "glb",
+      "bytes": 12404,
+      "sha256": "ac314863f8060d6f54417deb20fc22624a8c96aff7ea2b258d5e8d5b934e9cda",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "prop_dumpster",
+      "file": "props/dumpster.glb",
+      "kind": "glb",
+      "bytes": 7256,
+      "sha256": "fae7161680514585934ec94088d2ce9c3cb967fc6d447cebd613e38df6a029cf",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "prop_fence",
+      "file": "props/fence.glb",
+      "kind": "glb",
+      "bytes": 4324,
+      "sha256": "8a68c4e655ce67ee7518a36e6d3289d5c2d78249992fd19f74c47f9b2b4e7df8",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "prop_lamp",
+      "file": "props/lamp.glb",
+      "kind": "glb",
+      "bytes": 4836,
+      "sha256": "4da94873895ceac9a69fde830180a6501c10744a16054e6bb0bf9acd200c9dc8",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "prop_sign",
+      "file": "props/sign.glb",
+      "kind": "glb",
+      "bytes": 2932,
+      "sha256": "1a9014a2932bd09942539ad18a8f5fe79b89ffac190b1947afdef5ae43cebefe",
+      "generator": "tools/blender/props.py"
     }
   ]
 }

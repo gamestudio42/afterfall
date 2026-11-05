@@ -265,6 +265,7 @@ export class GameRenderer {
     this.vfx?.setAtlas(art.spark_atlas);
     this.vfx?.setMuzzleAtlas(art.muzzle_atlas);
     this.vfx?.setDeathAtlas(art.death_atlas);
+    this.vfx?.setDustAtlas(art.dust_atlas);
   }
 
   private groundMats: GroundMaterials | null = null;
@@ -406,6 +407,7 @@ export class GameRenderer {
     this.vfx = new VfxSystem(this.scene, undefined, this.art.spark_atlas);
     this.vfx.setMuzzleAtlas(this.art.muzzle_atlas);
     this.vfx.setDeathAtlas(this.art.death_atlas);
+    this.vfx.setDustAtlas(this.art.dust_atlas);
   }
 
   private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number, shadows: boolean): THREE.InstancedMesh {

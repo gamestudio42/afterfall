@@ -110,4 +110,140 @@ describe("efeitos visuais", () => {
       expect(vfx.pool.filter((m) => m.visible).length).toBe(1);
     });
   });
+
+  describe("muzzle flash", () => {
+    function shot(seq: number, x: number, y: number, tx: number, ty: number): FxEvent {
+      return { seq, type: "shot", x, y, tx, ty };
+    }
+
+    it("slices the strip into four frames, a quarter of the sheet each", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setMuzzleAtlas(new THREE.Texture());
+      vfx.emit([shot(1, 0, 0, 10, 0)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      const map = (vfx.pool[0].material as THREE.MeshBasicMaterial).map!;
+      expect(map.repeat.x).toBeCloseTo(1 / 4, 5);
+      expect(map.repeat.y).toBeCloseTo(1, 5);
+      vfx.debugPin(0.9);
+      vfx.update(0.016, camera);
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.offset.x).toBeCloseTo(3 / 4, 5);
+    });
+
+    it("sits at the barrel, a step toward the target, and holds its size", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setMuzzleAtlas(new THREE.Texture());
+      vfx.emit([shot(1, 2, 3, 2, 13)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      const mesh = vfx.pool[0];
+      expect(mesh.visible).toBe(true);
+      expect(mesh.position.x).toBeCloseTo(2, 5);
+      expect(mesh.position.z).toBeCloseTo(3.9, 5);
+      const start = mesh.scale.x;
+      vfx.debugPin(0.9);
+      vfx.update(0.016, camera);
+      expect(mesh.scale.x).toBeCloseTo(start, 5);
+    });
+
+    it("is over in about a tenth of a second", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setMuzzleAtlas(new THREE.Texture());
+      vfx.emit([shot(1, 0, 0, 5, 0)]);
+      vfx.update(0.05, camera);
+      expect(vfx.pool.filter((m) => m.visible).length).toBe(1);
+      vfx.update(0.1, camera);
+      expect(vfx.pool.filter((m) => m.visible).length).toBe(0);
+    });
+
+    it("falls back to the spark burst while the strip has not arrived", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.emit([shot(1, 0, 0, 5, 0)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      const map = (vfx.pool[0].material as THREE.MeshBasicMaterial).map!;
+      expect(map.repeat.x).toBeCloseTo(1 / 6, 5);
+    });
+
+    it("keeps other events on the spark sheet", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setMuzzleAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "hit")]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.repeat.x).toBeCloseTo(1 / 6, 5);
+    });
+  });
+
+  describe("death cloud", () => {
+    function mat(vfx: VfxSystem, i = 0): THREE.MeshBasicMaterial {
+      return vfx.pool[i].material as THREE.MeshBasicMaterial;
+    }
+
+    it("plays the 4 by 2 sheet with normal blending", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "death", 3, 4)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).map!.repeat.x).toBeCloseTo(1 / 4, 5);
+      expect(mat(vfx).map!.repeat.y).toBeCloseTo(1 / 2, 5);
+      expect(mat(vfx).blending).toBe(THREE.NormalBlending);
+      expect(mat(vfx).opacity).toBe(1);
+      expect(vfx.pool[0].position.x).toBeCloseTo(3, 5);
+      expect(vfx.pool[0].position.z).toBeCloseTo(4, 5);
+    });
+
+    it("replaces the red additive particles, which buried the smoke", () => {
+      const { scene } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "death")]);
+      expect(vfx.active).toBe(0);
+      vfx.emit([fx(2, "hit")]);
+      expect(vfx.active).toBeGreaterThan(0);
+    });
+
+    it("fades by opacity at the end of its life", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "death")]);
+      vfx.debugPin(0.95);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).opacity).toBeGreaterThan(0);
+      expect(mat(vfx).opacity).toBeLessThan(0.3);
+    });
+
+    it("gives the slot back to additive blending for the next spark", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "death")]);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).blending).toBe(THREE.NormalBlending);
+      for (let i = 0; i < 40; i++) vfx.update(0.05, camera);
+      vfx.emit([fx(2, "hit")]);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).blending).toBe(THREE.AdditiveBlending);
+      expect(mat(vfx).opacity).toBe(1);
+    });
+
+    it("falls back to the spark burst while the sheet has not arrived", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      expect(vfx.deathReady).toBe(false);
+      vfx.emit([fx(1, "death")]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect(mat(vfx).map!.repeat.x).toBeCloseTo(1 / 6, 5);
+      expect(mat(vfx).blending).toBe(THREE.AdditiveBlending);
+    });
+  });
 });

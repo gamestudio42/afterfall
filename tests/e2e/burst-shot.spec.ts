@@ -25,7 +25,7 @@ test("captures the burst across its life", async ({ page }) => {
     const at = g.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
     g.renderer.rts.goalDistance = 70;
     g.renderer.rts.distance = 70;
-    g.sim.emitFx("death", at.x, at.y);
+    g.sim.emitFx("hit", at.x, at.y);
   });
   await page.waitForTimeout(800);
 

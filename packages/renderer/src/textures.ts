@@ -9,11 +9,15 @@ export interface ArtTextures {
   rust: THREE.Texture | null;
   /** Flipbook of the impact burst, packed by `tools/make-spark-atlas.ts`. */
   spark_atlas: THREE.Texture | null;
+  /** Muzzle flash strip, packed by `tools/make-flipbook-atlas.ts`. */
+  muzzle_atlas: THREE.Texture | null;
+  /** Death cloud sheet, packed by `tools/make-flipbook-atlas.ts`. */
+  death_atlas: THREE.Texture | null;
 }
 
 export type ArtName = keyof ArtTextures;
 
-const NAMES: ArtName[] = ["concrete", "asphalt", "grass", "rust", "spark_atlas"];
+const NAMES: ArtName[] = ["concrete", "asphalt", "grass", "rust", "spark_atlas", "muzzle_atlas", "death_atlas"];
 
 /**
  * Loads the surface maps without blocking the first frame: the materials are
@@ -21,7 +25,15 @@ const NAMES: ArtName[] = ["concrete", "asphalt", "grass", "rust", "spark_atlas"]
  * file keeps the flat colour, so art is never a hard dependency of booting.
  */
 export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => void): ArtTextures {
-  const art: ArtTextures = { concrete: null, asphalt: null, grass: null, rust: null, spark_atlas: null };
+  const art: ArtTextures = {
+    concrete: null,
+    asphalt: null,
+    grass: null,
+    rust: null,
+    spark_atlas: null,
+    muzzle_atlas: null,
+    death_atlas: null,
+  };
   const loader = new THREE.TextureLoader();
   for (const name of NAMES) {
     loader.load(

@@ -108,6 +108,38 @@
         "frames": 30,
         "cell": 128
       }
+    },
+    {
+      "name": "muzzle_atlas",
+      "file": "muzzle_atlas.png",
+      "width": 512,
+      "height": 128,
+      "bytes": 44394,
+      "sha256": "595cf6c86b33724e288f9a17b41d6f7daa41fd9cd241d6234ef4c026beb88e89",
+      "generator": "EffectCraft 0.21.1 tools/effectcraft/muzzle_flash.build.json + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 4,
+        "rows": 1,
+        "frames": 4,
+        "cell": 128
+      },
+      "coverage": [18.6, 30.45, 24.46, 14.54]
+    },
+    {
+      "name": "death_atlas",
+      "file": "death_atlas.png",
+      "width": 512,
+      "height": 256,
+      "bytes": 92417,
+      "sha256": "55014d604fd8f4560c7087fb1bfba608515f6d187818f96c9a04fd4d63995f5a",
+      "generator": "EffectCraft 0.21.1 tools/effectcraft/death_burst.build.json (every other frame) + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 4,
+        "rows": 2,
+        "frames": 8,
+        "cell": 128
+      },
+      "coverage": [6.23, 11.1, 17.54, 25.5, 30.05, 33.16, 37.12, 39.9]
     }
   ]
 }

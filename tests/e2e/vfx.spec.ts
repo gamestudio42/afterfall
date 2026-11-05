@@ -23,13 +23,14 @@ test("particles are born from the simulation event and fade when their life ends
   expect(before).toBe(0);
   if (process.env.VFX_BASELINE) await page.screenshot({ path: process.env.VFX_BASELINE });
 
-  // A death event at the centre of the screen must become a particle. The frame
+  // A hit at the centre of the screen must become a particle. Not a death: a
+  // death plays the smoke sheet instead of particles once it has loaded. The frame
   // is stepped explicitly: waiting on requestAnimationFrame under a software
   // renderer measures the machine, not the game.
   await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
     const at = g.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
-    g.sim.emitFx("death", at.x, at.y);
+    g.sim.emitFx("hit", at.x, at.y);
     g.step(1 / 60, 3);
   });
 

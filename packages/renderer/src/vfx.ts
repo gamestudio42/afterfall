@@ -51,7 +51,40 @@ const ATLAS_ROWS = 5;
 const ATLAS_ACTIVE = 12;
 const MAX_SPRITES = 24;
 
+/**
+ * Muzzle flash flipbook (`tools/effectcraft/muzzle_flash.build.json`): four
+ * frames in a row, every one of them carrying the flash, so the whole strip plays.
+ */
+const MUZZLE_COLS = 4;
+const MUZZLE_ROWS = 1;
+const MUZZLE_ACTIVE = 4;
+/** A flash is over in about a tenth of a second; four frames at ~36 fps. */
+const MUZZLE_LIFE = 0.11;
+const MUZZLE_SIZE = 2.6;
+/** Metres from the shooter toward the target, so the flash sits at the barrel. */
+const MUZZLE_REACH = 0.9;
+const MUZZLE_HEIGHT = 1.45;
+
+/**
+ * Death cloud (`tools/effectcraft/death_burst.build.json`): eight frames, every
+ * other frame of a 0.53 s render, 4 by 2. Dark dust and dried blood cannot be
+ * drawn additively (adding dark adds nothing), so this one blends normally.
+ */
+const DEATH_COLS = 4;
+const DEATH_ROWS = 2;
+const DEATH_ACTIVE = 8;
+const DEATH_LIFE = 0.6;
+const DEATH_SIZE = 6.4;
+const DEATH_HEIGHT = 0.9;
+
 interface Sprite {
+  /** The frames this burst plays: the spark sheet or the muzzle strip. */
+  frames: THREE.Texture[];
+  /**
+   * spark: additive, rises, grows and fades in code. muzzle: additive and still,
+   * the strip fades itself. smoke: normal blending, still, faded by opacity.
+   */
+  look: "spark" | "muzzle" | "smoke";
   x: number;
   y: number;
   z: number;
@@ -61,6 +94,21 @@ interface Sprite {
   r: number;
   g: number;
   b: number;
+}
+
+/** Slices a flipbook sheet into one texture per frame, left to right, top to bottom. */
+function sliceAtlas(atlas: THREE.Texture, cols: number, rows: number, active: number): THREE.Texture[] {
+  atlas.colorSpace = THREE.SRGBColorSpace;
+  atlas.needsUpdate = true;
+  const frames: THREE.Texture[] = [];
+  for (let f = 0; f < active; f++) {
+    const cell = atlas.clone();
+    cell.repeat.set(1 / cols, 1 / rows);
+    cell.offset.set((f % cols) / cols, 1 - (Math.floor(f / cols) + 1) / rows);
+    cell.needsUpdate = true;
+    frames.push(cell);
+  }
+  return frames;
 }
 
 /** Textura de faisca gerada em canvas: um degrade radial, sem arquivo. */
@@ -108,6 +156,8 @@ export class VfxSystem {
   /** Exposed for the capture spec: it counts the visible quads. */
   pool: THREE.Mesh[] = [];
   private frameTextures: THREE.Texture[] = [];
+  private muzzleFrames: THREE.Texture[] = [];
+  private deathFrames: THREE.Texture[] = [];
   private bursts: Sprite[] = [];
   private pin: number | null = null;
   private readonly sceneRef: THREE.Scene;
@@ -141,29 +191,46 @@ export class VfxSystem {
   }
 
   /**
-   * Gives the system its flipbook. Textures arrive after the first frame, so the
-   * pool is built lazily and the atlas can also be handed over later.
-   */
-  /**
    * Gives the system its flipbook. The atlas is sliced into one texture per
    * frame with `offset` and `repeat`: three then owns the UV convention, so
    * there is no flipY arithmetic to get wrong, and the clones share one image
-   * source, so the atlas is uploaded to the GPU once.
+   * source, so the atlas is uploaded to the GPU once. Textures arrive after the
+   * first frame, so the pool is built lazily.
    */
   setAtlas(atlas: THREE.Texture | null): void {
-    if (!atlas || this.pool.length > 0) return;
-    atlas.colorSpace = THREE.SRGBColorSpace;
-    atlas.needsUpdate = true;
-    for (let f = 0; f < ATLAS_ACTIVE; f++) {
-      const cell = atlas.clone();
-      cell.repeat.set(1 / ATLAS_COLS, 1 / ATLAS_ROWS);
-      cell.offset.set((f % ATLAS_COLS) / ATLAS_COLS, 1 - (Math.floor(f / ATLAS_COLS) + 1) / ATLAS_ROWS);
-      cell.needsUpdate = true;
-      this.frameTextures.push(cell);
-    }
+    if (!atlas || this.frameTextures.length > 0) return;
+    this.frameTextures = sliceAtlas(atlas, ATLAS_COLS, ATLAS_ROWS, ATLAS_ACTIVE);
+    this.ensurePool();
+  }
+
+  /**
+   * Gives shots their own flash. Without it a shot falls back to the spark
+   * burst, which is what every shot looked like before.
+   */
+  setMuzzleAtlas(atlas: THREE.Texture | null): void {
+    if (!atlas || this.muzzleFrames.length > 0) return;
+    this.muzzleFrames = sliceAtlas(atlas, MUZZLE_COLS, MUZZLE_ROWS, MUZZLE_ACTIVE);
+    this.ensurePool();
+  }
+
+  /** Gives deaths their dark cloud. Without it a death plays the spark burst. */
+  setDeathAtlas(atlas: THREE.Texture | null): void {
+    if (!atlas || this.deathFrames.length > 0) return;
+    this.deathFrames = sliceAtlas(atlas, DEATH_COLS, DEATH_ROWS, DEATH_ACTIVE);
+    this.ensurePool();
+  }
+
+  /** Whether deaths already play their own cloud (the sheet loads asynchronously). */
+  get deathReady(): boolean {
+    return this.deathFrames.length > 0;
+  }
+
+  private ensurePool(): void {
+    if (this.pool.length > 0) return;
+    const first = this.frameTextures[0] ?? this.muzzleFrames[0] ?? this.deathFrames[0];
     for (let i = 0; i < MAX_SPRITES; i++) {
       const mat = new THREE.MeshBasicMaterial({
-        map: this.frameTextures[0],
+        map: first,
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
@@ -175,6 +242,11 @@ export class VfxSystem {
       this.pool.push(mesh);
       this.sceneRef.add(mesh);
     }
+  }
+
+  /** Whether shots already play their own flash (the strip loads asynchronously). */
+  get muzzleReady(): boolean {
+    return this.muzzleFrames.length > 0;
   }
 
   /** Test hook: pin the burst at a fraction of its life (null resumes). */
@@ -194,8 +266,28 @@ export class VfxSystem {
       this.lastSeq = fx.seq;
       const burst = BURSTS[fx.type];
       if (!burst) continue;
-      if (this.pool.length > 0 && this.bursts.length < MAX_SPRITES) {
+      if (fx.type === "shot" && this.muzzleFrames.length > 0) {
+        if (this.bursts.length < MAX_SPRITES) this.bursts.push(this.muzzle(fx));
+      } else if (fx.type === "death" && this.deathFrames.length > 0) {
+        if (this.bursts.length < MAX_SPRITES) {
+          this.bursts.push({
+            frames: this.deathFrames,
+            look: "smoke",
+            x: fx.x,
+            y: DEATH_HEIGHT,
+            z: fx.y,
+            age: 0,
+            life: DEATH_LIFE,
+            size: DEATH_SIZE,
+            r: 1,
+            g: 1,
+            b: 1,
+          });
+        }
+      } else if (this.frameTextures.length > 0 && this.bursts.length < MAX_SPRITES) {
         this.bursts.push({
+          frames: this.frameTextures,
+          look: "spark",
           x: fx.x,
           y: 1.05,
           z: fx.y,
@@ -207,7 +299,10 @@ export class VfxSystem {
           b: burst.color.b,
         });
       }
-      for (let i = 0; i < burst.count; i++) {
+      // The cloud carries its own droplets; the additive red particles on top of
+      // it glowed like neon and buried the dark smoke, so a cloud replaces them.
+      const sparks = fx.type === "death" && this.deathFrames.length > 0 ? 0 : burst.count;
+      for (let i = 0; i < sparks; i++) {
         if (this.particles.length >= MAX_PARTICLES) break;
         const angle = (this.next() - 0.5) * 2 * Math.PI;
         const speed = burst.speed * (0.45 + this.next() * 0.9);
@@ -273,28 +368,61 @@ export class VfxSystem {
       const t = b.age / b.life;
       mesh.visible = true;
       const mat = mesh.material as THREE.MeshBasicMaterial;
-      const frame = this.frameTextures[Math.min(ATLAS_ACTIVE - 1, Math.floor(t * ATLAS_ACTIVE))];
+      const frame = b.frames[Math.min(b.frames.length - 1, Math.floor(t * b.frames.length))];
       if (mat.map !== frame) {
         // Swapping between textures does not change the shader: `needsUpdate`
         // here would recompile the program on every frame change, which is a
         // 12-compile stutter per burst and enough to starve the frame loop.
         mat.map = frame;
       }
-      this.posVec.set(b.x, b.y + t * 0.4, b.z);
+      const spark = b.look === "spark";
+      this.posVec.set(b.x, spark ? b.y + t * 0.4 : b.y, b.z);
       mesh.position.copy(this.posVec);
       mesh.quaternion.copy(this.cameraQuat);
-      mesh.scale.setScalar(b.size * (0.6 + t * 1.1));
-      // The render ends white-hot and dies out; the tint carries the event and
-      // the additive blend does the fade.
-      const fade = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
-      // The atlas carries its own white-hot colour; tinting it with the event
-      // colour turned a spark into a dull red dot, so the sprite stays warm and
-      // only the fade moves.
-      mat.color.setRGB(1.0 * fade, 0.94 * fade, 0.82 * fade);
+      // The muzzle and smoke sheets animate their own scale; only the spark is grown here.
+      mesh.scale.setScalar(spark ? b.size * (0.6 + t * 1.1) : b.size);
+      // The muzzle strip reaches zero alpha on its own last frame; the spark and
+      // the smoke still carry alpha at the end of their sheets, so they fade here.
+      const fade = b.look === "muzzle" || t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      // One pool serves both blend modes. Changing `blending` is render state,
+      // not a different shader, so it needs no `needsUpdate` either.
+      if (b.look === "smoke") {
+        mat.blending = THREE.NormalBlending;
+        mat.color.setRGB(1, 1, 1);
+        mat.opacity = fade;
+      } else {
+        mat.blending = THREE.AdditiveBlending;
+        mat.opacity = 1;
+        // Additive: the colour going to black is the fade. The atlas carries its
+        // own white-hot colour; tinting it with the event colour turned a spark
+        // into a dull red dot, so the sprite stays warm and only the fade moves.
+        mat.color.setRGB(1.0 * fade, 0.94 * fade, 0.82 * fade);
+      }
       this.bursts[sw] = b;
       sw++;
     }
     this.bursts.length = sw;
+  }
+
+  /** A flash at the barrel: from the shooter, a step toward the target. */
+  private muzzle(fx: FxEvent): Sprite {
+    const dx = (fx.tx ?? fx.x) - fx.x;
+    const dz = (fx.ty ?? fx.y) - fx.y;
+    const len = Math.hypot(dx, dz);
+    const k = len > 1e-6 ? MUZZLE_REACH / len : 0;
+    return {
+      frames: this.muzzleFrames,
+      look: "muzzle",
+      x: fx.x + dx * k,
+      y: MUZZLE_HEIGHT,
+      z: fx.y + dz * k,
+      age: 0,
+      life: MUZZLE_LIFE,
+      size: MUZZLE_SIZE,
+      r: 1,
+      g: 1,
+      b: 1,
+    };
   }
 
   /** Gerador barato e deterministico (mesma sequencia em todo cliente). */

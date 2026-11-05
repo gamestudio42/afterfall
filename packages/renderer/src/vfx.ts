@@ -51,7 +51,25 @@ const ATLAS_ROWS = 5;
 const ATLAS_ACTIVE = 12;
 const MAX_SPRITES = 24;
 
+/**
+ * Muzzle flash flipbook (`tools/effectcraft/muzzle_flash.build.json`): four
+ * frames in a row, every one of them carrying the flash, so the whole strip plays.
+ */
+const MUZZLE_COLS = 4;
+const MUZZLE_ROWS = 1;
+const MUZZLE_ACTIVE = 4;
+/** A flash is over in about a tenth of a second; four frames at ~36 fps. */
+const MUZZLE_LIFE = 0.11;
+const MUZZLE_SIZE = 2.6;
+/** Metres from the shooter toward the target, so the flash sits at the barrel. */
+const MUZZLE_REACH = 0.9;
+const MUZZLE_HEIGHT = 1.45;
+
 interface Sprite {
+  /** The frames this burst plays: the spark sheet or the muzzle strip. */
+  frames: THREE.Texture[];
+  /** The spark rises and grows as it dies; a muzzle flash holds still. */
+  drifts: boolean;
   x: number;
   y: number;
   z: number;
@@ -61,6 +79,21 @@ interface Sprite {
   r: number;
   g: number;
   b: number;
+}
+
+/** Slices a flipbook sheet into one texture per frame, left to right, top to bottom. */
+function sliceAtlas(atlas: THREE.Texture, cols: number, rows: number, active: number): THREE.Texture[] {
+  atlas.colorSpace = THREE.SRGBColorSpace;
+  atlas.needsUpdate = true;
+  const frames: THREE.Texture[] = [];
+  for (let f = 0; f < active; f++) {
+    const cell = atlas.clone();
+    cell.repeat.set(1 / cols, 1 / rows);
+    cell.offset.set((f % cols) / cols, 1 - (Math.floor(f / cols) + 1) / rows);
+    cell.needsUpdate = true;
+    frames.push(cell);
+  }
+  return frames;
 }
 
 /** Textura de faisca gerada em canvas: um degrade radial, sem arquivo. */
@@ -108,6 +141,7 @@ export class VfxSystem {
   /** Exposed for the capture spec: it counts the visible quads. */
   pool: THREE.Mesh[] = [];
   private frameTextures: THREE.Texture[] = [];
+  private muzzleFrames: THREE.Texture[] = [];
   private bursts: Sprite[] = [];
   private pin: number | null = null;
   private readonly sceneRef: THREE.Scene;
@@ -141,29 +175,34 @@ export class VfxSystem {
   }
 
   /**
-   * Gives the system its flipbook. Textures arrive after the first frame, so the
-   * pool is built lazily and the atlas can also be handed over later.
-   */
-  /**
    * Gives the system its flipbook. The atlas is sliced into one texture per
    * frame with `offset` and `repeat`: three then owns the UV convention, so
    * there is no flipY arithmetic to get wrong, and the clones share one image
-   * source, so the atlas is uploaded to the GPU once.
+   * source, so the atlas is uploaded to the GPU once. Textures arrive after the
+   * first frame, so the pool is built lazily.
    */
   setAtlas(atlas: THREE.Texture | null): void {
-    if (!atlas || this.pool.length > 0) return;
-    atlas.colorSpace = THREE.SRGBColorSpace;
-    atlas.needsUpdate = true;
-    for (let f = 0; f < ATLAS_ACTIVE; f++) {
-      const cell = atlas.clone();
-      cell.repeat.set(1 / ATLAS_COLS, 1 / ATLAS_ROWS);
-      cell.offset.set((f % ATLAS_COLS) / ATLAS_COLS, 1 - (Math.floor(f / ATLAS_COLS) + 1) / ATLAS_ROWS);
-      cell.needsUpdate = true;
-      this.frameTextures.push(cell);
-    }
+    if (!atlas || this.frameTextures.length > 0) return;
+    this.frameTextures = sliceAtlas(atlas, ATLAS_COLS, ATLAS_ROWS, ATLAS_ACTIVE);
+    this.ensurePool();
+  }
+
+  /**
+   * Gives shots their own flash. Without it a shot falls back to the spark
+   * burst, which is what every shot looked like before.
+   */
+  setMuzzleAtlas(atlas: THREE.Texture | null): void {
+    if (!atlas || this.muzzleFrames.length > 0) return;
+    this.muzzleFrames = sliceAtlas(atlas, MUZZLE_COLS, MUZZLE_ROWS, MUZZLE_ACTIVE);
+    this.ensurePool();
+  }
+
+  private ensurePool(): void {
+    if (this.pool.length > 0) return;
+    const first = this.frameTextures[0] ?? this.muzzleFrames[0];
     for (let i = 0; i < MAX_SPRITES; i++) {
       const mat = new THREE.MeshBasicMaterial({
-        map: this.frameTextures[0],
+        map: first,
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
@@ -194,8 +233,12 @@ export class VfxSystem {
       this.lastSeq = fx.seq;
       const burst = BURSTS[fx.type];
       if (!burst) continue;
-      if (this.pool.length > 0 && this.bursts.length < MAX_SPRITES) {
+      if (fx.type === "shot" && this.muzzleFrames.length > 0) {
+        if (this.bursts.length < MAX_SPRITES) this.bursts.push(this.muzzle(fx));
+      } else if (this.frameTextures.length > 0 && this.bursts.length < MAX_SPRITES) {
         this.bursts.push({
+          frames: this.frameTextures,
+          drifts: true,
           x: fx.x,
           y: 1.05,
           z: fx.y,
@@ -273,20 +316,22 @@ export class VfxSystem {
       const t = b.age / b.life;
       mesh.visible = true;
       const mat = mesh.material as THREE.MeshBasicMaterial;
-      const frame = this.frameTextures[Math.min(ATLAS_ACTIVE - 1, Math.floor(t * ATLAS_ACTIVE))];
+      const frame = b.frames[Math.min(b.frames.length - 1, Math.floor(t * b.frames.length))];
       if (mat.map !== frame) {
         // Swapping between textures does not change the shader: `needsUpdate`
         // here would recompile the program on every frame change, which is a
         // 12-compile stutter per burst and enough to starve the frame loop.
         mat.map = frame;
       }
-      this.posVec.set(b.x, b.y + t * 0.4, b.z);
+      this.posVec.set(b.x, b.drifts ? b.y + t * 0.4 : b.y, b.z);
       mesh.position.copy(this.posVec);
       mesh.quaternion.copy(this.cameraQuat);
-      mesh.scale.setScalar(b.size * (0.6 + t * 1.1));
+      // The muzzle strip animates its own scale; only the spark is grown here.
+      mesh.scale.setScalar(b.drifts ? b.size * (0.6 + t * 1.1) : b.size);
       // The render ends white-hot and dies out; the tint carries the event and
       // the additive blend does the fade.
-      const fade = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      // The muzzle strip fades to zero alpha on its own last frame.
+      const fade = !b.drifts || t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
       // The atlas carries its own white-hot colour; tinting it with the event
       // colour turned a spark into a dull red dot, so the sprite stays warm and
       // only the fade moves.
@@ -295,6 +340,27 @@ export class VfxSystem {
       sw++;
     }
     this.bursts.length = sw;
+  }
+
+  /** A flash at the barrel: from the shooter, a step toward the target. */
+  private muzzle(fx: FxEvent): Sprite {
+    const dx = (fx.tx ?? fx.x) - fx.x;
+    const dz = (fx.ty ?? fx.y) - fx.y;
+    const len = Math.hypot(dx, dz);
+    const k = len > 1e-6 ? MUZZLE_REACH / len : 0;
+    return {
+      frames: this.muzzleFrames,
+      drifts: false,
+      x: fx.x + dx * k,
+      y: MUZZLE_HEIGHT,
+      z: fx.y + dz * k,
+      age: 0,
+      life: MUZZLE_LIFE,
+      size: MUZZLE_SIZE,
+      r: 1,
+      g: 1,
+      b: 1,
+    };
   }
 
   /** Gerador barato e deterministico (mesma sequencia em todo cliente). */

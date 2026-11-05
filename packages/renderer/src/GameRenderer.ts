@@ -261,6 +261,7 @@ export class GameRenderer {
     }
     if (this.buildings) this.buildings.setMap(art.concrete);
     this.vfx?.setAtlas(art.spark_atlas);
+    this.vfx?.setMuzzleAtlas(art.muzzle_atlas);
   }
 
   private groundMats: GroundMaterials | null = null;
@@ -400,6 +401,7 @@ export class GameRenderer {
 
     this.windowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
     this.vfx = new VfxSystem(this.scene, undefined, this.art.spark_atlas);
+    this.vfx.setMuzzleAtlas(this.art.muzzle_atlas);
   }
 
   private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number, shadows: boolean): THREE.InstancedMesh {

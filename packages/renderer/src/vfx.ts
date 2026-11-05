@@ -66,16 +66,35 @@ const MUZZLE_REACH = 0.9;
 const MUZZLE_HEIGHT = 1.45;
 
 /**
- * Death cloud (`tools/effectcraft/death_burst.build.json`): eight frames, every
- * other frame of a 0.53 s render, 4 by 2. Dark dust and dried blood cannot be
- * drawn additively (adding dark adds nothing), so this one blends normally.
+ * Clouds: flipbooks of dust or smoke that blend normally, because dark or
+ * dull colours add nothing in an additive pass. Each replaces the spark and the
+ * physics particles of its event once its sheet has loaded.
+ *
+ * - death (`tools/effectcraft/death_burst.build.json`): dust and dried blood,
+ *   every other frame of a 0.53 s render, 4 by 2.
+ * - build (`tools/effectcraft/build_dust.build.json`): pale dust rolling low
+ *   and wide with a few chips kicked up, twelve frames of a 0.7 s render, 4 by 3
+ *   at 96 px. The event fires every 15 ticks for every worker on any task, so
+ *   it is capped: a busy site must not take the slots shots and deaths need.
+ *   The render sits in the lower half of its frame, so the quad stands higher
+ *   than the death cloud's: at 0.7 m the ground cut the dust off flat.
  */
-const DEATH_COLS = 4;
-const DEATH_ROWS = 2;
-const DEATH_ACTIVE = 8;
-const DEATH_LIFE = 0.6;
-const DEATH_SIZE = 6.4;
-const DEATH_HEIGHT = 0.9;
+interface Cloud {
+  cols: number;
+  rows: number;
+  frames: number;
+  life: number;
+  size: number;
+  height: number;
+  /** Most of these alive at once; further events are dropped. */
+  cap: number;
+}
+
+const CLOUDS: Record<"death" | "build", Cloud> = {
+  death: { cols: 4, rows: 2, frames: 8, life: 0.6, size: 6.4, height: 0.9, cap: MAX_SPRITES },
+  build: { cols: 4, rows: 3, frames: 12, life: 0.75, size: 5.2, height: 1.6, cap: 6 },
+};
+type CloudKind = keyof typeof CLOUDS;
 
 interface Sprite {
   /** The frames this burst plays: the spark sheet or the muzzle strip. */
@@ -85,6 +104,8 @@ interface Sprite {
    * the strip fades itself. smoke: normal blending, still, faded by opacity.
    */
   look: "spark" | "muzzle" | "smoke";
+  /** Which cloud this is, so its cap can be counted. */
+  cloud?: CloudKind;
   x: number;
   y: number;
   z: number;
@@ -94,6 +115,10 @@ interface Sprite {
   r: number;
   g: number;
   b: number;
+}
+
+function isCloud(type: string): type is CloudKind {
+  return type in CLOUDS;
 }
 
 /** Slices a flipbook sheet into one texture per frame, left to right, top to bottom. */
@@ -157,7 +182,7 @@ export class VfxSystem {
   pool: THREE.Mesh[] = [];
   private frameTextures: THREE.Texture[] = [];
   private muzzleFrames: THREE.Texture[] = [];
-  private deathFrames: THREE.Texture[] = [];
+  private cloudFrames: Partial<Record<CloudKind, THREE.Texture[]>> = {};
   private bursts: Sprite[] = [];
   private pin: number | null = null;
   private readonly sceneRef: THREE.Scene;
@@ -215,19 +240,34 @@ export class VfxSystem {
 
   /** Gives deaths their dark cloud. Without it a death plays the spark burst. */
   setDeathAtlas(atlas: THREE.Texture | null): void {
-    if (!atlas || this.deathFrames.length > 0) return;
-    this.deathFrames = sliceAtlas(atlas, DEATH_COLS, DEATH_ROWS, DEATH_ACTIVE);
-    this.ensurePool();
+    this.setCloudAtlas("death", atlas);
+  }
+
+  /** Gives construction its dust. Without it a work tick plays the spark burst. */
+  setDustAtlas(atlas: THREE.Texture | null): void {
+    this.setCloudAtlas("build", atlas);
   }
 
   /** Whether deaths already play their own cloud (the sheet loads asynchronously). */
   get deathReady(): boolean {
-    return this.deathFrames.length > 0;
+    return !!this.cloudFrames.death;
+  }
+
+  /** Whether construction already plays its dust. */
+  get dustReady(): boolean {
+    return !!this.cloudFrames.build;
+  }
+
+  private setCloudAtlas(kind: CloudKind, atlas: THREE.Texture | null): void {
+    if (!atlas || this.cloudFrames[kind]) return;
+    const c = CLOUDS[kind];
+    this.cloudFrames[kind] = sliceAtlas(atlas, c.cols, c.rows, c.frames);
+    this.ensurePool();
   }
 
   private ensurePool(): void {
     if (this.pool.length > 0) return;
-    const first = this.frameTextures[0] ?? this.muzzleFrames[0] ?? this.deathFrames[0];
+    const first = this.frameTextures[0] ?? this.muzzleFrames[0] ?? this.cloudFrames.death?.[0] ?? this.cloudFrames.build?.[0];
     for (let i = 0; i < MAX_SPRITES; i++) {
       const mat = new THREE.MeshBasicMaterial({
         map: first,
@@ -268,22 +308,8 @@ export class VfxSystem {
       if (!burst) continue;
       if (fx.type === "shot" && this.muzzleFrames.length > 0) {
         if (this.bursts.length < MAX_SPRITES) this.bursts.push(this.muzzle(fx));
-      } else if (fx.type === "death" && this.deathFrames.length > 0) {
-        if (this.bursts.length < MAX_SPRITES) {
-          this.bursts.push({
-            frames: this.deathFrames,
-            look: "smoke",
-            x: fx.x,
-            y: DEATH_HEIGHT,
-            z: fx.y,
-            age: 0,
-            life: DEATH_LIFE,
-            size: DEATH_SIZE,
-            r: 1,
-            g: 1,
-            b: 1,
-          });
-        }
+      } else if (isCloud(fx.type) && this.cloudFrames[fx.type]) {
+        this.pushCloud(fx.type, fx);
       } else if (this.frameTextures.length > 0 && this.bursts.length < MAX_SPRITES) {
         this.bursts.push({
           frames: this.frameTextures,
@@ -301,7 +327,7 @@ export class VfxSystem {
       }
       // The cloud carries its own droplets; the additive red particles on top of
       // it glowed like neon and buried the dark smoke, so a cloud replaces them.
-      const sparks = fx.type === "death" && this.deathFrames.length > 0 ? 0 : burst.count;
+      const sparks = isCloud(fx.type) && this.cloudFrames[fx.type] ? 0 : burst.count;
       for (let i = 0; i < sparks; i++) {
         if (this.particles.length >= MAX_PARTICLES) break;
         const angle = (this.next() - 0.5) * 2 * Math.PI;
@@ -402,6 +428,28 @@ export class VfxSystem {
       sw++;
     }
     this.bursts.length = sw;
+  }
+
+  private pushCloud(kind: CloudKind, fx: FxEvent): void {
+    const c = CLOUDS[kind];
+    if (this.bursts.length >= MAX_SPRITES) return;
+    let alive = 0;
+    for (const b of this.bursts) if (b.cloud === kind && b.age < b.life) alive++;
+    if (alive >= c.cap) return;
+    this.bursts.push({
+      frames: this.cloudFrames[kind]!,
+      look: "smoke",
+      cloud: kind,
+      x: fx.x,
+      y: c.height,
+      z: fx.y,
+      age: 0,
+      life: c.life,
+      size: c.size,
+      r: 1,
+      g: 1,
+      b: 1,
+    });
   }
 
   /** A flash at the barrel: from the shooter, a step toward the target. */

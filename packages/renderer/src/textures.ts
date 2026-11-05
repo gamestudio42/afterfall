@@ -13,11 +13,13 @@ export interface ArtTextures {
   muzzle_atlas: THREE.Texture | null;
   /** Death cloud sheet, packed by `tools/make-flipbook-atlas.ts`. */
   death_atlas: THREE.Texture | null;
+  /** Construction dust sheet, packed by `tools/make-flipbook-atlas.ts`. */
+  dust_atlas: THREE.Texture | null;
 }
 
 export type ArtName = keyof ArtTextures;
 
-const NAMES: ArtName[] = ["concrete", "asphalt", "grass", "rust", "spark_atlas", "muzzle_atlas", "death_atlas"];
+const NAMES: ArtName[] = ["concrete", "asphalt", "grass", "rust", "spark_atlas", "muzzle_atlas", "death_atlas", "dust_atlas"];
 
 /**
  * Loads the surface maps without blocking the first frame: the materials are
@@ -33,6 +35,7 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
     spark_atlas: null,
     muzzle_atlas: null,
     death_atlas: null,
+    dust_atlas: null,
   };
   const loader = new THREE.TextureLoader();
   for (const name of NAMES) {

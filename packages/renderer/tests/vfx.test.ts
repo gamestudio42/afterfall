@@ -246,4 +246,70 @@ describe("efeitos visuais", () => {
       expect(mat(vfx).blending).toBe(THREE.AdditiveBlending);
     });
   });
+
+  describe("construction dust", () => {
+    function visible(vfx: VfxSystem) {
+      return vfx.pool.filter((m) => m.visible);
+    }
+
+    it("plays the 4 by 3 sheet, blending normally", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setDustAtlas(new THREE.Texture());
+      expect(vfx.dustReady).toBe(true);
+      vfx.emit([fx(1, "build", 5, 6)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      const mat = vfx.pool[0].material as THREE.MeshBasicMaterial;
+      expect(mat.map!.repeat.x).toBeCloseTo(1 / 4, 5);
+      expect(mat.map!.repeat.y).toBeCloseTo(1 / 3, 5);
+      expect(mat.blending).toBe(THREE.NormalBlending);
+      expect(vfx.pool[0].position.x).toBeCloseTo(5, 5);
+      expect(vfx.pool[0].position.y).toBeCloseTo(1.6, 5);
+    });
+
+    it("replaces the particles of a work tick", () => {
+      const { scene } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setDustAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "build")]);
+      expect(vfx.active).toBe(0);
+    });
+
+    it("keeps at most six clouds, so a busy site leaves slots for shots and deaths", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setDustAtlas(new THREE.Texture());
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit(Array.from({ length: 20 }, (_, i) => fx(i + 1, "build", i, 0)));
+      vfx.update(0.016, camera);
+      expect(visible(vfx).length).toBe(6);
+      vfx.emit([fx(100, "death")]);
+      vfx.update(0.016, camera);
+      expect(visible(vfx).length).toBe(7);
+    });
+
+    it("frees its slots when the dust settles", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setDustAtlas(new THREE.Texture());
+      vfx.emit(Array.from({ length: 6 }, (_, i) => fx(i + 1, "build")));
+      vfx.update(0.016, camera);
+      for (let i = 0; i < 20; i++) vfx.update(0.05, camera);
+      expect(visible(vfx).length).toBe(0);
+      vfx.emit([fx(50, "build")]);
+      vfx.update(0.016, camera);
+      expect(visible(vfx).length).toBe(1);
+    });
+
+    it("falls back to the spark burst while the sheet has not arrived", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.emit([fx(1, "build")]);
+      expect(vfx.active).toBeGreaterThan(0);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.repeat.x).toBeCloseTo(1 / 6, 5);
+    });
+  });
 });

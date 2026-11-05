@@ -140,6 +140,22 @@
         "cell": 128
       },
       "coverage": [6.23, 11.1, 17.54, 25.5, 30.05, 33.16, 37.12, 39.9]
+    },
+    {
+      "name": "dust_atlas",
+      "file": "dust_atlas.png",
+      "width": 384,
+      "height": 288,
+      "bytes": 98414,
+      "sha256": "bdc4320e5460b4d360c07aa2f19994369406c5483e9a8e63752dcf5b01241ba6",
+      "generator": "EffectCraft 0.21.1 tools/effectcraft/build_dust.build.json (frames 0-20 even, and 21) + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 4,
+        "rows": 3,
+        "frames": 12,
+        "cell": 96
+      },
+      "coverage": [3.19, 5.45, 9.11, 12.93, 18.11, 22.07, 25.35, 28.8, 32.01, 34.85, 35.87, 33.02]
     }
   ]
 }

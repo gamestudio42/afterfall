@@ -54,7 +54,7 @@
       }
     },
     {
-      "name": "prop_barrier",
+      "name": "props_barrier",
       "file": "props/barrier.glb",
       "kind": "glb",
       "bytes": 2000,
@@ -62,7 +62,7 @@
       "generator": "tools/blender/props.py"
     },
     {
-      "name": "prop_car",
+      "name": "props_car",
       "file": "props/car.glb",
       "kind": "glb",
       "bytes": 12404,
@@ -70,7 +70,7 @@
       "generator": "tools/blender/props.py"
     },
     {
-      "name": "prop_dumpster",
+      "name": "props_dumpster",
       "file": "props/dumpster.glb",
       "kind": "glb",
       "bytes": 7256,
@@ -78,7 +78,7 @@
       "generator": "tools/blender/props.py"
     },
     {
-      "name": "prop_fence",
+      "name": "props_fence",
       "file": "props/fence.glb",
       "kind": "glb",
       "bytes": 4324,
@@ -86,7 +86,7 @@
       "generator": "tools/blender/props.py"
     },
     {
-      "name": "prop_lamp",
+      "name": "props_lamp",
       "file": "props/lamp.glb",
       "kind": "glb",
       "bytes": 4836,
@@ -94,11 +94,19 @@
       "generator": "tools/blender/props.py"
     },
     {
-      "name": "prop_sign",
+      "name": "props_sign",
       "file": "props/sign.glb",
       "kind": "glb",
       "bytes": 2932,
       "sha256": "1a9014a2932bd09942539ad18a8f5fe79b89ffac190b1947afdef5ae43cebefe",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "survivors_walker",
+      "file": "survivors/walker.glb",
+      "kind": "glb",
+      "bytes": 21296,
+      "sha256": "cf2286f4b0344e91d22dfd3c5f5fcdca15a9e685757bea33ab63147304ac327e",
       "generator": "tools/blender/props.py"
     }
   ]

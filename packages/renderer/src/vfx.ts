@@ -74,7 +74,7 @@ const DEATH_COLS = 4;
 const DEATH_ROWS = 2;
 const DEATH_ACTIVE = 8;
 const DEATH_LIFE = 0.6;
-const DEATH_SIZE = 4.6;
+const DEATH_SIZE = 6.4;
 const DEATH_HEIGHT = 0.9;
 
 interface Sprite {
@@ -299,7 +299,10 @@ export class VfxSystem {
           b: burst.color.b,
         });
       }
-      for (let i = 0; i < burst.count; i++) {
+      // The cloud carries its own droplets; the additive red particles on top of
+      // it glowed like neon and buried the dark smoke, so a cloud replaces them.
+      const sparks = fx.type === "death" && this.deathFrames.length > 0 ? 0 : burst.count;
+      for (let i = 0; i < sparks; i++) {
         if (this.particles.length >= MAX_PARTICLES) break;
         const angle = (this.next() - 0.5) * 2 * Math.PI;
         const speed = burst.speed * (0.45 + this.next() * 0.9);

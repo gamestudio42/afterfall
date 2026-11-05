@@ -200,6 +200,16 @@ describe("efeitos visuais", () => {
       expect(vfx.pool[0].position.z).toBeCloseTo(4, 5);
     });
 
+    it("replaces the red additive particles, which buried the smoke", () => {
+      const { scene } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setDeathAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "death")]);
+      expect(vfx.active).toBe(0);
+      vfx.emit([fx(2, "hit")]);
+      expect(vfx.active).toBeGreaterThan(0);
+    });
+
     it("fades by opacity at the end of its life", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene);

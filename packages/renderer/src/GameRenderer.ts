@@ -50,6 +50,15 @@ const UP = new THREE.Vector3(0, 1, 0);
  * Draws a Simulation with Three.js. Reads simulation state but never
  * mutates it; interpolates positions between ticks.
  */
+/**
+ * Where the portrait camera sits for the survivor model: head, one shoulder and
+ * the shirt. Tighter than this and the pose's raised arms take over the frame;
+ * further out and the face stops reading at 72 px.
+ */
+export function portraitFraming(): { eye: { x: number; y: number; z: number }; target: { x: number; y: number; z: number }; fov: number } {
+  return { eye: { x: 0.45, y: 1.8, z: 0.95 }, target: { x: 0, y: 1.6, z: 0 }, fov: 32 };
+}
+
 export class GameRenderer {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -88,6 +97,72 @@ export class GameRenderer {
   hoverBuilding = -1;
   private time = 0;
   private windowMat: THREE.MeshBasicMaterial;
+
+  /**
+   * Renders the survivor model once into a small image for the side panel. One
+   * portrait serves every survivor: they share geometry and only differ by the
+   * shirt tint, and a placeholder face would be worse than none.
+   */
+  survivorPortrait(): string | null {
+    if (this.portraitTried) return this.portrait;
+    this.portraitTried = true;
+    const parts = this.unitParts;
+    if (parts.length === 0) return null;
+    try {
+      const size = 128;
+      const target = new THREE.WebGLRenderTarget(size, size, { colorSpace: THREE.SRGBColorSpace });
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1b2028);
+      for (const part of parts) {
+        const mat = (part.material as THREE.MeshStandardMaterial).clone();
+        // The shirt is white in the model and takes its colour from the squad
+        // tint, which a plain mesh does not have: give it the survivor blue so
+        // the portrait is not a white torso.
+        if (mat.color.getHex() === 0xffffff) mat.color.setHex(0x4a90b8);
+        scene.add(new THREE.Mesh(part.geometry, mat));
+      }
+      // Three-quarter view from the shoulders up.
+      // Framed for the head, one shoulder and the shirt: tighter than this and
+      // the pose's raised arms take over the frame.
+      const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
+      camera.position.set(0.45, 1.8, 0.95);
+      camera.lookAt(0, 1.6, 0);
+      const key = new THREE.DirectionalLight(0xffffff, 2.6);
+      key.position.set(1.2, 3, 2);
+      const fill = new THREE.HemisphereLight(0xbcd2ea, 0x30302c, 1.4);
+      scene.add(key, fill);
+
+      const prevTarget = this.renderer.getRenderTarget();
+      this.renderer.setRenderTarget(target);
+      this.renderer.clear();
+      this.renderer.render(scene, camera);
+      const pixels = new Uint8Array(size * size * 4);
+      this.renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+      this.renderer.setRenderTarget(prevTarget);
+
+      // readRenderTargetPixels returns bottom-up rows: flip into an ImageData.
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      const image = ctx.createImageData(size, size);
+      for (let y = 0; y < size; y++) {
+        const src = (size - 1 - y) * size * 4;
+        image.data.set(pixels.subarray(src, src + size * 4), y * size * 4);
+      }
+      ctx.putImageData(image, 0, 0);
+      this.portrait = canvas.toDataURL("image/png");
+
+      target.dispose();
+      scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) (m.material as THREE.Material).dispose();
+      });
+      return this.portrait;
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * Loads the survivor model and swaps it in place of the capsules. The capsule
@@ -193,6 +268,8 @@ export class GameRenderer {
   private propScene: PropScene | null = null;
   /** Meshes of the survivor model, written with the same matrix as the capsules. */
   private unitParts: THREE.InstancedMesh[] = [];
+  private portrait: string | null = null;
+  private portraitTried = false;
   private unitColored: THREE.InstancedMesh | null = null;
   private unitFallback: THREE.InstancedMesh[] = [];
   private artBase: string;

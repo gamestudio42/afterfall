@@ -316,6 +316,15 @@ canvas.world.hidden {
   height: 9px;
   border-radius: 2px;
 }
+/* Portrait rendered by the renderer, once per session. */
+.portrait {
+  display: block;
+  float: right;
+  margin: 0 0 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #12161c;
+}
 /* Icons are inline SVG, so they only need to line up with the text. */
 .icon {
   display: inline-block;

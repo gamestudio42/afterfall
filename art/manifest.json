@@ -39,21 +39,6 @@
       "generator": "tools/make-textures.ts"
     },
     {
-      "name": "spark_atlas",
-      "file": "spark_atlas.png",
-      "width": 768,
-      "height": 640,
-      "bytes": 64656,
-      "sha256": "b898e001ad60c542eee8684702572e5e5b44191734561add885b76464916fe47",
-      "generator": "EffectCraft hit_sparks_final + tools/make-spark-atlas.ts",
-      "grid": {
-        "cols": 6,
-        "rows": 5,
-        "frames": 30,
-        "cell": 128
-      }
-    },
-    {
       "name": "props_barrier",
       "file": "props/barrier.glb",
       "kind": "glb",
@@ -108,6 +93,21 @@
       "bytes": 21296,
       "sha256": "cf2286f4b0344e91d22dfd3c5f5fcdca15a9e685757bea33ab63147304ac327e",
       "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "spark_atlas",
+      "file": "spark_atlas.png",
+      "width": 768,
+      "height": 640,
+      "bytes": 99260,
+      "sha256": "ccff409c83e5440c88bbcbf21be91cde75cf40378047b3894fd459e35464b5cb",
+      "generator": "EffectCraft hit_sparks_final + tools/make-spark-atlas.ts",
+      "grid": {
+        "cols": 6,
+        "rows": 5,
+        "frames": 30,
+        "cell": 128
+      }
     }
   ]
 }

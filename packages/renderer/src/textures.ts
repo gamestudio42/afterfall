@@ -19,6 +19,17 @@ export interface ArtTextures {
   death_atlas: THREE.Texture | null;
   /** Structure collapse sheet, packed by `tools/make-flipbook-atlas.ts`. */
   collapse_atlas: THREE.Texture | null;
+  /** Facade modules baked by `tools/blender/facades.py`: colour and lit-window mask per style. */
+  facade_residential: THREE.Texture | null;
+  facade_office: THREE.Texture | null;
+  facade_industrial: THREE.Texture | null;
+  facade_storefront: THREE.Texture | null;
+  facade_residential_lit: THREE.Texture | null;
+  facade_office_lit: THREE.Texture | null;
+  facade_industrial_lit: THREE.Texture | null;
+  facade_storefront_lit: THREE.Texture | null;
+  /** Flat roof seen from above, from the same bake. */
+  roof: THREE.Texture | null;
   /** Construction dust sheet, packed by `tools/make-flipbook-atlas.ts`. */
   dust_atlas: THREE.Texture | null;
 }
@@ -37,7 +48,29 @@ const NAMES: ArtName[] = [
   "death_atlas",
   "dust_atlas",
   "collapse_atlas",
+  "facade_residential",
+  "facade_office",
+  "facade_industrial",
+  "facade_storefront",
+  "facade_residential_lit",
+  "facade_office_lit",
+  "facade_industrial_lit",
+  "facade_storefront_lit",
+  "roof",
 ];
+
+/** Photographic bakes ship as JPEG (no alpha, a quarter of the PNG size). */
+const JPEG = new Set<ArtName>([
+  "facade_residential",
+  "facade_office",
+  "facade_industrial",
+  "facade_storefront",
+  "facade_residential_lit",
+  "facade_office_lit",
+  "facade_industrial_lit",
+  "facade_storefront_lit",
+  "roof",
+]);
 
 /**
  * Loads the surface maps without blocking the first frame: the materials are
@@ -57,11 +90,20 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
     death_atlas: null,
     dust_atlas: null,
     collapse_atlas: null,
+    facade_residential: null,
+    facade_office: null,
+    facade_industrial: null,
+    facade_storefront: null,
+    facade_residential_lit: null,
+    facade_office_lit: null,
+    facade_industrial_lit: null,
+    facade_storefront_lit: null,
+    roof: null,
   };
   const loader = new THREE.TextureLoader();
   for (const name of NAMES) {
     loader.load(
-      `${baseUrl}art/${name}.png`,
+      `${baseUrl}art/${name}.${JPEG.has(name) ? "jpg" : "png"}`,
       (tex) => {
         tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
         tex.colorSpace = THREE.SRGBColorSpace;

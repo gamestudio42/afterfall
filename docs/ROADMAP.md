@@ -49,6 +49,7 @@
 - [x] **A flipbook per event.** Shots play a muzzle flash, deaths a cloud of dust and dried blood, work ticks pale dust, infected strikes three claw streaks, gunfire a ring spreading over the ground to the radius that pulls infected (45 m pistol, 70 m rifle), and a fallen wall, tower or gate a dome of rubble dust with masonry thrown up, all rendered in EffectCraft from recipes in `tools/effectcraft/`; the spark is left to hits. Clouds blend normally and replace the particles of their event, the strike replaces its particles too and mirrors every other slash, noise rings lie flat and merge when shots come from within 10 m (three alive at most), collapses are capped at four, and construction dust is capped at six alive so a busy site never takes the slots shots and deaths need (decision 21).
 - [x] **`tools/make-flipbook-atlas.ts`.** Packs a raw RGBA sequence into an atlas, rejects an empty frame and records grid and per-frame coverage in the manifest. Soft effects ship at 96 px cells or every other frame when 128 px would cost more than 100 KB.
 - [x] **Textured ground keeps its colour.** The ground materials kept their flat colour under the map and were darkened twice (asphalt at sRGB 10 instead of 52); each now takes a tint derived from its map's mean, pinned by a test.
+- [x] **Facades, roofs and a parapet.** `tools/blender/facades.py` bakes four facade modules in Cycles from real geometry (residential brick with boarded windows, office ribbon glazing, corrugated industrial, a storefront with roller shutters for the ground floor of shops) and a tar roof with vents, each with a lit-window mask; `tools/pack-facades.ts` ships them as JPEG (110 KB for all nine). Buildings get a cornice and parapet, facades follow the perimeter in 12.8 m modules shifted per building, and at night only settlement buildings light their windows (decision 22). Captures in `docs/art/city_day.png` and `city_night.png` (`CITY_SHOT=1`).
 - [x] **Frame cost probe.** `GameController.cost` and `tests/e2e/perf.spec.ts` split simulation from render; results and their limits in [PERF.md](PERF.md).
 
 Two constraints learned the hard way still apply to every new asset:
@@ -57,6 +58,13 @@ Two constraints learned the hard way still apply to every new asset:
 - **No asset enters the repository unverified.** Every asset is listed in `manifest.json` and checked by `pnpm assets:check`; a render once claimed by an agent was fabricated and left no file on disk.
 
 ## Next — art
+
+The goal before the first human playtest is a coherent, finished-looking city.
+Done so far: facades, roofs and parapets. Still open, in order:
+
+- **Sidewalks and curbs**, so blocks read as streets rather than flat slabs; units walk at ground level, so a raised curb has to stay low or the feet sink.
+- **Rooftop props** (water tanks, AC units, antennas) instanced from the prop kit, and facade maps at 1024 px if the closest zoom shows the 40 px/m bake.
+- **A ground-floor door** on every building's `facing` side, so the entrance the simulation uses is visible.
 
 1. **Measure on a real GPU.** Every frame number so far comes from SwiftShader. The 60 fps budget below has not been checked on hardware, nor with a night horde on screen.
 2. **Bloom on emissive materials** (windows, halos, infected eyes), only if the GPU measurement leaves room for it.
@@ -69,7 +77,8 @@ Two constraints learned the hard way still apply to every new asset:
 
 Every art item has to be measured against a declared ceiling, otherwise "looks better" wins every argument:
 
-- **Initial payload ≤ 1.5 MB.** The JS bundle is 976 kB raw and 276 kB gzip (2026-11-05, up from 869/245 kB before the art pass); the assets in `public/art` are 864 KB after the six flipbooks, against the 1 MB ceiling `pnpm assets:check` enforces; atlases are shared and tiled, and nothing ships per object.
+- **Initial payload ≤ 1.5 MB.** The JS bundle is 976 kB raw and 276 kB gzip (2026-11-05, up from 869/245 kB before the art pass). Art is not part of it: every map loads after the first frame and the renderer keeps its flat colours until it lands.
+- **Streamed art ≤ 8 MB, 512 KB per file** (raised from 1 MB on 2026-11-06 for the city pass). `public/art` is 974 KB after the six flipbooks and the facade bake; `pnpm assets:check` enforces both numbers. Atlases are shared and tiled, and nothing ships per object.
 - **60 fps at 1080p** with about 100 buildings, forty survivors and one night horde. Shadows, bloom and particle counts are the three knobs that move this number.
 - **Audio and large textures stay out of the bundle:** sound streams from `public/sfx` (372 KB), and no texture over 64 kB is inlined.
 - An asset that cannot be measured against these numbers does not ship.

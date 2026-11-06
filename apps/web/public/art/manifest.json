@@ -156,6 +156,22 @@
         "cell": 96
       },
       "coverage": [3.19, 5.45, 9.11, 12.93, 18.11, 22.07, 25.35, 28.8, 32.01, 34.85, 35.87, 33.02]
+    },
+    {
+      "name": "melee_atlas",
+      "file": "melee_atlas.png",
+      "width": 896,
+      "height": 128,
+      "bytes": 15755,
+      "sha256": "6f6f1e112181d78b150c8fbdeab0bdb830b94bbc743a6dd3356b5fc1c033a508",
+      "generator": "EffectCraft 0.21.1 melee_swipe + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 7,
+        "rows": 1,
+        "frames": 7,
+        "cell": 128
+      },
+      "coverage": [2.86, 6.42, 9.41, 9.37, 8.82, 5.79, 2.5]
     }
   ]
 }

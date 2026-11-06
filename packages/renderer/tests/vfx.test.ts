@@ -180,6 +180,93 @@ describe("efeitos visuais", () => {
     });
   });
 
+  describe("infected strike", () => {
+    function strike(seq: number, x: number, y: number, tx: number, ty: number): FxEvent {
+      return { seq, type: "melee", x, y, tx, ty };
+    }
+
+    it("plays the seven-frame strip additively", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setMeleeAtlas(new THREE.Texture());
+      expect(vfx.meleeReady).toBe(true);
+      vfx.emit([strike(1, 0, 0, 1, 0)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      const mat = vfx.pool[0].material as THREE.MeshBasicMaterial;
+      expect(mat.map!.repeat.x).toBeCloseTo(1 / 7, 5);
+      expect(mat.map!.repeat.y).toBeCloseTo(1, 5);
+      expect(mat.blending).toBe(THREE.AdditiveBlending);
+      vfx.debugPin(0.95);
+      vfx.update(0.016, camera);
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.offset.x).toBeCloseTo(6 / 7, 5);
+    });
+
+    it("sits on the victim, pulled back toward the attacker", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setMeleeAtlas(new THREE.Texture());
+      vfx.emit([strike(1, 0, 0, 4, 0)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect(vfx.pool[0].position.x).toBeCloseTo(3.5, 5);
+      expect(vfx.pool[0].position.z).toBeCloseTo(0, 5);
+    });
+
+    it("never lands behind an attacker standing closer than the pull", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setMeleeAtlas(new THREE.Texture());
+      vfx.emit([strike(1, 0, 0, 0.2, 0)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect(vfx.pool[0].position.x).toBeCloseTo(0, 5);
+    });
+
+    it("mirrors every other strike", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setMeleeAtlas(new THREE.Texture());
+      vfx.emit([strike(1, 0, 0, 2, 0), strike(2, 5, 0, 7, 0)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect(Math.sign(vfx.pool[0].scale.x)).not.toBe(Math.sign(vfx.pool[1].scale.x));
+      expect(vfx.pool[0].scale.y).toBeGreaterThan(0);
+      expect(vfx.pool[1].scale.y).toBeGreaterThan(0);
+    });
+
+    it("is over in about a quarter of a second", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setMeleeAtlas(new THREE.Texture());
+      vfx.emit([strike(1, 0, 0, 2, 0)]);
+      vfx.update(0.2, camera);
+      expect(vfx.pool.filter((m) => m.visible).length).toBe(1);
+      vfx.update(0.06, camera);
+      expect(vfx.pool.filter((m) => m.visible).length).toBe(0);
+    });
+
+    it("replaces the physics particles once the strip has loaded", () => {
+      const { scene } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.emit([strike(1, 0, 0, 2, 0)]);
+      expect(vfx.active).toBeGreaterThan(0);
+      const loaded = new VfxSystem(scene);
+      loaded.setMeleeAtlas(new THREE.Texture());
+      loaded.emit([strike(1, 0, 0, 2, 0)]);
+      expect(loaded.active).toBe(0);
+    });
+
+    it("falls back to the spark burst while the strip has not arrived", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.emit([strike(1, 0, 0, 2, 0)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.repeat.x).toBeCloseTo(1 / 6, 5);
+    });
+  });
+
   describe("death cloud", () => {
     function mat(vfx: VfxSystem, i = 0): THREE.MeshBasicMaterial {
       return vfx.pool[i].material as THREE.MeshBasicMaterial;

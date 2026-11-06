@@ -1,0 +1,399 @@
+[
+  {
+    "command": "comp.new",
+    "params": {
+      "name": "melee_swipe",
+      "width": 256,
+      "height": 256,
+      "frameRate": 30,
+      "duration": 0.3
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "claw0",
+      "size": [170, 11],
+      "fill": "#fff1d2",
+      "position": [109.52, 104.36]
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Glow",
+      "layers": ["claw0"]
+    }
+  },
+  {
+    "command": "prop.set",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/rotation",
+      "value": -38
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/scale",
+      "time": 0.0,
+      "value": [30, 85, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/opacity",
+      "time": 0.0,
+      "value": 0
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/scale",
+      "time": 0.033,
+      "value": [75, 62, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/opacity",
+      "time": 0.033,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/scale",
+      "time": 0.067,
+      "value": [110, 45, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/opacity",
+      "time": 0.067,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/scale",
+      "time": 0.133,
+      "value": [118, 41, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/opacity",
+      "time": 0.133,
+      "value": 70
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/scale",
+      "time": 0.2,
+      "value": [120, 40, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw0",
+      "path": "transform/opacity",
+      "time": 0.2,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "claw1",
+      "size": [200, 11],
+      "fill": "#fff1d2",
+      "position": [128.0, 128.0]
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Glow",
+      "layers": ["claw1"]
+    }
+  },
+  {
+    "command": "prop.set",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/rotation",
+      "value": -38
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/scale",
+      "time": 0,
+      "value": [30, 85, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/opacity",
+      "time": 0,
+      "value": 0
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/scale",
+      "time": 0.033,
+      "value": [30, 85, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/opacity",
+      "time": 0.033,
+      "value": 0
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/scale",
+      "time": 0.066,
+      "value": [75, 62, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/opacity",
+      "time": 0.066,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/scale",
+      "time": 0.1,
+      "value": [110, 45, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/opacity",
+      "time": 0.1,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/scale",
+      "time": 0.166,
+      "value": [118, 41, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/opacity",
+      "time": 0.166,
+      "value": 70
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/scale",
+      "time": 0.233,
+      "value": [120, 40, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw1",
+      "path": "transform/opacity",
+      "time": 0.233,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "claw2",
+      "size": [170, 11],
+      "fill": "#fff1d2",
+      "position": [146.48, 151.64]
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Glow",
+      "layers": ["claw2"]
+    }
+  },
+  {
+    "command": "prop.set",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/rotation",
+      "value": -38
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/scale",
+      "time": 0,
+      "value": [30, 85, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/opacity",
+      "time": 0,
+      "value": 0
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/scale",
+      "time": 0.066,
+      "value": [30, 85, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/opacity",
+      "time": 0.066,
+      "value": 0
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/scale",
+      "time": 0.099,
+      "value": [75, 62, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/opacity",
+      "time": 0.099,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/scale",
+      "time": 0.133,
+      "value": [110, 45, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/opacity",
+      "time": 0.133,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/scale",
+      "time": 0.199,
+      "value": [118, 41, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/opacity",
+      "time": 0.199,
+      "value": 70
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/scale",
+      "time": 0.266,
+      "value": [120, 40, 100]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "claw2",
+      "path": "transform/opacity",
+      "time": 0.266,
+      "value": 0
+    }
+  },
+  {
+    "command": "file.save",
+    "params": {
+      "path": "melee_swipe.ecproj"
+    }
+  }
+]

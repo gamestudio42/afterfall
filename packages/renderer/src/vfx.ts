@@ -66,6 +66,21 @@ const MUZZLE_REACH = 0.9;
 const MUZZLE_HEIGHT = 1.45;
 
 /**
+ * Infected strike (`tools/effectcraft/melee_swipe.build.json`): three claw
+ * streaks raked diagonally, seven frames of a 0.27 s render in a row. It sits on
+ * the victim, pulled a little toward the attacker, and every other strike is
+ * mirrored so a sustained attack does not stamp the same slash.
+ */
+const MELEE_COLS = 7;
+const MELEE_ROWS = 1;
+const MELEE_ACTIVE = 7;
+const MELEE_LIFE = 0.24;
+const MELEE_SIZE = 3.4;
+/** Metres from the victim back toward the attacker. */
+const MELEE_REACH = 0.5;
+const MELEE_HEIGHT = 1.15;
+
+/**
  * Clouds: flipbooks of dust or smoke that blend normally, because dark or
  * dull colours add nothing in an additive pass. Each replaces the spark and the
  * physics particles of its event once its sheet has loaded.
@@ -97,13 +112,16 @@ const CLOUDS: Record<"death" | "build", Cloud> = {
 type CloudKind = keyof typeof CLOUDS;
 
 interface Sprite {
-  /** The frames this burst plays: the spark sheet or the muzzle strip. */
+  /** The frames this burst plays: the spark sheet, or a strip or cloud sheet. */
   frames: THREE.Texture[];
   /**
-   * spark: additive, rises, grows and fades in code. muzzle: additive and still,
-   * the strip fades itself. smoke: normal blending, still, faded by opacity.
+   * spark: additive, rises, grows and fades in code. flash (muzzle, strike):
+   * additive and still, the strip fades itself. smoke: normal blending, still,
+   * faded by opacity.
    */
-  look: "spark" | "muzzle" | "smoke";
+  look: "spark" | "flash" | "smoke";
+  /** Mirrored horizontally, so repeated strikes alternate their slash. */
+  flip?: boolean;
   /** Which cloud this is, so its cap can be counted. */
   cloud?: CloudKind;
   x: number;
@@ -182,6 +200,8 @@ export class VfxSystem {
   pool: THREE.Mesh[] = [];
   private frameTextures: THREE.Texture[] = [];
   private muzzleFrames: THREE.Texture[] = [];
+  private meleeFrames: THREE.Texture[] = [];
+  private strikes = 0;
   private cloudFrames: Partial<Record<CloudKind, THREE.Texture[]>> = {};
   private bursts: Sprite[] = [];
   private pin: number | null = null;
@@ -238,6 +258,21 @@ export class VfxSystem {
     this.ensurePool();
   }
 
+  /**
+   * Gives infected strikes their claw slash. Without it a strike falls back to
+   * the spark burst.
+   */
+  setMeleeAtlas(atlas: THREE.Texture | null): void {
+    if (!atlas || this.meleeFrames.length > 0) return;
+    this.meleeFrames = sliceAtlas(atlas, MELEE_COLS, MELEE_ROWS, MELEE_ACTIVE);
+    this.ensurePool();
+  }
+
+  /** Whether strikes already play their own slash. */
+  get meleeReady(): boolean {
+    return this.meleeFrames.length > 0;
+  }
+
   /** Gives deaths their dark cloud. Without it a death plays the spark burst. */
   setDeathAtlas(atlas: THREE.Texture | null): void {
     this.setCloudAtlas("death", atlas);
@@ -267,7 +302,8 @@ export class VfxSystem {
 
   private ensurePool(): void {
     if (this.pool.length > 0) return;
-    const first = this.frameTextures[0] ?? this.muzzleFrames[0] ?? this.cloudFrames.death?.[0] ?? this.cloudFrames.build?.[0];
+    const first =
+      this.frameTextures[0] ?? this.muzzleFrames[0] ?? this.meleeFrames[0] ?? this.cloudFrames.death?.[0] ?? this.cloudFrames.build?.[0];
     for (let i = 0; i < MAX_SPRITES; i++) {
       const mat = new THREE.MeshBasicMaterial({
         map: first,
@@ -308,6 +344,8 @@ export class VfxSystem {
       if (!burst) continue;
       if (fx.type === "shot" && this.muzzleFrames.length > 0) {
         if (this.bursts.length < MAX_SPRITES) this.bursts.push(this.muzzle(fx));
+      } else if (fx.type === "melee" && this.meleeFrames.length > 0) {
+        if (this.bursts.length < MAX_SPRITES) this.bursts.push(this.strike(fx));
       } else if (isCloud(fx.type) && this.cloudFrames[fx.type]) {
         this.pushCloud(fx.type, fx);
       } else if (this.frameTextures.length > 0 && this.bursts.length < MAX_SPRITES) {
@@ -327,7 +365,10 @@ export class VfxSystem {
       }
       // The cloud carries its own droplets; the additive red particles on top of
       // it glowed like neon and buried the dark smoke, so a cloud replaces them.
-      const sparks = isCloud(fx.type) && this.cloudFrames[fx.type] ? 0 : burst.count;
+      // The strike's pale particles did the same to the slash: blobs where the
+      // claws should read.
+      const replaced = (isCloud(fx.type) && !!this.cloudFrames[fx.type]) || (fx.type === "melee" && this.meleeFrames.length > 0);
+      const sparks = replaced ? 0 : burst.count;
       for (let i = 0; i < sparks; i++) {
         if (this.particles.length >= MAX_PARTICLES) break;
         const angle = (this.next() - 0.5) * 2 * Math.PI;
@@ -405,11 +446,12 @@ export class VfxSystem {
       this.posVec.set(b.x, spark ? b.y + t * 0.4 : b.y, b.z);
       mesh.position.copy(this.posVec);
       mesh.quaternion.copy(this.cameraQuat);
-      // The muzzle and smoke sheets animate their own scale; only the spark is grown here.
-      mesh.scale.setScalar(spark ? b.size * (0.6 + t * 1.1) : b.size);
-      // The muzzle strip reaches zero alpha on its own last frame; the spark and
-      // the smoke still carry alpha at the end of their sheets, so they fade here.
-      const fade = b.look === "muzzle" || t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      // The flash and smoke sheets animate their own scale; only the spark is grown here.
+      const scale = spark ? b.size * (0.6 + t * 1.1) : b.size;
+      mesh.scale.set(b.flip ? -scale : scale, scale, scale);
+      // The flash strips fade out on their own last frames; the spark and the
+      // smoke still carry alpha at the end of their sheets, so they fade here.
+      const fade = b.look === "flash" || t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
       // One pool serves both blend modes. Changing `blending` is render state,
       // not a different shader, so it needs no `needsUpdate` either.
       if (b.look === "smoke") {
@@ -460,13 +502,38 @@ export class VfxSystem {
     const k = len > 1e-6 ? MUZZLE_REACH / len : 0;
     return {
       frames: this.muzzleFrames,
-      look: "muzzle",
+      look: "flash",
       x: fx.x + dx * k,
       y: MUZZLE_HEIGHT,
       z: fx.y + dz * k,
       age: 0,
       life: MUZZLE_LIFE,
       size: MUZZLE_SIZE,
+      r: 1,
+      g: 1,
+      b: 1,
+    };
+  }
+
+  /** A slash on the victim, pulled back toward the attacker. */
+  private strike(fx: FxEvent): Sprite {
+    const tx = fx.tx ?? fx.x;
+    const tz = fx.ty ?? fx.y;
+    const dx = fx.x - tx;
+    const dz = fx.y - tz;
+    const len = Math.hypot(dx, dz);
+    const k = len > 1e-6 ? Math.min(MELEE_REACH, len) / len : 0;
+    this.strikes++;
+    return {
+      frames: this.meleeFrames,
+      look: "flash",
+      flip: this.strikes % 2 === 0,
+      x: tx + dx * k,
+      y: MELEE_HEIGHT,
+      z: tz + dz * k,
+      age: 0,
+      life: MELEE_LIFE,
+      size: MELEE_SIZE,
       r: 1,
       g: 1,
       b: 1,

@@ -11,6 +11,8 @@ export interface ArtTextures {
   spark_atlas: THREE.Texture | null;
   /** Muzzle flash strip, packed by `tools/make-flipbook-atlas.ts`. */
   muzzle_atlas: THREE.Texture | null;
+  /** Infected strike strip, packed by `tools/make-flipbook-atlas.ts`. */
+  melee_atlas: THREE.Texture | null;
   /** Death cloud sheet, packed by `tools/make-flipbook-atlas.ts`. */
   death_atlas: THREE.Texture | null;
   /** Construction dust sheet, packed by `tools/make-flipbook-atlas.ts`. */
@@ -19,7 +21,17 @@ export interface ArtTextures {
 
 export type ArtName = keyof ArtTextures;
 
-const NAMES: ArtName[] = ["concrete", "asphalt", "grass", "rust", "spark_atlas", "muzzle_atlas", "death_atlas", "dust_atlas"];
+const NAMES: ArtName[] = [
+  "concrete",
+  "asphalt",
+  "grass",
+  "rust",
+  "spark_atlas",
+  "muzzle_atlas",
+  "melee_atlas",
+  "death_atlas",
+  "dust_atlas",
+];
 
 /**
  * Loads the surface maps without blocking the first frame: the materials are
@@ -34,6 +46,7 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
     rust: null,
     spark_atlas: null,
     muzzle_atlas: null,
+    melee_atlas: null,
     death_atlas: null,
     dust_atlas: null,
   };

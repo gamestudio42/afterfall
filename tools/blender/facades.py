@@ -67,7 +67,7 @@ def world(strength, color=(1.0, 1.0, 1.0)):
     bpy.context.scene.world = w
 
 
-def camera(cx, cz, width, height, front=True):
+def camera(cx, cz, width, height, front=True, px_per_m=None):
     """Orthographic camera framing exactly one module."""
     sc = bpy.context.scene
     cam_data = bpy.data.cameras.new("cam")
@@ -83,8 +83,9 @@ def camera(cx, cz, width, height, front=True):
         cam.rotation_euler = (0, 0, 0)
     cam_data.clip_end = 100
     sc.camera = cam
-    sc.render.resolution_x = round(width * PX_PER_M)
-    sc.render.resolution_y = round(height * PX_PER_M)
+    ppm = px_per_m or PX_PER_M
+    sc.render.resolution_x = round(width * ppm)
+    sc.render.resolution_y = round(height * ppm)
     if width != height:
         cam_data.sensor_fit = "HORIZONTAL" if width > height else "VERTICAL"
 
@@ -570,3 +571,105 @@ if not only or "roof" in only:
     build_roof(mats, random.Random(5))
     camera(6.4, 6.4, 12.8, 12.8, front=False)
     render(os.path.join(OUT, "roof.png"))
+
+
+# ---------------------------------------------------------------- street level
+
+
+def build_sidewalk(mats, rng):
+    """Concrete slabs seen from above, 0.8 m square, 8 by 8 per 6.4 m module:
+    each slab a little tilted and off colour, a few cracked, one missing with
+    weeds in the dirt, and moss along some joints."""
+    W = 6.4
+    S = 0.8
+    n = int(W / S)
+    slabs = {}
+    for j in range(n):
+        for i in range(n):
+            r = rng.random()
+            slabs[(i, j)] = {
+                "kind": "missing" if r < 0.02 else ("cracked" if r < 0.12 else "slab"),
+                "shade": rng.randrange(len(mats["slab_v"])),
+                "tilt": (rng.uniform(-1.2, 1.2), rng.uniform(-1.2, 1.2)),
+                "dz": rng.uniform(-0.008, 0.008),
+                "crack": (rng.uniform(0.1, 0.7), rng.uniform(0.1, 0.7), rng.uniform(0, math.pi)),
+            }
+    for dx, dy in tile_offsets(W, W):
+        box(f"bed{dx}_{dy}", dx, dx + W, dy, dy + W, -0.12, -0.04, mats["joint"])
+        for (i, j), sl in slabs.items():
+            x = dx + i * S
+            y = dy + j * S
+            if sl["kind"] == "missing":
+                box(f"dirt{dx}_{dy}_{i}_{j}", x, x + S, y, y + S, -0.06, -0.035, mats["dirt"])
+                for k in range(5):
+                    bpy.ops.mesh.primitive_cone_add(
+                        radius1=0.06, depth=0.12, vertices=5,
+                        location=(x + 0.15 + (k * 0.13) % 0.5, y + 0.2 + (k * 0.29) % 0.45, 0.0),
+                    )
+                    bpy.context.active_object.data.materials.append(mats["weed"])
+                continue
+            o = box(f"s{dx}_{dy}_{i}_{j}", x + 0.008, x + S - 0.008, y + 0.008, y + S - 0.008, -0.06, sl["dz"], mats["slab_v"][sl["shade"]])
+            if sl["kind"] == "cracked":
+                cx, cy, ang = sl["crack"]
+                bpy.ops.mesh.primitive_plane_add(size=1, location=(x + cx + 0.1, y + cy + 0.1, sl["dz"] + 0.012))
+                c = bpy.context.active_object
+                c.scale = (0.55, 0.012, 1)
+                c.rotation_euler = (0, 0, ang)
+                c.data.materials.append(mats["joint"])
+        # Moss creeping along a few joints.
+        for k in range(3):
+            jx = dx + S * (1 + (k * 3) % (n - 1))
+            box(f"moss{dx}_{dy}_{k}", jx - 0.02, jx + 0.02, dy + k * 1.6, dy + k * 1.6 + 2.4, -0.04, 0.004, mats["weed"])
+
+
+def build_door(mats):
+    """A double metal door in a concrete surround, with a canopy and a step,
+    framed 2.4 m wide by 3.2 m tall."""
+    box("wall", -2, 4.4, 0.0, 0.3, -1, 4.2, mats["wall"])
+    box("surround", 0.1, 2.3, -0.12, 0.0, 0.15, 2.85, mats["frame"])
+    box("recess", 0.3, 2.1, -0.13, 0.05, 0.25, 2.65, mats["dark"])
+    for k, x0 in enumerate((0.33, 1.22)):
+        box(f"leaf{k}", x0, x0 + 0.85, -0.16, -0.12, 0.25, 2.6, mats["door"])
+        box(f"pane{k}", x0 + 0.2, x0 + 0.65, -0.17, -0.16, 1.45, 2.3, mats["glass"])
+        box(f"bar{k}", x0 + 0.1, x0 + 0.75, -0.21, -0.17, 1.05, 1.11, mats["frame"])
+        box(f"kick{k}", x0 + 0.03, x0 + 0.82, -0.17, -0.16, 0.27, 0.5, mats["frame"])
+    box("canopy", -0.05, 2.45, -0.95, 0.0, 2.9, 3.05, mats["frame"])
+    box("step", 0.0, 2.4, -0.55, 0.0, 0.0, 0.15, mats["frame"])
+
+
+if not only or "sidewalk" in only:
+    VERT_AXIS = 1
+    reset()
+    period = (6.4, 6.4)
+    mats = {
+        "slab_v": [
+            mat_flat("slab_a", (0.62, 0.61, 0.58), 0.92, period=period, dirt=0.25),
+            mat_flat("slab_b", (0.57, 0.56, 0.53), 0.92, period=period, dirt=0.3),
+            mat_flat("slab_c", (0.66, 0.65, 0.62), 0.92, period=period, dirt=0.2),
+            mat_flat("slab_d", (0.52, 0.51, 0.49), 0.92, period=period, dirt=0.35),
+        ],
+        "joint": mat_flat("joint", (0.16, 0.16, 0.15), 1.0),
+        "dirt": mat_flat("dirt", (0.25, 0.2, 0.15), 1.0),
+        "weed": mat_flat("weed", (0.2, 0.3, 0.12), 0.9),
+    }
+    world(0.5, (0.92, 0.95, 1.0))
+    sun(60, 30, 1.3)
+    build_sidewalk(mats, random.Random(17))
+    camera(3.2, 3.2, 6.4, 6.4, front=False, px_per_m=80)
+    render(os.path.join(OUT, "sidewalk.png"))
+
+if not only or "door" in only:
+    VERT_AXIS = 2
+    reset()
+    mats = {
+        "wall": mat_flat("wall", (0.7, 0.69, 0.66), 0.9),
+        "frame": mat_flat("frame", (0.78, 0.77, 0.74), 0.85, period=(2.4, 3.2), dirt=0.25),
+        "dark": mat_flat("dark", (0.05, 0.05, 0.05), 1.0),
+        "door": mat_flat("door", (0.32, 0.36, 0.38), 0.55, 0.4, period=(2.4, 3.2), dirt=0.3),
+        "glass": mat_glass("glass"),
+    }
+    world(0.5, (0.92, 0.95, 1.0))
+    sun(55, 20, 1.3)
+    build_door(mats)
+    camera(1.2, 1.6, 2.4, 3.2, px_per_m=80)
+    render(os.path.join(OUT, "door.png"))

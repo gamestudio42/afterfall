@@ -54,16 +54,54 @@ function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferG
 export const TEXTURED_TINT: Record<keyof GroundMaterials, number> = {
   roads: 0xa7abae,
   ground: 0xe9c8ff,
-  blocks: 0xc4c4bf,
+  // Blocks wear the sidewalk slabs (mean sRGB 174, 174, 171).
+  blocks: 0xd0cabe,
+  // Curbs wear the concrete map and stay a step lighter than the sidewalk.
+  curbs: 0xf8f9f8,
   parks: 0xffffff,
 };
+
+/** The sidewalk map is one 6.4 m module of 0.8 m slabs. */
+export const SIDEWALK_TILE = 6.4;
+/** How far a sidewalk reaches past the road edge on imported maps. */
+export const SIDEWALK_WIDTH = 2.6;
+/** Curb: a low lip at the block edge, low enough that feet do not sink in it. */
+const CURB_W = 0.3;
+const CURB_H = 0.12;
 
 /** Materials the ground is built from, so the art pass can give each a map. */
 export interface GroundMaterials {
   ground: THREE.MeshStandardMaterial;
   blocks: THREE.MeshStandardMaterial | null;
+  curbs: THREE.MeshStandardMaterial | null;
   roads: THREE.MeshStandardMaterial | null;
   parks: THREE.MeshStandardMaterial | null;
+}
+
+/**
+ * A curb around a block: a strip on top and the face down to the road, on all
+ * four sides. Top at CURB_H, so the block's sidewalk (at 0.06) sits a little
+ * below it, which is what makes the edge read from the RTS camera.
+ */
+export function curbRing(x: number, z: number, w: number, d: number): THREE.BufferGeometry[] {
+  const out: THREE.BufferGeometry[] = [];
+  const top = (x0: number, z0: number, ww: number, dd: number) => out.push(plane(x0, z0, ww, dd, CURB_H));
+  top(x, z, w, CURB_W);
+  top(x, z + d - CURB_W, w, CURB_W);
+  top(x, z + CURB_W, CURB_W, d - CURB_W * 2);
+  top(x + w - CURB_W, z + CURB_W, CURB_W, d - CURB_W * 2);
+  // Outer faces, facing the road.
+  const face = (cx: number, cz: number, len: number, rotY: number) => {
+    const g = new THREE.PlaneGeometry(len, CURB_H);
+    g.rotateY(rotY);
+    g.translate(cx, CURB_H / 2, cz);
+    out.push(g);
+  };
+  face(x + w / 2, z, w, Math.PI);
+  face(x + w / 2, z + d, w, 0);
+  face(x, z + d / 2, d, -Math.PI / 2);
+  face(x + w, z + d / 2, d, Math.PI / 2);
+  return out;
 }
 
 /**
@@ -87,7 +125,7 @@ export function buildCityGround(city: CityMap): { group: THREE.Group; materials:
 
   const margin = 400;
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x4a4d40, roughness: 1 });
-  const materials: GroundMaterials = { ground: groundMat, blocks: null, roads: null, parks: null };
+  const materials: GroundMaterials = { ground: groundMat, blocks: null, curbs: null, roads: null, parks: null };
   const groundGeo = plane(-margin, -margin, city.width + margin * 2, city.height + margin * 2, -0.05);
   worldUv(groundGeo, 12);
   const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -100,13 +138,30 @@ export function buildCityGround(city: CityMap): { group: THREE.Group; materials:
   for (let j = 0; j < city.blocksY; j++)
     for (let i = 0; i < city.blocksX; i++)
       blocks.push(plane(city.roadWidth + i * pitch, city.roadWidth + j * pitch, city.blockSize, city.blockSize, 0.06));
+  // Imported maps have no blocks: their sidewalks run along the roads instead,
+  // a ribbon wider than the road laid just under it.
+  for (const r of city.roads) if (r.path) blocks.push(...ribbon(r.path, (r.width ?? 8) + SIDEWALK_WIDTH * 2, 0.005));
   if (blocks.length) {
-    const blockGeo = mergeGeometries(blocks);
-    worldUv(blockGeo, 3);
+    const blockGeo = mergeGeometries(blocks.map((g) => (g.index ? g.toNonIndexed() : g)));
+    worldUv(blockGeo, SIDEWALK_TILE);
     materials.blocks = new THREE.MeshStandardMaterial({ color: 0x8d897e, roughness: 0.95 });
     const blockMesh = new THREE.Mesh(blockGeo, materials.blocks);
     blockMesh.receiveShadow = true;
     group.add(blockMesh);
+  }
+
+  // Curbs around the blocks of a generated city.
+  const curbs: THREE.BufferGeometry[] = [];
+  for (let j = 0; j < city.blocksY; j++)
+    for (let i = 0; i < city.blocksX; i++)
+      curbs.push(...curbRing(city.roadWidth + i * pitch, city.roadWidth + j * pitch, city.blockSize, city.blockSize));
+  if (curbs.length) {
+    const curbGeo = mergeGeometries(curbs);
+    worldUv(curbGeo, 3);
+    materials.curbs = new THREE.MeshStandardMaterial({ color: 0xb3afa5, roughness: 0.9 });
+    const curbMesh = new THREE.Mesh(curbGeo, materials.curbs);
+    curbMesh.receiveShadow = true;
+    group.add(curbMesh);
   }
 
   const roads = city.roads.flatMap((r) =>

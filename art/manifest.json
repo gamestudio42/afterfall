@@ -204,6 +204,96 @@
         "cell": 72
       },
       "coverage": [8.66, 17.65, 30.17, 36.15, 41.71, 48.09, 54.38, 60.26, 64.56, 66.34]
+    },
+    {
+      "name": "facade_residential",
+      "file": "facade_residential.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 38979,
+      "sha256": "872f76c2ecf609852dd46a161bd5e3fcb80ad613637d185c33c7afd8d271b41a",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "facade_office",
+      "file": "facade_office.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 15491,
+      "sha256": "0ca3d46cc4401d589718fd007929f188991435ac0f9bb330cb19fec2a21c6f1f",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "facade_industrial",
+      "file": "facade_industrial.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 17036,
+      "sha256": "550075337ef1d93e195001f095228ff167b7b8197f7ccaaf31d56aab645a2cee",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "facade_storefront",
+      "file": "facade_storefront.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 128,
+      "bytes": 4995,
+      "sha256": "df0b7064fc17c81ea5859a356841288a88666bb6bdaf155c9c6317c4daa81223",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "facade_residential_lit",
+      "file": "facade_residential_lit.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 10459,
+      "sha256": "1a9bd7d772f578c49f1ed848f7a567a4c0c232d1d08c9912139f7b5e3c407362",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "facade_office_lit",
+      "file": "facade_office_lit.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 10841,
+      "sha256": "ef843b1e56f13e90905ccf02ae3c5bd109d93ce0326b929168b29de6d69b0123",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "facade_industrial_lit",
+      "file": "facade_industrial_lit.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 3908,
+      "sha256": "e369f602adf3a66d669ceb3c3da63e2dd82daf8b76e85af66a4b1fc1d973f155",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "facade_storefront_lit",
+      "file": "facade_storefront_lit.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 128,
+      "bytes": 989,
+      "sha256": "2a0a4e334cd6d97ab1b52253fe4eb7646dd947705bfb61e09a5f1a3035565f67",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "roof",
+      "file": "roof.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 9235,
+      "sha256": "f6dbcdbc748e04035051d82427653283ed5c37b65cef323b2302edd95b442e90",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
     }
   ]
 }

@@ -46,7 +46,7 @@
 - [x] **Night look.** Lamp-post halos in one `InstancedMesh` and fog that closes in after dark. No bloom pass.
 - [x] **HUD and minimap.** Inline SVG resource icons, horde entry markers on the minimap after dusk, and a rendered survivor portrait in the side panel.
 - [x] **A pipeline with a contract.** `manifest.json` with size and `sha256`; `pnpm assets:check` re-derives byte budget, PNG header, alpha channel and GLB header from disk and runs in CI.
-- [x] **A flipbook per event.** Shots play a muzzle flash, deaths a cloud of dust and dried blood, work ticks pale dust, and infected strikes three claw streaks, all rendered in EffectCraft from recipes in `tools/effectcraft/`; the spark is left to hits. Clouds blend normally and replace the particles of their event, the strike replaces its particles too and mirrors every other slash, and construction dust is capped at six alive so a busy site never takes the slots shots and deaths need (decision 21).
+- [x] **A flipbook per event.** Shots play a muzzle flash, deaths a cloud of dust and dried blood, work ticks pale dust, infected strikes three claw streaks, and gunfire a ring spreading over the ground to the radius that pulls infected (45 m pistol, 70 m rifle), all rendered in EffectCraft from recipes in `tools/effectcraft/`; the spark is left to hits. Clouds blend normally and replace the particles of their event, the strike replaces its particles too and mirrors every other slash, noise rings lie flat and merge when shots come from within 10 m (three alive at most), and construction dust is capped at six alive so a busy site never takes the slots shots and deaths need (decision 21).
 - [x] **`tools/make-flipbook-atlas.ts`.** Packs a raw RGBA sequence into an atlas, rejects an empty frame and records grid and per-frame coverage in the manifest. Soft effects ship at 96 px cells or every other frame when 128 px would cost more than 100 KB.
 - [x] **Textured ground keeps its colour.** The ground materials kept their flat colour under the map and were darkened twice (asphalt at sRGB 10 instead of 52); each now takes a tint derived from its map's mean, pinned by a test.
 - [x] **Frame cost probe.** `GameController.cost` and `tests/e2e/perf.spec.ts` split simulation from render; results and their limits in [PERF.md](PERF.md).
@@ -63,13 +63,13 @@ Two constraints learned the hard way still apply to every new asset:
 3. **A facade texture** and a single atlas for the surface maps; today each map is its own file.
 4. **Billboard atlas at distance versus GLB up close** for survivors and infected, decided by draw calls and frame time with forty units on screen.
 5. **Infected with a real model.** They are still capsules; `walker.glb` was authored as an infected, so the model already exists.
-6. **See the effects in a real fight.** Muzzle flash, strike, death cloud and dust were reviewed only with events fired by script in daylight; a night horde against a walled base is the review that counts. The work-tick dust also shows on farms and workshops, which suits building and repair better.
+6. **See the effects in a real fight.** Muzzle flash, strike, noise ring, death cloud and dust were reviewed only with events fired by script in daylight; a night horde against a walled base is the review that counts. The work-tick dust also shows on farms and workshops, which suits building and repair better.
 
 ## Budget
 
 Every art item has to be measured against a declared ceiling, otherwise "looks better" wins every argument:
 
-- **Initial payload ≤ 1.5 MB.** The JS bundle is 976 kB raw and 276 kB gzip (2026-11-05, up from 869/245 kB before the art pass); the assets in `public/art` are 712 KB after the four flipbooks, against the 1 MB ceiling `pnpm assets:check` enforces; atlases are shared and tiled, and nothing ships per object.
+- **Initial payload ≤ 1.5 MB.** The JS bundle is 976 kB raw and 276 kB gzip (2026-11-05, up from 869/245 kB before the art pass); the assets in `public/art` are 793 KB after the five flipbooks, against the 1 MB ceiling `pnpm assets:check` enforces; atlases are shared and tiled, and nothing ships per object.
 - **60 fps at 1080p** with about 100 buildings, forty survivors and one night horde. Shadows, bloom and particle counts are the three knobs that move this number.
 - **Audio and large textures stay out of the bundle:** sound streams from `public/sfx` (372 KB), and no texture over 64 kB is inlined.
 - An asset that cannot be measured against these numbers does not ship.

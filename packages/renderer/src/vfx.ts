@@ -18,6 +18,8 @@ export interface FxEvent {
   y: number;
   tx?: number;
   ty?: number;
+  /** Radius in metres, for events that cover an area (noise). */
+  r?: number;
 }
 
 interface Burst {
@@ -37,7 +39,6 @@ const BURSTS: Record<string, Burst> = {
   melee: { count: 8, life: 0.42, speed: 5.0, size: 1.3, lift: 2.0, color: new THREE.Color(0xe8e2cc), spread: Math.PI, sprite: 3.2 },
   death: { count: 20, life: 0.95, speed: 4.0, size: 2.4, lift: 3.6, color: new THREE.Color(0xb3402f), spread: Math.PI, sprite: 6.4 },
   build: { count: 14, life: 1.15, speed: 2.6, size: 2.8, lift: 4.6, color: new THREE.Color(0xcfc0a8), spread: Math.PI * 0.6, sprite: 5.2 },
-  noise: { count: 6, life: 0.8, speed: 2.4, size: 1.8, lift: 1.6, color: new THREE.Color(0xa9b2bc), spread: Math.PI, sprite: 3.6 },
   shot: { count: 4, life: 0.34, speed: 7.0, size: 1.1, lift: 1.0, color: new THREE.Color(0xfff0c0), spread: 0.6, sprite: 2.0 },
 };
 
@@ -94,6 +95,29 @@ const MELEE_HEIGHT = 1.15;
  *   The render sits in the lower half of its frame, so the quad stands higher
  *   than the death cloud's: at 0.7 m the ground cut the dust off flat.
  */
+/**
+ * Noise ring (`tools/effectcraft/noise_ring.build.json`): a wave and a fainter
+ * echo spreading over the ground to the radius that pulls infected toward a
+ * shot, 45 m for a pistol and 70 m for a rifle. Eight frames of a 1 s render,
+ * 4 by 2 at 192 px. The ring is drawn by growing the shape, not the layer, so
+ * the stroke stays thin at full size.
+ *
+ * It lies flat, and every shot in a fight fires one, so a ring is dropped
+ * when another is still spreading from nearby, and at most a few are alive.
+ * Without its sheet a noise draws nothing: it never had a spark of its own.
+ */
+const RING_COLS = 4;
+const RING_ROWS = 2;
+const RING_FRAMES = 8;
+const RING_LIFE = 1.0;
+/** The last frame's ring spans 496 of the 512 px it was rendered in. */
+const RING_FILL = 496 / 512;
+const RING_HEIGHT = 0.12;
+const RING_CAP = 3;
+/** A ring is dropped while another one spreads from within this many metres. */
+const RING_MERGE = 10;
+const FLAT = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+
 interface Cloud {
   cols: number;
   rows: number;
@@ -117,9 +141,9 @@ interface Sprite {
   /**
    * spark: additive, rises, grows and fades in code. flash (muzzle, strike):
    * additive and still, the strip fades itself. smoke: normal blending, still,
-   * faded by opacity.
+   * faded by opacity. ring: additive and flat on the ground.
    */
-  look: "spark" | "flash" | "smoke";
+  look: "spark" | "flash" | "smoke" | "ring";
   /** Mirrored horizontally, so repeated strikes alternate their slash. */
   flip?: boolean;
   /** Which cloud this is, so its cap can be counted. */
@@ -201,6 +225,7 @@ export class VfxSystem {
   private frameTextures: THREE.Texture[] = [];
   private muzzleFrames: THREE.Texture[] = [];
   private meleeFrames: THREE.Texture[] = [];
+  private ringFrames: THREE.Texture[] = [];
   private strikes = 0;
   private cloudFrames: Partial<Record<CloudKind, THREE.Texture[]>> = {};
   private bursts: Sprite[] = [];
@@ -273,6 +298,18 @@ export class VfxSystem {
     return this.meleeFrames.length > 0;
   }
 
+  /** Gives gunfire noise its ring. Without it a noise draws nothing. */
+  setNoiseAtlas(atlas: THREE.Texture | null): void {
+    if (!atlas || this.ringFrames.length > 0) return;
+    this.ringFrames = sliceAtlas(atlas, RING_COLS, RING_ROWS, RING_FRAMES);
+    this.ensurePool();
+  }
+
+  /** Whether noise already draws its ring. */
+  get noiseReady(): boolean {
+    return this.ringFrames.length > 0;
+  }
+
   /** Gives deaths their dark cloud. Without it a death plays the spark burst. */
   setDeathAtlas(atlas: THREE.Texture | null): void {
     this.setCloudAtlas("death", atlas);
@@ -303,7 +340,12 @@ export class VfxSystem {
   private ensurePool(): void {
     if (this.pool.length > 0) return;
     const first =
-      this.frameTextures[0] ?? this.muzzleFrames[0] ?? this.meleeFrames[0] ?? this.cloudFrames.death?.[0] ?? this.cloudFrames.build?.[0];
+      this.frameTextures[0] ??
+      this.muzzleFrames[0] ??
+      this.meleeFrames[0] ??
+      this.ringFrames[0] ??
+      this.cloudFrames.death?.[0] ??
+      this.cloudFrames.build?.[0];
     for (let i = 0; i < MAX_SPRITES; i++) {
       const mat = new THREE.MeshBasicMaterial({
         map: first,
@@ -340,6 +382,10 @@ export class VfxSystem {
     for (const fx of events) {
       if (fx.seq <= this.lastSeq) continue;
       this.lastSeq = fx.seq;
+      if (fx.type === "noise") {
+        if (this.ringFrames.length > 0) this.pushRing(fx);
+        continue;
+      }
       const burst = BURSTS[fx.type];
       if (!burst) continue;
       if (fx.type === "shot" && this.muzzleFrames.length > 0) {
@@ -445,13 +491,13 @@ export class VfxSystem {
       const spark = b.look === "spark";
       this.posVec.set(b.x, spark ? b.y + t * 0.4 : b.y, b.z);
       mesh.position.copy(this.posVec);
-      mesh.quaternion.copy(this.cameraQuat);
+      mesh.quaternion.copy(b.look === "ring" ? FLAT : this.cameraQuat);
       // The flash and smoke sheets animate their own scale; only the spark is grown here.
       const scale = spark ? b.size * (0.6 + t * 1.1) : b.size;
       mesh.scale.set(b.flip ? -scale : scale, scale, scale);
       // The flash strips fade out on their own last frames; the spark and the
       // smoke still carry alpha at the end of their sheets, so they fade here.
-      const fade = b.look === "flash" || t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      const fade = b.look === "flash" || b.look === "ring" || t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
       // One pool serves both blend modes. Changing `blending` is render state,
       // not a different shader, so it needs no `needsUpdate` either.
       if (b.look === "smoke") {
@@ -464,7 +510,9 @@ export class VfxSystem {
         // Additive: the colour going to black is the fade. The atlas carries its
         // own white-hot colour; tinting it with the event colour turned a spark
         // into a dull red dot, so the sprite stays warm and only the fade moves.
-        mat.color.setRGB(1.0 * fade, 0.94 * fade, 0.82 * fade);
+        // The ring keeps its own cool white: warmed, it read as another spark.
+        if (b.look === "ring") mat.color.setRGB(1, 1, 1);
+        else mat.color.setRGB(1.0 * fade, 0.94 * fade, 0.82 * fade);
       }
       this.bursts[sw] = b;
       sw++;
@@ -513,6 +561,30 @@ export class VfxSystem {
       g: 1,
       b: 1,
     };
+  }
+
+  private pushRing(fx: FxEvent): void {
+    if (!fx.r || fx.r <= 0 || this.bursts.length >= MAX_SPRITES) return;
+    let alive = 0;
+    for (const b of this.bursts) {
+      if (b.look !== "ring" || b.age >= b.life) continue;
+      if (Math.hypot(b.x - fx.x, b.z - fx.y) < RING_MERGE) return;
+      alive++;
+    }
+    if (alive >= RING_CAP) return;
+    this.bursts.push({
+      frames: this.ringFrames,
+      look: "ring",
+      x: fx.x,
+      y: RING_HEIGHT,
+      z: fx.y,
+      age: 0,
+      life: RING_LIFE,
+      size: (fx.r * 2) / RING_FILL,
+      r: 1,
+      g: 1,
+      b: 1,
+    });
   }
 
   /** A slash on the victim, pulled back toward the attacker. */

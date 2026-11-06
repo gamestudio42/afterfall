@@ -13,6 +13,8 @@ export interface ArtTextures {
   muzzle_atlas: THREE.Texture | null;
   /** Infected strike strip, packed by `tools/make-flipbook-atlas.ts`. */
   melee_atlas: THREE.Texture | null;
+  /** Gunfire noise ring sheet, packed by `tools/make-flipbook-atlas.ts`. */
+  noise_atlas: THREE.Texture | null;
   /** Death cloud sheet, packed by `tools/make-flipbook-atlas.ts`. */
   death_atlas: THREE.Texture | null;
   /** Construction dust sheet, packed by `tools/make-flipbook-atlas.ts`. */
@@ -29,6 +31,7 @@ const NAMES: ArtName[] = [
   "spark_atlas",
   "muzzle_atlas",
   "melee_atlas",
+  "noise_atlas",
   "death_atlas",
   "dust_atlas",
 ];
@@ -47,6 +50,7 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
     spark_atlas: null,
     muzzle_atlas: null,
     melee_atlas: null,
+    noise_atlas: null,
     death_atlas: null,
     dust_atlas: null,
   };

@@ -80,11 +80,15 @@ function fx(seq: number, type: string, x = 0, y = 0): FxEvent {
 
 describe("sound mapping", () => {
   it("covers every simulation effect", () => {
-    for (const type of ["shot", "melee", "hit", "death", "noise", "build"]) {
+    for (const type of ["shot", "melee", "hit", "death", "build"]) {
       expect(soundForFx(type)).not.toBeNull();
       expect(SOUNDS[soundForFx(type)!]).toBeDefined();
     }
     expect(soundForFx("unknown")).toBeNull();
+  });
+
+  it("keeps noise silent, because its shot already plays", () => {
+    expect(soundForFx("noise")).toBeNull();
   });
 
   it("maps the alerts that have a sound and ignores the text ones", () => {

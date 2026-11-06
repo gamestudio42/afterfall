@@ -69,7 +69,8 @@ export class GameRenderer {
   private hemi = new THREE.HemisphereLight(0xbfd4e6, 0x3a3328, 1);
   private hqLight = new THREE.PointLight(0xffb060, 0, 60, 1.6);
   private cityGroup: THREE.Group | null = null;
-  private buildings: BuildingBatch | null = null;
+  /** Exposed for the capture specs. */
+  buildings: BuildingBatch | null = null;
   private survivors: THREE.InstancedMesh;
   private heads: THREE.InstancedMesh;
   private packs: THREE.InstancedMesh;
@@ -96,7 +97,6 @@ export class GameRenderer {
   overlay: OverlayMode = "none";
   hoverBuilding = -1;
   private time = 0;
-  private windowMat: THREE.MeshBasicMaterial;
 
   /**
    * Renders the survivor model once into a small image for the side panel. One
@@ -261,7 +261,7 @@ export class GameRenderer {
       set("roads", art.asphalt);
       set("parks", art.grass);
     }
-    if (this.buildings) this.buildings.setMap(art.concrete);
+    if (this.buildings) this.buildings.setArt(art);
     this.vfx?.setAtlas(art.spark_atlas);
     this.vfx?.setMuzzleAtlas(art.muzzle_atlas);
     this.vfx?.setMeleeAtlas(art.melee_atlas);
@@ -406,7 +406,6 @@ export class GameRenderer {
     this.tracers.frustumCulled = false;
     this.scene.add(this.tracers);
 
-    this.windowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
     this.vfx = new VfxSystem(this.scene, undefined, this.art.spark_atlas);
     this.vfx.setMuzzleAtlas(this.art.muzzle_atlas);
     this.vfx.setMeleeAtlas(this.art.melee_atlas);
@@ -433,7 +432,7 @@ export class GameRenderer {
       this.scene.remove(this.cityGroup);
     }
     if (this.buildings) {
-      this.scene.remove(this.buildings.mesh, this.buildings.windows);
+      this.scene.remove(this.buildings.mesh);
       this.buildings.dispose();
     }
     const city = sim.city;
@@ -444,11 +443,11 @@ export class GameRenderer {
     this.applyArt(this.art);
     this.scene.add(this.cityGroup);
 
-    this.buildings = new BuildingBatch(city.buildings, this.windowMat);
+    this.buildings = new BuildingBatch(city.buildings);
     // Textures may already have arrived before the city existed: apply the
-    // building map now, and let applyArt handle anything that lands later.
-    this.buildings.setMap(this.art.concrete);
-    this.scene.add(this.buildings.mesh, this.buildings.windows);
+    // building maps now, and let applyArt handle anything that lands later.
+    this.buildings.setArt(this.art);
+    this.scene.add(this.buildings.mesh);
     this.refreshBuildingColors();
     this.dressStreets(sim);
     this.rts.setBounds(0, city.width, 0, city.height);
@@ -461,7 +460,6 @@ export class GameRenderer {
     const sim = this.sim;
     if (!sim || !this.buildings) return;
     const roofC = new THREE.Color();
-    const winC = new THREE.Color();
     sim.city.buildings.forEach((def, i) => {
       const st = sim.state.buildings[i];
       tmpC.setHex(BUILDING_TYPES[def.type].color);
@@ -478,10 +476,10 @@ export class GameRenderer {
         if (st.cache) tmpC.lerp(new THREE.Color(0x4ee0c0), 0.5);
       }
       if (i === this.hoverBuilding) tmpC.lerp(new THREE.Color(0xffffff), 0.18);
-      roofC.copy(tmpC).multiplyScalar(0.7);
+      // The roof map is already dark tar: tinting it at 0.7 as well turned roofs to mud.
+      roofC.copy(tmpC);
       // Windows glow only in settlement buildings.
-      winC.setHex(st.fn !== "none" ? 0xffc66b : 0x15171a);
-      this.buildings!.setColors(i, tmpC, roofC, winC);
+      this.buildings!.setColors(i, tmpC, roofC, st.fn !== "none" ? 1 : 0);
     });
     this.buildings.commitColors();
   }
@@ -581,7 +579,7 @@ export class GameRenderer {
     fog.color.copy(sky);
     fog.near = lerp(150, 220, daylight);
     fog.far = lerp(520, 620, daylight);
-    this.windowMat.opacity = (1 - daylight) * 0.95;
+    this.buildings?.setNight(1 - daylight);
     const hq = sim.state.hq;
     if (hq >= 0) {
       const b = sim.city.buildings[hq];

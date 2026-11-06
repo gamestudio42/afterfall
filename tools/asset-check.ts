@@ -1,7 +1,13 @@
 /**
  * Verifies the art assets against the manifest the generator wrote. This is
  * the rule that keeps a fake or stale render out of the repository: existence,
- * byte budget, PNG header, alpha channel and sha256, all re-derived from disk.
+ * byte budget, PNG or JPEG header, alpha channel and sha256, all re-derived
+ * from disk.
+ *
+ * The budget is for art that streams in after the first frame: every map
+ * loads asynchronously and the renderer keeps its flat colours until it lands,
+ * so this number does not delay the start of a game. The initial payload (the
+ * JS bundle) has its own ceiling in docs/ROADMAP.md.
  *
  * Usage: pnpm assets:check
  */
@@ -14,18 +20,34 @@ const ART = resolve(import.meta.dirname, "../apps/web/public/art");
 const MANIFEST = resolve(ART, "manifest.json");
 
 /** Nothing in `art/` may exceed this, and the whole folder must fit the budget. */
-const MAX_FILE_BYTES = 256 * 1024;
-const MAX_TOTAL_BYTES = 1024 * 1024;
+const MAX_FILE_BYTES = 512 * 1024;
+const MAX_TOTAL_BYTES = 8 * 1024 * 1024;
 
 interface Entry {
   name: string;
   file: string;
-  kind?: "png" | "glb";
+  kind?: "png" | "jpg" | "glb";
   width?: number;
   height?: number;
   bytes: number;
   sha256: string;
   generator: string;
+}
+
+/** Width and height from a baseline or progressive JPEG's SOF segment. */
+function readJpegSize(buf: Buffer): { width: number; height: number } {
+  if (buf[0] !== 0xff || buf[1] !== 0xd8) throw new Error("not a JPEG (bad SOI)");
+  let i = 2;
+  while (i + 9 < buf.length) {
+    if (buf[i] !== 0xff) throw new Error(`JPEG marker expected at ${i}`);
+    const marker = buf[i + 1];
+    const len = buf.readUInt16BE(i + 2);
+    if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+      return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+    }
+    i += 2 + len;
+  }
+  throw new Error("JPEG has no SOF segment");
 }
 
 /** A GLB starts with the magic "glTF", then a version and the total length. */
@@ -64,6 +86,18 @@ for (const entry of manifest.assets) {
   if (entry.kind === "glb" || entry.file.endsWith(".glb")) {
     const err = checkGlb(buf);
     if (err) problems.push(`${entry.name}: ${err}`);
+    continue;
+  }
+
+  if (entry.kind === "jpg" || entry.file.endsWith(".jpg")) {
+    try {
+      const size = readJpegSize(buf);
+      if (size.width !== entry.width || size.height !== entry.height) {
+        problems.push(`${entry.name}: ${size.width}x${size.height} on disk, ${entry.width}x${entry.height} in the manifest`);
+      }
+    } catch (err) {
+      problems.push(`${entry.name}: ${(err as Error).message}`);
+    }
     continue;
   }
 

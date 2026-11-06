@@ -33,6 +33,8 @@ const NAMES = [
   "facade_industrial_lit",
   "facade_storefront_lit",
   "roof",
+  "sidewalk",
+  "door",
 ];
 const blender = execFileSync("blender", ["--version"], { encoding: "utf8" }).split("\n")[0].trim();
 

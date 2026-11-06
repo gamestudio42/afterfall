@@ -8,7 +8,8 @@ type Win = { __afterfall: any };
  * windows light up and every other building stays dark.
  *
  * Opt-in: `CITY_SHOT=1 pnpm test:e2e tests/e2e/city-shot.spec.ts`; the captures
- * go to `docs/art/city_day.png` and `docs/art/city_night.png`.
+ * go to `docs/art/city_day.png`, `docs/art/city_street.png` (close on a
+ * door, the curbs and the sidewalk) and `docs/art/city_night.png`.
  */
 test.skip(!process.env.CITY_SHOT, "set CITY_SHOT=1 to capture the city");
 
@@ -45,7 +46,14 @@ test("captures the city by day and by night", async ({ page }) => {
       () =>
         page.evaluate(() => {
           const m = (window as unknown as Win).__afterfall.renderer.buildings.materials;
-          return !!(m.residential.map && m.office.map && m.roof.map && m.residential.emissiveMap);
+          const g = (window as unknown as Win).__afterfall.renderer;
+          return !!(
+            m.residential.map &&
+            m.office.map &&
+            m.roof.map &&
+            m.residential.emissiveMap &&
+            g.doors?.group.children[0].material.map
+          );
         }),
       { timeout: 20_000 },
     )
@@ -60,6 +68,28 @@ test("captures the city by day and by night", async ({ page }) => {
   });
   await page.waitForTimeout(1_500);
   await page.screenshot({ path: "docs/art/city_day.png" });
+
+  await page.evaluate(() => {
+    const g = (window as unknown as Win).__afterfall;
+    // The camera looks down toward -z, so a door facing +z is in view: frame
+    // the one nearest the HQ.
+    const hq = g.sim.city.buildings[g.sim.state.hq];
+    let b = hq;
+    let bd = Infinity;
+    for (const o of g.sim.city.buildings) {
+      if (o.facing.y <= 0.5) continue;
+      const d = Math.hypot(o.entrance.x - hq.entrance.x, o.entrance.y - hq.entrance.y);
+      if (d < bd) {
+        bd = d;
+        b = o;
+      }
+    }
+    g.renderer.rts.jumpTo(b.entrance.x, b.entrance.y + 4);
+    g.renderer.rts.goalDistance = 22;
+    g.renderer.rts.distance = 22;
+  });
+  await page.waitForTimeout(1_500);
+  await page.screenshot({ path: "docs/art/city_street.png" });
 
   await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;

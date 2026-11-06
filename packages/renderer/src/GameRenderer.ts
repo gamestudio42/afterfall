@@ -8,6 +8,7 @@ import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround, TEXTURED_TINT, type GroundMaterials } from "./cityMeshes";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, type PropScene } from "./props";
+import { Doors } from "./doors";
 import { VfxSystem, type FxEvent } from "./vfx";
 
 export type OverlayMode = "none" | "resources" | "danger";
@@ -69,6 +70,8 @@ export class GameRenderer {
   private hemi = new THREE.HemisphereLight(0xbfd4e6, 0x3a3328, 1);
   private hqLight = new THREE.PointLight(0xffb060, 0, 60, 1.6);
   private cityGroup: THREE.Group | null = null;
+  /** Exposed for the capture specs. */
+  doors: Doors | null = null;
   /** Exposed for the capture specs. */
   buildings: BuildingBatch | null = null;
   private survivors: THREE.InstancedMesh;
@@ -257,11 +260,13 @@ export class GameRenderer {
         mat.needsUpdate = true;
       };
       set("ground", art.grass);
-      set("blocks", art.concrete);
+      set("blocks", art.sidewalk);
+      set("curbs", art.concrete);
       set("roads", art.asphalt);
       set("parks", art.grass);
     }
     if (this.buildings) this.buildings.setArt(art);
+    this.doors?.setMap(art.door);
     this.vfx?.setAtlas(art.spark_atlas);
     this.vfx?.setMuzzleAtlas(art.muzzle_atlas);
     this.vfx?.setMeleeAtlas(art.melee_atlas);
@@ -448,6 +453,13 @@ export class GameRenderer {
     // building maps now, and let applyArt handle anything that lands later.
     this.buildings.setArt(this.art);
     this.scene.add(this.buildings.mesh);
+    if (this.doors) {
+      this.scene.remove(this.doors.group);
+      this.doors.dispose();
+    }
+    this.doors = new Doors(city.buildings);
+    this.doors.setMap(this.art.door);
+    this.scene.add(this.doors.group);
     this.refreshBuildingColors();
     this.dressStreets(sim);
     this.rts.setBounds(0, city.width, 0, city.height);

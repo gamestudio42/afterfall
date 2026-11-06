@@ -30,6 +30,10 @@ export interface ArtTextures {
   facade_storefront_lit: THREE.Texture | null;
   /** Flat roof seen from above, from the same bake. */
   roof: THREE.Texture | null;
+  /** Concrete sidewalk slabs seen from above, a 6.4 m module. */
+  sidewalk: THREE.Texture | null;
+  /** A double door in its surround, 2.4 by 3.2 m. */
+  door: THREE.Texture | null;
   /** Construction dust sheet, packed by `tools/make-flipbook-atlas.ts`. */
   dust_atlas: THREE.Texture | null;
 }
@@ -57,6 +61,8 @@ const NAMES: ArtName[] = [
   "facade_industrial_lit",
   "facade_storefront_lit",
   "roof",
+  "sidewalk",
+  "door",
 ];
 
 /** Photographic bakes ship as JPEG (no alpha, a quarter of the PNG size). */
@@ -70,6 +76,8 @@ const JPEG = new Set<ArtName>([
   "facade_industrial_lit",
   "facade_storefront_lit",
   "roof",
+  "sidewalk",
+  "door",
 ]);
 
 /**
@@ -99,6 +107,8 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
     facade_industrial_lit: null,
     facade_storefront_lit: null,
     roof: null,
+    sidewalk: null,
+    door: null,
   };
   const loader = new THREE.TextureLoader();
   for (const name of NAMES) {

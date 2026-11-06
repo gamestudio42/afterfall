@@ -172,6 +172,22 @@
         "cell": 128
       },
       "coverage": [2.86, 6.42, 9.41, 9.37, 8.82, 5.79, 2.5]
+    },
+    {
+      "name": "noise_atlas",
+      "file": "noise_atlas.png",
+      "width": 768,
+      "height": 384,
+      "bytes": 83195,
+      "sha256": "5e2cb1dffd67e5d7245b24e186b17226ed0c320e610780b2171105532cbe922b",
+      "generator": "EffectCraft 0.21.1 noise_ring + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 4,
+        "rows": 2,
+        "frames": 8,
+        "cell": 192
+      },
+      "coverage": [1.02, 4, 8.12, 11.93, 15.36, 16.24, 16.06, 4.12]
     }
   ]
 }

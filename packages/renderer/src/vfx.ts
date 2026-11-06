@@ -9,7 +9,7 @@
 
 import * as THREE from "three";
 
-export type FxKind = "shot" | "melee" | "hit" | "death" | "noise" | "build";
+export type FxKind = "shot" | "melee" | "hit" | "death" | "noise" | "build" | "collapse";
 
 export interface FxEvent {
   seq: number;
@@ -39,6 +39,7 @@ const BURSTS: Record<string, Burst> = {
   melee: { count: 8, life: 0.42, speed: 5.0, size: 1.3, lift: 2.0, color: new THREE.Color(0xe8e2cc), spread: Math.PI, sprite: 3.2 },
   death: { count: 20, life: 0.95, speed: 4.0, size: 2.4, lift: 3.6, color: new THREE.Color(0xb3402f), spread: Math.PI, sprite: 6.4 },
   build: { count: 14, life: 1.15, speed: 2.6, size: 2.8, lift: 4.6, color: new THREE.Color(0xcfc0a8), spread: Math.PI * 0.6, sprite: 5.2 },
+  collapse: { count: 18, life: 1.0, speed: 3.2, size: 2.6, lift: 4.0, color: new THREE.Color(0x8a7f6c), spread: Math.PI, sprite: 6.0 },
   shot: { count: 4, life: 0.34, speed: 7.0, size: 1.1, lift: 1.0, color: new THREE.Color(0xfff0c0), spread: 0.6, sprite: 2.0 },
 };
 
@@ -94,6 +95,11 @@ const MELEE_HEIGHT = 1.15;
  *   it is capped: a busy site must not take the slots shots and deaths need.
  *   The render sits in the lower half of its frame, so the quad stands higher
  *   than the death cloud's: at 0.7 m the ground cut the dust off flat.
+ * - collapse (`tools/effectcraft/collapse.build.json`): a dome of dark rubble
+ *   dust with chunks of masonry thrown up and falling back, when infected bring
+ *   a wall, tower or gate down. Ten frames of a 1 s render, 5 by 2 at 72 px:
+ *   blurred dust loses nothing at that size, and 96 px cost 120 KB. Like the
+ *   construction dust it sits low in its frame, so the quad stands high.
  */
 /**
  * Noise ring (`tools/effectcraft/noise_ring.build.json`): a wave and a fainter
@@ -129,9 +135,10 @@ interface Cloud {
   cap: number;
 }
 
-const CLOUDS: Record<"death" | "build", Cloud> = {
+const CLOUDS: Record<"death" | "build" | "collapse", Cloud> = {
   death: { cols: 4, rows: 2, frames: 8, life: 0.6, size: 6.4, height: 0.9, cap: MAX_SPRITES },
   build: { cols: 4, rows: 3, frames: 12, life: 0.75, size: 5.2, height: 1.6, cap: 6 },
+  collapse: { cols: 5, rows: 2, frames: 10, life: 0.9, size: 8.5, height: 2.4, cap: 4 },
 };
 type CloudKind = keyof typeof CLOUDS;
 
@@ -320,6 +327,16 @@ export class VfxSystem {
     this.setCloudAtlas("build", atlas);
   }
 
+  /** Gives a fallen structure its rubble cloud. Without it a collapse plays the spark burst. */
+  setCollapseAtlas(atlas: THREE.Texture | null): void {
+    this.setCloudAtlas("collapse", atlas);
+  }
+
+  /** Whether a collapse already plays its rubble cloud. */
+  get collapseReady(): boolean {
+    return !!this.cloudFrames.collapse;
+  }
+
   /** Whether deaths already play their own cloud (the sheet loads asynchronously). */
   get deathReady(): boolean {
     return !!this.cloudFrames.death;
@@ -345,7 +362,8 @@ export class VfxSystem {
       this.meleeFrames[0] ??
       this.ringFrames[0] ??
       this.cloudFrames.death?.[0] ??
-      this.cloudFrames.build?.[0];
+      this.cloudFrames.build?.[0] ??
+      this.cloudFrames.collapse?.[0];
     for (let i = 0; i < MAX_SPRITES; i++) {
       const mat = new THREE.MeshBasicMaterial({
         map: first,

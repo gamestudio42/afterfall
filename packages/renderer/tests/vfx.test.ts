@@ -475,4 +475,54 @@ describe("efeitos visuais", () => {
       expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.repeat.x).toBeCloseTo(1 / 6, 5);
     });
   });
+
+  describe("structure collapse", () => {
+    function visible(vfx: VfxSystem) {
+      return vfx.pool.filter((m) => m.visible);
+    }
+
+    it("plays the 5 by 2 rubble sheet, blending normally, standing high", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.setCollapseAtlas(new THREE.Texture());
+      expect(vfx.collapseReady).toBe(true);
+      vfx.emit([fx(1, "collapse", 7, 8)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      const mat = vfx.pool[0].material as THREE.MeshBasicMaterial;
+      expect(mat.map!.repeat.x).toBeCloseTo(1 / 5, 5);
+      expect(mat.map!.repeat.y).toBeCloseTo(1 / 2, 5);
+      expect(mat.blending).toBe(THREE.NormalBlending);
+      expect(vfx.pool[0].position.x).toBeCloseTo(7, 5);
+      expect(vfx.pool[0].position.y).toBeCloseTo(2.4, 5);
+      expect(vfx.pool[0].position.z).toBeCloseTo(8, 5);
+    });
+
+    it("replaces the particles once the sheet has loaded", () => {
+      const { scene } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setCollapseAtlas(new THREE.Texture());
+      vfx.emit([fx(1, "collapse")]);
+      expect(vfx.active).toBe(0);
+    });
+
+    it("keeps at most four, so a breach leaves slots for the fight", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setCollapseAtlas(new THREE.Texture());
+      vfx.emit(Array.from({ length: 8 }, (_, i) => fx(i + 1, "collapse", i * 3, 0)));
+      vfx.update(0.016, camera);
+      expect(visible(vfx).length).toBe(4);
+    });
+
+    it("falls back to the spark and grey particles while the sheet has not arrived", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.emit([fx(1, "collapse")]);
+      expect(vfx.active).toBeGreaterThan(0);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.repeat.x).toBeCloseTo(1 / 6, 5);
+    });
+  });
 });

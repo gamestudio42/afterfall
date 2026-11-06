@@ -226,7 +226,7 @@ export interface Horde {
 
 export interface Fx {
   seq: number;
-  type: "shot" | "melee" | "hit" | "death" | "noise" | "build";
+  type: "shot" | "melee" | "hit" | "death" | "noise" | "build" | "collapse";
   x: number;
   y: number;
   tx: number;

@@ -6,7 +6,7 @@
  * director (director.ts) is what actually plays.
  */
 
-export type FxKind = "shot" | "melee" | "hit" | "death" | "noise" | "build";
+export type FxKind = "shot" | "melee" | "hit" | "death" | "noise" | "build" | "collapse";
 
 /** O que a simulacao publica em `sim.fx` (subconjunto estrutural de core). */
 export interface FxEvent {
@@ -52,6 +52,7 @@ const FX_SOUND: Record<string, string> = {
   melee: "melee",
   hit: "hit",
   death: "death",
+  // A collapse is silent here: its alert (`alert.structureDestroyed`) already plays.
   // Noise only comes from gunfire, which already plays its shot: a second layer
   // on every shot would double the loudest sound in a fight.
   build: "build",

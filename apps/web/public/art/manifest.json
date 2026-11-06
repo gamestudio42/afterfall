@@ -188,6 +188,22 @@
         "cell": 192
       },
       "coverage": [1.02, 4, 8.12, 11.93, 15.36, 16.24, 16.06, 4.12]
+    },
+    {
+      "name": "collapse_atlas",
+      "file": "collapse_atlas.png",
+      "width": 360,
+      "height": 144,
+      "bytes": 73102,
+      "sha256": "3b303dd9f2d0b1615c68cae2052d76898a8c1fc1c8644528f275633549a40669",
+      "generator": "EffectCraft 0.21.1 collapse + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 5,
+        "rows": 2,
+        "frames": 10,
+        "cell": 72
+      },
+      "coverage": [8.66, 17.65, 30.17, 36.15, 41.71, 48.09, 54.38, 60.26, 64.56, 66.34]
     }
   ]
 }

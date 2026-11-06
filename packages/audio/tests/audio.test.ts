@@ -91,6 +91,11 @@ describe("sound mapping", () => {
     expect(soundForFx("noise")).toBeNull();
   });
 
+  it("leaves a collapse to the sound of its alert", () => {
+    expect(soundForFx("collapse")).toBeNull();
+    expect(soundForAlert("alert.structureDestroyed")).not.toBeNull();
+  });
+
   it("maps the alerts that have a sound and ignores the text ones", () => {
     expect(soundForAlert("alert.hordeDetected")).toBe("horde");
     expect(soundForAlert("alert.dawn")).toBe("dawn");

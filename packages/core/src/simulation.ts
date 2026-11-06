@@ -547,8 +547,8 @@ export class Simulation {
     this.alert(key, params, severity, pos);
   }
 
-  emitFx(type: Fx["type"], x: number, y: number, tx = x, ty = y): void {
-    this.fx.push({ seq: ++this.fxSeq, type, x, y, tx, ty });
+  emitFx(type: Fx["type"], x: number, y: number, tx = x, ty = y, r?: number): void {
+    this.fx.push(r === undefined ? { seq: ++this.fxSeq, type, x, y, tx, ty } : { seq: ++this.fxSeq, type, x, y, tx, ty, r });
     if (this.fx.length > 300) this.fx.splice(0, this.fx.length - 300);
   }
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, tickAt } from "@afterfall/shared";
 import { CellKind, cityFromOverpass } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
-import { hqPerimeter } from "../src/systems/infected";
+import { emitNoise, hqPerimeter } from "../src/systems/infected";
 import { SAVE_VERSION, createSimulation, deserialize, getReport, serialize, stateHash, type Simulation } from "../src";
 import { enterBuilding } from "../src/systems/util";
 import { autoplay, fortRing, pickBase } from "./autoplay";
@@ -380,5 +380,16 @@ describe("real maps (OpenStreetMap)", () => {
     const cells = hqPerimeter(sim);
     expect(cells.length).toBeGreaterThan(8);
     for (const i of cells) expect(sim.grid.kind[i]).not.toBe(CellKind.Building);
+  });
+});
+
+describe("noise", () => {
+  it("publishes its radius as an effect, so it can be drawn", () => {
+    const sim = started();
+    const before = sim.fx.length;
+    emitNoise(sim, 12, 34, 45);
+    const fx = sim.fx[sim.fx.length - 1];
+    expect(sim.fx.length).toBe(before + 1);
+    expect(fx).toMatchObject({ type: "noise", x: 12, y: 34, r: 45 });
   });
 });

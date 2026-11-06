@@ -196,6 +196,8 @@ function perceive(sim: Simulation, e: InfectedEntity, vision: number): void {
 
 /** Gunfire and other noise pulls nearby idle infected towards the source. */
 export function emitNoise(sim: Simulation, x: number, y: number, radius: number): void {
+  // Published with its radius, so the renderer can show how far the shot carries.
+  sim.emitFx("noise", x, y, x, y, radius);
   sim.infectedHash.query(x, y, radius, (id) => {
     const o = sim.state.entities.get(id);
     if (!o?.infected || !o.transform) return;

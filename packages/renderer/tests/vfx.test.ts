@@ -267,6 +267,82 @@ describe("efeitos visuais", () => {
     });
   });
 
+  describe("noise ring", () => {
+    function noise(seq: number, x: number, y: number, r: number): FxEvent {
+      return { seq, type: "noise", x, y, r };
+    }
+    const visible = (vfx: VfxSystem) => vfx.pool.filter((m) => m.visible);
+
+    it("lies flat on the ground and spans the noise radius", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setNoiseAtlas(new THREE.Texture());
+      expect(vfx.noiseReady).toBe(true);
+      vfx.emit([noise(1, 3, 4, 45)]);
+      vfx.debugPin(0);
+      vfx.update(0.016, camera);
+      const mesh = vfx.pool[0];
+      const mat = mesh.material as THREE.MeshBasicMaterial;
+      expect(mat.map!.repeat.x).toBeCloseTo(1 / 4, 5);
+      expect(mat.map!.repeat.y).toBeCloseTo(1 / 2, 5);
+      expect(mat.blending).toBe(THREE.AdditiveBlending);
+      expect(mesh.position.x).toBeCloseTo(3, 5);
+      expect(mesh.position.z).toBeCloseTo(4, 5);
+      // The quad's normal points up, whatever the camera does.
+      const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.quaternion);
+      expect(normal.y).toBeCloseTo(1, 5);
+      // The last frame's ring fills 496 of 512 px, so the quad is a little wider than the radius.
+      expect(mesh.scale.x * (496 / 512)).toBeCloseTo(90, 5);
+    });
+
+    it("draws nothing, and spawns no particles, without its sheet", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
+      vfx.emit([noise(1, 0, 0, 45)]);
+      vfx.update(0.016, camera);
+      expect(visible(vfx).length).toBe(0);
+      expect(vfx.active).toBe(0);
+    });
+
+    it("drops a ring while another spreads from nearby", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setNoiseAtlas(new THREE.Texture());
+      vfx.emit([noise(1, 0, 0, 45), noise(2, 4, 0, 45), noise(3, 30, 0, 45)]);
+      vfx.update(0.016, camera);
+      expect(visible(vfx).length).toBe(2);
+    });
+
+    it("keeps at most three alive", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setNoiseAtlas(new THREE.Texture());
+      vfx.emit([0, 1, 2, 3, 4].map((i) => noise(i + 1, i * 50, 0, 45)));
+      vfx.update(0.016, camera);
+      expect(visible(vfx).length).toBe(3);
+    });
+
+    it("ignores a noise without a radius", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setNoiseAtlas(new THREE.Texture());
+      vfx.emit([{ seq: 1, type: "noise", x: 0, y: 0 }]);
+      vfx.update(0.016, camera);
+      expect(visible(vfx).length).toBe(0);
+    });
+
+    it("is gone after a second", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      vfx.setNoiseAtlas(new THREE.Texture());
+      vfx.emit([noise(1, 0, 0, 70)]);
+      vfx.update(0.9, camera);
+      expect(visible(vfx).length).toBe(1);
+      vfx.update(0.15, camera);
+      expect(visible(vfx).length).toBe(0);
+    });
+  });
+
   describe("death cloud", () => {
     function mat(vfx: VfxSystem, i = 0): THREE.MeshBasicMaterial {
       return vfx.pool[i].material as THREE.MeshBasicMaterial;

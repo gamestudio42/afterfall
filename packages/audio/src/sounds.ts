@@ -52,7 +52,8 @@ const FX_SOUND: Record<string, string> = {
   melee: "melee",
   hit: "hit",
   death: "death",
-  noise: "noise",
+  // Noise only comes from gunfire, which already plays its shot: a second layer
+  // on every shot would double the loudest sound in a fight.
   build: "build",
 };
 

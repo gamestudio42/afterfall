@@ -231,6 +231,8 @@ export interface Fx {
   y: number;
   tx: number;
   ty: number;
+  /** Radius in metres, for events that cover an area (noise). */
+  r?: number;
 }
 
 export interface GameState {

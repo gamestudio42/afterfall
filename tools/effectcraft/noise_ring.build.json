@@ -1,0 +1,198 @@
+[
+  {
+    "command": "comp.new",
+    "params": {
+      "name": "noise_ring",
+      "width": 512,
+      "height": 512,
+      "frameRate": 8,
+      "duration": 1.0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "wave",
+      "size": [40, 40],
+      "fill": null,
+      "stroke": "#dfeaff",
+      "strokeWidth": 7
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Glow",
+      "layers": ["wave"]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "wave",
+      "path": "contents/group/contents/ellipse/size",
+      "time": 0,
+      "value": [40, 40]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "wave",
+      "path": "contents/group/contents/ellipse/size",
+      "time": 0.0,
+      "value": [40, 40]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "wave",
+      "path": "contents/group/contents/ellipse/size",
+      "time": 0.45,
+      "value": [400, 400]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "wave",
+      "path": "contents/group/contents/ellipse/size",
+      "time": 0.85,
+      "value": [496, 496]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "wave",
+      "path": "transform/opacity",
+      "time": 0,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "wave",
+      "path": "transform/opacity",
+      "time": 0.06,
+      "value": 100
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "wave",
+      "path": "transform/opacity",
+      "time": 0.45,
+      "value": 60
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "wave",
+      "path": "transform/opacity",
+      "time": 0.85,
+      "value": 0
+    }
+  },
+  {
+    "command": "layer.newShape",
+    "params": {
+      "kind": "ellipse",
+      "name": "echo",
+      "size": [40, 40],
+      "fill": null,
+      "stroke": "#9fb4d6",
+      "strokeWidth": 4
+    }
+  },
+  {
+    "command": "effect.apply",
+    "params": {
+      "effect": "Glow",
+      "layers": ["echo"]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "echo",
+      "path": "contents/group/contents/ellipse/size",
+      "time": 0,
+      "value": [40, 40]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "echo",
+      "path": "contents/group/contents/ellipse/size",
+      "time": 0.15,
+      "value": [40, 40]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "echo",
+      "path": "contents/group/contents/ellipse/size",
+      "time": 0.6,
+      "value": [400, 400]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "echo",
+      "path": "contents/group/contents/ellipse/size",
+      "time": 1.0,
+      "value": [496, 496]
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "echo",
+      "path": "transform/opacity",
+      "time": 0,
+      "value": 0
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "echo",
+      "path": "transform/opacity",
+      "time": 0.21,
+      "value": 55
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "echo",
+      "path": "transform/opacity",
+      "time": 0.6,
+      "value": 33
+    }
+  },
+  {
+    "command": "prop.addKey",
+    "params": {
+      "layer": "echo",
+      "path": "transform/opacity",
+      "time": 1.0,
+      "value": 0
+    }
+  },
+  {
+    "command": "file.save",
+    "params": {
+      "path": "noise_ring.ecproj"
+    }
+  }
+]

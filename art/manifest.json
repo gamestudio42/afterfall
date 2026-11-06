@@ -294,6 +294,26 @@
       "bytes": 9235,
       "sha256": "f6dbcdbc748e04035051d82427653283ed5c37b65cef323b2302edd95b442e90",
       "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "sidewalk",
+      "file": "sidewalk.jpg",
+      "kind": "jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 23081,
+      "sha256": "425467e1d95417aef4ae23794bf4162a7a80729b4ca57a69686f71bfffd31efb",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
+    },
+    {
+      "name": "door",
+      "file": "door.jpg",
+      "kind": "jpg",
+      "width": 192,
+      "height": 256,
+      "bytes": 4564,
+      "sha256": "9b73e5a0da498f1bc5cfcc3072a672e66b1985dee2faaa88243e4aa655fa5dfc",
+      "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
     }
   ]
 }

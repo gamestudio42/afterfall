@@ -17,6 +17,8 @@ export interface ArtTextures {
   noise_atlas: THREE.Texture | null;
   /** Death cloud sheet, packed by `tools/make-flipbook-atlas.ts`. */
   death_atlas: THREE.Texture | null;
+  /** Structure collapse sheet, packed by `tools/make-flipbook-atlas.ts`. */
+  collapse_atlas: THREE.Texture | null;
   /** Construction dust sheet, packed by `tools/make-flipbook-atlas.ts`. */
   dust_atlas: THREE.Texture | null;
 }
@@ -34,6 +36,7 @@ const NAMES: ArtName[] = [
   "noise_atlas",
   "death_atlas",
   "dust_atlas",
+  "collapse_atlas",
 ];
 
 /**
@@ -53,6 +56,7 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
     noise_atlas: null,
     death_atlas: null,
     dust_atlas: null,
+    collapse_atlas: null,
   };
   const loader = new THREE.TextureLoader();
   for (const name of NAMES) {

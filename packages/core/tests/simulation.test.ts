@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, tickAt } from "@afterfall/shared";
 import { CellKind, cityFromOverpass } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
-import { emitNoise, hqPerimeter } from "../src/systems/infected";
+import { destroyStructure, emitNoise, hqPerimeter } from "../src/systems/infected";
 import { SAVE_VERSION, createSimulation, deserialize, getReport, serialize, stateHash, type Simulation } from "../src";
 import { enterBuilding } from "../src/systems/util";
 import { autoplay, fortRing, pickBase } from "./autoplay";
@@ -225,6 +225,24 @@ describe("infected and combat (phase 5)", () => {
     for (let i = 0; i < 4; i++) sim.spawnInfected("brute", p.x, p.y, 99);
     const ok = runUntil(sim, () => !sim.state.entities.has(wall.id) || sim.hqBuilding!.hp < sim.hqBuilding!.maxHp, 3000);
     expect(ok).toBe(true);
+  });
+});
+
+describe("collapse", () => {
+  it("a destroyed structure publishes a collapse, not a death", () => {
+    const sim = started(6);
+    const hq = sim.city.buildings[sim.state.hq];
+    const g = sim.grid;
+    const cy = Math.floor(hq.entrance.y / g.cell) + (hq.facing.y > 0 ? 2 : -2);
+    const cx = Math.floor(hq.entrance.x / g.cell);
+    sim.enqueue({ type: "placeStructures", kind: "wall", cells: [[cx, cy]] });
+    sim.tick();
+    const wall = [...sim.structures()][0];
+    const { x, y } = wall.transform!;
+    const before = sim.fx.length;
+    destroyStructure(sim, wall);
+    const added = sim.fx.slice(before);
+    expect(added).toEqual([expect.objectContaining({ type: "collapse", x, y })]);
   });
 });
 

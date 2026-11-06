@@ -268,6 +268,7 @@ export class GameRenderer {
     this.vfx?.setNoiseAtlas(art.noise_atlas);
     this.vfx?.setDeathAtlas(art.death_atlas);
     this.vfx?.setDustAtlas(art.dust_atlas);
+    this.vfx?.setCollapseAtlas(art.collapse_atlas);
   }
 
   private groundMats: GroundMaterials | null = null;
@@ -412,6 +413,7 @@ export class GameRenderer {
     this.vfx.setNoiseAtlas(this.art.noise_atlas);
     this.vfx.setDeathAtlas(this.art.death_atlas);
     this.vfx.setDustAtlas(this.art.dust_atlas);
+    this.vfx.setCollapseAtlas(this.art.collapse_atlas);
   }
 
   private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number, shadows: boolean): THREE.InstancedMesh {

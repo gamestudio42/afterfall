@@ -31,7 +31,7 @@ const entries = files.map((file) => {
     kind: "glb",
     bytes: buf.length,
     sha256: createHash("sha256").update(buf).digest("hex"),
-    generator: "tools/blender/props.py",
+    generator: file.includes("/roof_") ? "tools/blender/roof_props.py" : "tools/blender/props.py",
   };
 });
 

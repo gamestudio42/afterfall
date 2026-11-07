@@ -51,6 +51,7 @@
 - [x] **Textured ground keeps its colour.** The ground materials kept their flat colour under the map and were darkened twice (asphalt at sRGB 10 instead of 52); each now takes a tint derived from its map's mean, pinned by a test.
 - [x] **Facades, roofs and a parapet.** `tools/blender/facades.py` bakes four facade modules in Cycles from real geometry (residential brick with boarded windows, office ribbon glazing, corrugated industrial, a storefront with roller shutters for the ground floor of shops) and a tar roof with vents, each with a lit-window mask; `tools/pack-facades.ts` ships them as JPEG (110 KB for all nine). Buildings get a cornice and parapet, facades follow the perimeter in 12.8 m modules shifted per building, and at night only settlement buildings light their windows (decision 22). Captures in `docs/art/city_day.png` and `city_night.png` (`CITY_SHOT=1`).
 - [x] **Sidewalks, curbs and doors.** Blocks wear baked concrete slabs (tinted, cracked, mossy joints, the odd one missing) and a curb at the edge; imported maps get a sidewalk ribbon along every road. Every building has a front door with a canopy and a step, placed by casting from its entrance back to its wall, so it is where survivors actually go in; three draw calls for the city. Close capture in `docs/art/city_street.png`.
+- [x] **Rooftop kit.** `tools/blender/roof_props.py` makes five pieces (water tank, AC unit, stair bulkhead, antenna, mushroom vent; 48–264 triangles, 41 KB in all), and `placeRoofProps` dresses each roof by its building: bulkheads from three floors up, tanks on homes, AC units on shops and offices, vents and the odd antenna anywhere, inside the parapet, apart from each other and square with the first wall. Same instanced loader as the street kit: one draw call per piece and material.
 - [x] **Frame cost probe.** `GameController.cost` and `tests/e2e/perf.spec.ts` split simulation from render; results and their limits in [PERF.md](PERF.md).
 
 Two constraints learned the hard way still apply to every new asset:
@@ -61,9 +62,9 @@ Two constraints learned the hard way still apply to every new asset:
 ## Next — art
 
 The goal before the first human playtest is a coherent, finished-looking city.
-Done so far: facades, roofs, parapets, sidewalks, curbs and doors. Still open, in order:
+Done so far: facades, roofs, parapets, sidewalks, curbs, doors and the rooftop kit. Still open:
 
-- **Rooftop props** (water tanks, AC units, antennas) instanced from the prop kit, and facade maps at 1024 px if the closest zoom shows the 40 px/m bake.
+- **Facade maps at 1024 px**, if the closest zoom shows the 40 px/m bake.
 
 1. **Measure on a real GPU.** Every frame number so far comes from SwiftShader. The 60 fps budget below has not been checked on hardware, nor with a night horde on screen.
 2. **Bloom on emissive materials** (windows, halos, infected eyes), only if the GPU measurement leaves room for it.
@@ -77,7 +78,7 @@ Done so far: facades, roofs, parapets, sidewalks, curbs and doors. Still open, i
 Every art item has to be measured against a declared ceiling, otherwise "looks better" wins every argument:
 
 - **Initial payload ≤ 1.5 MB.** The JS bundle is 976 kB raw and 276 kB gzip (2026-11-05, up from 869/245 kB before the art pass). Art is not part of it: every map loads after the first frame and the renderer keeps its flat colours until it lands.
-- **Streamed art ≤ 8 MB, 512 KB per file** (raised from 1 MB on 2026-11-06 for the city pass). `public/art` is 1001 KB after the six flipbooks and the facade, sidewalk and door bake; `pnpm assets:check` enforces both numbers. Atlases are shared and tiled, and nothing ships per object.
+- **Streamed art ≤ 8 MB, 512 KB per file** (raised from 1 MB on 2026-11-06 for the city pass). `public/art` is 1041 KB after the six flipbooks, the facade, sidewalk and door bake and the rooftop kit; `pnpm assets:check` enforces both numbers. Atlases are shared and tiled, and nothing ships per object.
 - **60 fps at 1080p** with about 100 buildings, forty survivors and one night horde. Shadows, bloom and particle counts are the three knobs that move this number.
 - **Audio and large textures stay out of the bundle:** sound streams from `public/sfx` (372 KB), and no texture over 64 kB is inlined.
 - An asset that cannot be measured against these numbers does not ship.

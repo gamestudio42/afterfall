@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { CityMap } from "@afterfall/world";
+import type { BuildingDef, CityMap } from "@afterfall/world";
 import { CellKind } from "@afterfall/world";
-import { placeProps, PROP_KINDS } from "../src/props";
+import { placeProps, placeRoofProps, PROP_KINDS } from "../src/props";
 
 const CELL = 2;
 
@@ -81,3 +81,65 @@ describe("placeProps", () => {
 function PROP_KINdsGuard(kind: string): boolean {
   return (PROP_KINDS as readonly string[]).includes(kind);
 }
+
+describe("rooftop props", () => {
+  function roofBuilding(index: number, type: string, floors: number, w = 20, d = 16, x = 0): BuildingDef {
+    return {
+      id: `b${index}`,
+      index,
+      type: type as BuildingDef["type"],
+      zone: "residential" as BuildingDef["zone"],
+      rect: { x, y: 0, w, h: d },
+      area: w * d,
+      floors,
+      height: floors * 3.2 + 0.6,
+      entrance: { x: x + w / 2, y: -1 },
+      facing: { x: 0, y: -1 },
+    };
+  }
+
+  const many = Array.from({ length: 60 }, (_, i) => roofBuilding(i, i % 2 ? "office" : "apartment", 2 + (i % 4), 20, 16, i * 30));
+
+  it("sits every piece on its roof, inside the parapet", () => {
+    const placed = placeRoofProps(many, 3);
+    let n = 0;
+    for (const [, list] of placed) {
+      for (const p of list) {
+        const b = many.find((o) => p.x >= o.rect.x && p.x <= o.rect.x + o.rect.w)!;
+        expect(p.y).toBeCloseTo(b.height, 5);
+        expect(p.x).toBeGreaterThan(b.rect.x + 0.9);
+        expect(p.x).toBeLessThan(b.rect.x + b.rect.w - 0.9);
+        expect(p.z).toBeGreaterThan(0.9);
+        expect(p.z).toBeLessThan(b.rect.h - 0.9);
+        n++;
+      }
+    }
+    expect(n).toBeGreaterThan(60);
+  });
+
+  it("puts tanks on homes, AC units mostly on offices, and stairs only on three floors or more", () => {
+    const placed = placeRoofProps(many, 3);
+    const owner = (p: { x: number }) => many.find((o) => p.x >= o.rect.x && p.x <= o.rect.x + o.rect.w)!;
+    for (const p of placed.get("roof_tank") ?? []) expect(owner(p).type).toBe("apartment");
+    for (const p of placed.get("roof_stairs") ?? []) expect(owner(p).floors).toBeGreaterThanOrEqual(3);
+    const ac = (placed.get("roof_ac") ?? []).map(owner);
+    expect(ac.filter((b) => b.type === "office").length).toBeGreaterThan(ac.filter((b) => b.type === "apartment").length);
+  });
+
+  it("keeps pieces on one roof apart", () => {
+    const placed = placeRoofProps(many, 3);
+    const all = [...placed.values()].flat();
+    for (let i = 0; i < all.length; i++)
+      for (let j = i + 1; j < all.length; j++) expect(Math.hypot(all[i].x - all[j].x, all[i].z - all[j].z)).toBeGreaterThan(0.8);
+  });
+
+  it("dresses the same city the same way for the same seed", () => {
+    const a = placeRoofProps(many, 9);
+    const b = placeRoofProps(many, 9);
+    expect(JSON.stringify([...a])).toBe(JSON.stringify([...b]));
+  });
+
+  it("leaves a roof too small for a piece bare", () => {
+    expect([...placeRoofProps([roofBuilding(0, "office", 3, 2.4, 2.4)], 1).values()].flat()).toEqual([]);
+  });
+});

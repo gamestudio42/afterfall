@@ -7,7 +7,7 @@ import { RtsCamera } from "./camera";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround, TEXTURED_TINT, type GroundMaterials } from "./cityMeshes";
 import { loadArtTextures, type ArtTextures } from "./textures";
-import { loadProps, placeProps, type PropScene } from "./props";
+import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Doors } from "./doors";
 import { VfxSystem, type FxEvent } from "./vfx";
 
@@ -234,7 +234,10 @@ export class GameRenderer {
     for (const m of this.propScene?.meshes ?? []) this.scene.remove(m);
     this.propScene = null;
     const token = ++this.propToken;
-    const placements = placeProps(sim.city, this.sim!.grid, sim.city.seed ?? 1);
+    const placements = new Map<PropKind | RoofKind, PropPlacement[]>([
+      ...placeProps(sim.city, this.sim!.grid, sim.city.seed ?? 1),
+      ...placeRoofProps(sim.city.buildings, sim.city.seed ?? 1),
+    ]);
     void loadProps(this.artBase, placements, (kit) => {
       if (token !== this.propToken) {
         for (const m of kit.meshes) m.traverse((o) => (o as THREE.Mesh).geometry?.dispose());

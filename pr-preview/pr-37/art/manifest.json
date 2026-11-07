@@ -335,8 +335,8 @@
       "name": "props_roof_vent",
       "file": "props/roof_vent.glb",
       "kind": "glb",
-      "bytes": 6104,
-      "sha256": "afd2de00be1d260186223f214f05dc034d27312b606e5cf83381767aef53314a",
+      "bytes": 4088,
+      "sha256": "975b2b4b6cbcbdd3b2802730badc37adc894b2fc507d42779224d0d40e6bb9fe",
       "generator": "tools/blender/roof_props.py"
     },
     {

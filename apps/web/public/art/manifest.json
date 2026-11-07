@@ -354,6 +354,14 @@
       "bytes": 21296,
       "sha256": "cf2286f4b0344e91d22dfd3c5f5fcdca15a9e685757bea33ab63147304ac327e",
       "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "infected_infected",
+      "file": "infected/infected.glb",
+      "kind": "glb",
+      "bytes": 28552,
+      "sha256": "1374b09dbb6670c15765d2f4bb5a9cc74258caef17a620ec706c4f9f5705f848",
+      "generator": "tools/blender/infected.py"
     }
   ]
 }

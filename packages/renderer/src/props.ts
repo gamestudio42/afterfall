@@ -111,8 +111,7 @@ export function placeRoofProps(buildings: BuildingDef[], seed = 1): Map<RoofKind
     if (!commercial && b.floors >= 2 && h(2) < 0.55) wants.push("roof_tank");
     const acs = commercial ? 1 + Math.floor(h(3) * Math.min(4, b.area / 120)) : h(3) < 0.3 ? 1 : 0;
     for (let i = 0; i < acs; i++) wants.push("roof_ac");
-    const vents = Math.floor(h(4) * 3);
-    for (let i = 0; i < vents; i++) wants.push("roof_vent");
+    if (h(4) < 0.5) wants.push("roof_vent");
     if (h(5) < 0.22) wants.push("roof_antenna");
 
     const placed: { x: number; y: number; r: number }[] = [];
@@ -254,7 +253,10 @@ export async function loadProps(
         const inst = new THREE.InstancedMesh(geo, mat, list.length);
         // Shadows on props are the expensive half in software rendering; the
         // kit is small and mostly hugged by the building shadows anyway.
-        inst.castShadow = kind === "car" || kind === "barrier" || kind === "dumpster" || kind === "roof_tank" || kind === "roof_stairs";
+        // Roof pieces cast none: hundreds of them in the shadow pass slowed the
+        // software-rendered frame enough to stall the camera's ease in CI, and
+        // seen from above their own shading carries them.
+        inst.castShadow = kind === "car" || kind === "barrier" || kind === "dumpster";
         inst.receiveShadow = true;
         inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         list.forEach((p, i) => {

@@ -141,7 +141,9 @@ export("roof_antenna", join("roof_antenna"))
 # --- mushroom vent: base, stem and cap --------------------------------------
 reset()
 metal = mat("metal", (0.48, 0.49, 0.5), rough=0.55, metal=0.6)
-cyl(0.24, 0.08, (0, 0, 0.04), verts=10, material=metal)
-cyl(0.14, 0.6, (0, 0, 0.36), verts=10, material=metal)
-cone(0.34, 0.08, 0.2, (0, 0, 0.76), verts=10, material=metal)
+# Six sides: a vent is a few pixels from the RTS camera, and there is one on
+# most roofs, so its triangles add up faster than anything else in the kit.
+cyl(0.24, 0.08, (0, 0, 0.04), verts=6, material=metal)
+cyl(0.14, 0.6, (0, 0, 0.36), verts=6, material=metal)
+cone(0.34, 0.08, 0.2, (0, 0, 0.76), verts=6, material=metal)
 export("roof_vent", join("roof_vent"))

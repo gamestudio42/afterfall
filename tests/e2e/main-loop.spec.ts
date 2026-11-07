@@ -173,13 +173,15 @@ test("the minimap moves the camera where it is clicked", async ({ page }) => {
   const box = (await minimap.boundingBox())!;
   // Click near the top-left corner of the map.
   await page.mouse.click(box.x + box.width * 0.15, box.y + box.height * 0.2);
-  await page.waitForTimeout(1500);
-  const target = await page.evaluate(() => {
-    const g = (window as unknown as Win).__afterfall;
-    return { x: g.renderer.rts.target.x / g.sim.city.width, y: g.renderer.rts.target.z / g.sim.city.height };
-  });
-  expect(target.x).toBeCloseTo(0.15, 1);
-  expect(target.y).toBeCloseTo(0.2, 1);
+  // The camera eases toward the click frame by frame, so how far it got after
+  // a fixed wait measured the software renderer's frame rate, not the minimap.
+  // Wait for it to arrive instead.
+  const target = () =>
+    page.evaluate(() => {
+      const g = (window as unknown as Win).__afterfall;
+      return { x: g.renderer.rts.target.x / g.sim.city.width, y: g.renderer.rts.target.z / g.sim.city.height };
+    });
+  await expect.poll(async () => Math.hypot((await target()).x - 0.15, (await target()).y - 0.2), { timeout: 15_000 }).toBeLessThan(0.05);
   await page.screenshot({ path: "test-results/minimap.png" });
 });
 

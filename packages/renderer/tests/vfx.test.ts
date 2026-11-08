@@ -116,7 +116,7 @@ describe("efeitos visuais", () => {
       return { seq, type: "shot", x, y, tx, ty };
     }
 
-    it("slices the strip into four frames, a quarter of the sheet each", () => {
+    it("slices the strip into six frames, a sixth of the sheet each", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
       vfx.setMuzzleAtlas(new THREE.Texture());
@@ -124,11 +124,11 @@ describe("efeitos visuais", () => {
       vfx.debugPin(0);
       vfx.update(0.016, camera);
       const map = (vfx.pool[0].material as THREE.MeshBasicMaterial).map!;
-      expect(map.repeat.x).toBeCloseTo(1 / 4, 5);
+      expect(map.repeat.x).toBeCloseTo(1 / 6, 5);
       expect(map.repeat.y).toBeCloseTo(1, 5);
       vfx.debugPin(0.9);
       vfx.update(0.016, camera);
-      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.offset.x).toBeCloseTo(3 / 4, 5);
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.offset.x).toBeCloseTo(5 / 6, 5);
     });
 
     it("sits at the barrel, a step toward the target, and holds its size", () => {
@@ -185,7 +185,7 @@ describe("efeitos visuais", () => {
       return { seq, type: "melee", x, y, tx, ty };
     }
 
-    it("plays the seven-frame strip additively", () => {
+    it("plays the ten-frame sheet additively", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
       vfx.setMeleeAtlas(new THREE.Texture());
@@ -194,12 +194,14 @@ describe("efeitos visuais", () => {
       vfx.debugPin(0);
       vfx.update(0.016, camera);
       const mat = vfx.pool[0].material as THREE.MeshBasicMaterial;
-      expect(mat.map!.repeat.x).toBeCloseTo(1 / 7, 5);
-      expect(mat.map!.repeat.y).toBeCloseTo(1, 5);
+      expect(mat.map!.repeat.x).toBeCloseTo(1 / 5, 5);
+      expect(mat.map!.repeat.y).toBeCloseTo(1 / 2, 5);
       expect(mat.blending).toBe(THREE.AdditiveBlending);
       vfx.debugPin(0.95);
       vfx.update(0.016, camera);
-      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.offset.x).toBeCloseTo(6 / 7, 5);
+      // Frame 9 of 10, at the bottom-right cell of the 5 by 2 sheet.
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.offset.x).toBeCloseTo(4 / 5, 5);
+      expect((vfx.pool[0].material as THREE.MeshBasicMaterial).map!.offset.y).toBeCloseTo(0, 5);
     });
 
     it("sits on the victim, pulled back toward the attacker", () => {
@@ -235,12 +237,12 @@ describe("efeitos visuais", () => {
       expect(vfx.pool[1].scale.y).toBeGreaterThan(0);
     });
 
-    it("is over in about a quarter of a second", () => {
+    it("is over in about a third of a second", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene);
       vfx.setMeleeAtlas(new THREE.Texture());
       vfx.emit([strike(1, 0, 0, 2, 0)]);
-      vfx.update(0.2, camera);
+      vfx.update(0.25, camera);
       expect(vfx.pool.filter((m) => m.visible).length).toBe(1);
       vfx.update(0.06, camera);
       expect(vfx.pool.filter((m) => m.visible).length).toBe(0);

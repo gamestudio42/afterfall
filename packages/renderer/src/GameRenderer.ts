@@ -226,6 +226,66 @@ export class GameRenderer {
   }
 
   /**
+   * Loads the infected model and swaps it in place of the capsule. One instanced
+   * mesh per material, the same way the survivor kit works: three draw calls for
+   * a horde of six hundred instead of one, and a silhouette that says "enemy"
+   * before the health bar does.
+   */
+  private async loadInfectedModel(): Promise<void> {
+    let gltf;
+    try {
+      gltf = await new GLTFLoader().loadAsync(`${this.artBase}art/infected/infected.glb`);
+    } catch {
+      return;
+    }
+    gltf.scene.updateMatrixWorld(true);
+    const parts: THREE.InstancedMesh[] = [];
+    let colored: THREE.InstancedMesh | null = null;
+    gltf.scene.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const geo = child.geometry.clone();
+      geo.applyMatrix4(child.matrixWorld);
+      const src = child.material as THREE.MeshStandardMaterial;
+      const name = (src.name ?? "").toLowerCase();
+      // `skin` is white in the model and takes INFECTED[kind].color as its
+      // instance colour. The rags stay near black and the eyes are the only
+      // emissive surface, which is what makes a horde read after dark.
+      const isSkin = name.includes("skin");
+      const isEyes = name.includes("eye");
+      const mat = new THREE.MeshStandardMaterial({
+        name: src.name,
+        color: src.color.clone(),
+        roughness: isEyes ? 0.4 : 0.8,
+        metalness: 0,
+        flatShading: true,
+        emissive: isEyes ? new THREE.Color(0x8fe35a) : new THREE.Color(0x000000),
+        emissiveIntensity: isEyes ? 1.4 : 0,
+      });
+      const inst = new THREE.InstancedMesh(geo, mat, MAX_INFECTED);
+      inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      // Only the skin is tinted. An instanceColor on the rags and the eyes would
+      // be written for the skin's colour too and take them to black, the same
+      // trap the survivor kit hit.
+      if (isSkin) inst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_INFECTED * 3), 3);
+      inst.count = 0;
+      inst.castShadow = true;
+      inst.receiveShadow = true;
+      inst.frustumCulled = false;
+      if (isSkin) colored = inst;
+      parts.push(inst);
+      this.scene.add(inst);
+    });
+    // Without the skin there is nothing to tint by kind, so the capsule stays.
+    if (parts.length === 0 || !colored) {
+      for (const p of parts) this.scene.remove(p);
+      return;
+    }
+    this.infected.visible = false;
+    this.infectedParts = parts;
+    this.infectedColored = colored;
+  }
+
+  /**
    * Drops the prop kit on the sidewalks. Loading is asynchronous and the city
    * can change while it runs, so a token guards against a stale kit landing on
    * a new map.
@@ -284,6 +344,9 @@ export class GameRenderer {
   private propScene: PropScene | null = null;
   /** Meshes of the survivor model, written with the same matrix as the capsules. */
   private unitParts: THREE.InstancedMesh[] = [];
+  /** Meshes of the infected model, same contract: one per material. */
+  private infectedParts: THREE.InstancedMesh[] = [];
+  private infectedColored: THREE.InstancedMesh | null = null;
   private portrait: string | null = null;
   private portraitTried = false;
   private unitColored: THREE.InstancedMesh | null = null;
@@ -346,6 +409,9 @@ export class GameRenderer {
       MAX_INFECTED,
       true,
     );
+    // The capsule keeps drawing until the model lands, then it is hidden: a
+    // missing GLB costs an infected its silhouette and nothing else.
+    void this.loadInfectedModel();
     const bar = new THREE.PlaneGeometry(1, 0.14);
     this.hpBg = this.instanced(
       bar,
@@ -672,10 +738,15 @@ export class GameRenderer {
           tmpQ,
           tmpS.set(def.scale * UNIT_SCALE, def.scale * UNIT_SCALE * (1 + sway * 0.1), def.scale * UNIT_SCALE),
         );
-        this.infected.setMatrixAt(zi, tmpM);
         tmpC.setHex(def.color);
         if (this.overlay === "danger") tmpC.lerp(new THREE.Color(0xff3020), 0.5);
-        this.infected.setColorAt(zi, tmpC);
+        if (this.infectedParts.length > 0) {
+          for (const part of this.infectedParts) part.setMatrixAt(zi, tmpM);
+          this.infectedColored?.setColorAt(zi, tmpC);
+        } else {
+          this.infected.setMatrixAt(zi, tmpM);
+          this.infected.setColorAt(zi, tmpC);
+        }
         zi++;
         const h = e.health!;
         if (h.hp < h.max) addBar(x, 2.1 * def.scale * UNIT_SCALE, z, h.hp / h.max, 0xd04a3a);
@@ -686,10 +757,22 @@ export class GameRenderer {
     for (const part of this.unitParts) part.count = su;
     this.packs.count = sp;
     this.rings.count = sr;
-    this.infected.count = zi;
+    // The capsule only draws the frames before the model lands.
+    this.infected.count = this.infectedParts.length > 0 ? 0 : zi;
+    for (const part of this.infectedParts) part.count = zi;
     this.hpBg.count = bars;
     this.hpFg.count = bars;
-    for (const m of [this.survivors, this.heads, this.packs, this.rings, this.infected, this.hpBg, this.hpFg, ...this.unitParts]) {
+    for (const m of [
+      this.survivors,
+      this.heads,
+      this.packs,
+      this.rings,
+      this.infected,
+      this.hpBg,
+      this.hpFg,
+      ...this.unitParts,
+      ...this.infectedParts,
+    ]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }

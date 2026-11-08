@@ -12,7 +12,13 @@ import { resolve } from "node:path";
 const ART = resolve(import.meta.dirname, "../apps/web/public/art");
 const MANIFEST = resolve(ART, "manifest.json");
 
-const dirs = ["props", "survivors"];
+const dirs = ["props", "survivors", "infected"];
+/** Every folder of GLBs, and the script that bakes it. */
+const GENERATORS: Record<string, string> = {
+  props: "tools/blender/props.py",
+  survivors: "tools/blender/props.py",
+  infected: "tools/blender/infected.py",
+};
 const files = dirs.flatMap((dir) =>
   readdirSync(resolve(ART, dir))
     .filter((f) => f.endsWith(".glb"))
@@ -31,7 +37,7 @@ const entries = files.map((file) => {
     kind: "glb",
     bytes: buf.length,
     sha256: createHash("sha256").update(buf).digest("hex"),
-    generator: file.includes("/roof_") ? "tools/blender/roof_props.py" : "tools/blender/props.py",
+    generator: file.includes("/roof_") ? "tools/blender/roof_props.py" : GENERATORS[file.split("/")[0]],
   };
 });
 

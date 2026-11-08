@@ -54,22 +54,6 @@
       }
     },
     {
-      "name": "muzzle_atlas",
-      "file": "muzzle_atlas.png",
-      "width": 512,
-      "height": 128,
-      "bytes": 44394,
-      "sha256": "595cf6c86b33724e288f9a17b41d6f7daa41fd9cd241d6234ef4c026beb88e89",
-      "generator": "EffectCraft 0.21.1 tools/effectcraft/muzzle_flash.build.json + tools/make-flipbook-atlas.ts",
-      "grid": {
-        "cols": 4,
-        "rows": 1,
-        "frames": 4,
-        "cell": 128
-      },
-      "coverage": [18.6, 30.45, 24.46, 14.54]
-    },
-    {
       "name": "death_atlas",
       "file": "death_atlas.png",
       "width": 512,
@@ -100,22 +84,6 @@
         "cell": 96
       },
       "coverage": [3.19, 5.45, 9.11, 12.93, 18.11, 22.07, 25.35, 28.8, 32.01, 34.85, 35.87, 33.02]
-    },
-    {
-      "name": "melee_atlas",
-      "file": "melee_atlas.png",
-      "width": 896,
-      "height": 128,
-      "bytes": 15755,
-      "sha256": "6f6f1e112181d78b150c8fbdeab0bdb830b94bbc743a6dd3356b5fc1c033a508",
-      "generator": "EffectCraft 0.21.1 melee_swipe + tools/make-flipbook-atlas.ts",
-      "grid": {
-        "cols": 7,
-        "rows": 1,
-        "frames": 7,
-        "cell": 128
-      },
-      "coverage": [2.86, 6.42, 9.41, 9.37, 8.82, 5.79, 2.5]
     },
     {
       "name": "noise_atlas",
@@ -362,6 +330,38 @@
       "bytes": 28552,
       "sha256": "1374b09dbb6670c15765d2f4bb5a9cc74258caef17a620ec706c4f9f5705f848",
       "generator": "tools/blender/infected.py"
+    },
+    {
+      "name": "melee_atlas",
+      "file": "melee_atlas.png",
+      "width": 640,
+      "height": 256,
+      "bytes": 60452,
+      "sha256": "961a76cd95bb3acbb5b7e61aeabbf3bae068939ba19bd8916c05aabd2a669032",
+      "generator": "EffectCraft 0.21.1 tools/effectcraft/melee_swipe.build.json + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 5,
+        "rows": 2,
+        "frames": 10,
+        "cell": 128
+      },
+      "coverage": [9.82, 19.57, 31.84, 37.96, 43.53, 49.22, 51.59, 52.53, 52.67, 51.4]
+    },
+    {
+      "name": "muzzle_atlas",
+      "file": "muzzle_atlas.png",
+      "width": 768,
+      "height": 128,
+      "bytes": 75080,
+      "sha256": "29f8202400b6463e09d0848a2ea099dad6168391a0bed74c07bd2f375c4feb24",
+      "generator": "EffectCraft 0.21.1 tools/effectcraft/muzzle_flash.build.json + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 6,
+        "rows": 1,
+        "frames": 6,
+        "cell": 128
+      },
+      "coverage": [24.77, 48.3, 55.62, 57.17, 45.5, 22.45]
     }
   ]
 }

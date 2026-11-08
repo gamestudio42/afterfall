@@ -54,30 +54,49 @@ const ATLAS_ACTIVE = 12;
 const MAX_SPRITES = 24;
 
 /**
- * Muzzle flash flipbook (`tools/effectcraft/muzzle_flash.build.json`): four
- * frames in a row, every one of them carrying the flash, so the whole strip plays.
+ * Muzzle flash flipbook (`tools/effectcraft/muzzle_flash.build.json`): a white-hot
+ * core, a six-point burst, a nine-point flare behind it and a shock ring that
+ * grows as the flare collapses. Six frames in a row, every one of them carrying
+ * the flash, so the whole strip plays.
+ *
+ * The sheet it replaced was two orange stars over a small core, four frames of a
+ * render whose last third was empty: measured in the game it owned 0.07 % of the
+ * frame at the combat zoom and 0.02 % at the default one, last of the seven
+ * effects — on the effect that fires on every shot. This one peaks at 57 % cell
+ * coverage and its first frame already carries a quarter of it, so a shot reads
+ * even at 17 px.
  */
-const MUZZLE_COLS = 4;
+const MUZZLE_COLS = 6;
 const MUZZLE_ROWS = 1;
-const MUZZLE_ACTIVE = 4;
-/** A flash is over in about a tenth of a second; four frames at ~36 fps. */
-const MUZZLE_LIFE = 0.11;
-const MUZZLE_SIZE = 2.6;
+const MUZZLE_ACTIVE = 6;
+/** A flash is over in about a tenth of a second; six frames at 30 fps. */
+const MUZZLE_LIFE = 0.13;
+const MUZZLE_SIZE = 3.0;
 /** Metres from the shooter toward the target, so the flash sits at the barrel. */
 const MUZZLE_REACH = 0.9;
 const MUZZLE_HEIGHT = 1.45;
 
 /**
- * Infected strike (`tools/effectcraft/melee_swipe.build.json`): three claw
- * streaks raked diagonally, seven frames of a 0.27 s render in a row. It sits on
- * the victim, pulled a little toward the attacker, and every other strike is
- * mirrored so a sustained attack does not stamp the same slash.
+ * Infected strike (`tools/effectcraft/melee_swipe.build.json`): four claw
+ * streaks raked on the same diagonal, staggered so the rake reads as motion,
+ * a hot impact flash behind them and a few embers thrown off. Ten frames of a
+ * 0.33 s render in a 5 by 2 sheet.
+ *
+ * The sheet it replaced carried three thin strokes that thinned from 85 % to
+ * 40 % of their height while they faded, started at 2.9 % cell coverage and
+ * ended at 2.5 %: measured against the other five flipbooks at the combat zoom
+ * it owned 0.04 % of the frame, the least of any effect, and it is the one the
+ * player sees on every infected strike. This one peaks at 52 % and no frame is
+ * empty, so the rake never blinks out mid-life.
+ *
+ * It sits on the victim, pulled a little toward the attacker, and every other
+ * strike is mirrored so a sustained attack does not stamp the same slash.
  */
-const MELEE_COLS = 7;
-const MELEE_ROWS = 1;
-const MELEE_ACTIVE = 7;
-const MELEE_LIFE = 0.24;
-const MELEE_SIZE = 3.4;
+const MELEE_COLS = 5;
+const MELEE_ROWS = 2;
+const MELEE_ACTIVE = 10;
+const MELEE_LIFE = 0.3;
+const MELEE_SIZE = 4.0;
 /** Metres from the victim back toward the attacker. */
 const MELEE_REACH = 0.5;
 const MELEE_HEIGHT = 1.15;

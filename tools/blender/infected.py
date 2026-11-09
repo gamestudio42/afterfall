@@ -39,6 +39,9 @@ OUT = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "apps/web/publ
 os.makedirs(OUT, exist_ok=True)
 
 POSES = 6
+# A seventh pose: standing. An idle unit frozen in the contact pose stands in a
+# full lunge, which is what made the squad around the headquarters look wrong.
+STAND_POSE = 6
 # Hunched: hips low, shoulders forward, arms hanging past the knees.
 HIP_Z = 0.92
 SHOULDER_Z = 1.36
@@ -55,7 +58,7 @@ LIFT = 0.05
 # thigh positive forward and knee positive folding the shin back. A sine wave cannot
 # do this job: sin(60 deg) == sin(120 deg) collapses six poses into two. Poses 3-5
 # are the mirror of 0-2.
-GAIT = (
+GAIT_WALK = (
     (0.46, 0.10, -0.40, 0.45),
     (0.08, 0.15, -0.04, 0.95),
     (-0.32, 0.55, 0.34, 0.35),
@@ -152,9 +155,13 @@ def swing(base, length, angle):
     return Vector(base) + Vector((0.0, -math.sin(angle) * length, -math.cos(angle) * length))
 
 
-def build_pose(index, skin, rags, eyes):
-    """One pose of the lurching walk, from the GAIT table."""
-    key = GAIT[index % 3]
+STANDING = ((0.02, 0.03, -0.02, 0.03),)
+
+
+def build_pose(index, skin, rags, eyes, table=None):
+    """One pose of the lurching walk, from the walk table (or the standing one)."""
+    walk = GAIT_WALK if table is None else table
+    key = walk[index % 3] if len(walk) >= 3 else walk[0]
     if index >= 3:
         lt, lk, rt, rk = key[2], key[3], key[0], key[1]
     else:
@@ -284,5 +291,10 @@ rags = mat("rags", (0.16, 0.15, 0.13), rough=0.95)
 eyes = mat("eyes", (0.10, 0.12, 0.06), rough=0.4, emit=(0.62, 0.95, 0.36), emit_strength=6.0)
 
 poses = [build_pose(i, skin, rags, eyes) for i in range(POSES)]
+# Standing: the hunch held still, knees barely bent.
+standing = build_pose(0, skin, rags, eyes, table=STANDING)
+standing.name = f"pose{STAND_POSE}"
+standing.data.name = standing.name
+poses.append(standing)
 export(poses, "infected")
 print("INFECTED DONE")

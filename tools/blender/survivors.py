@@ -25,6 +25,9 @@ OUT = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "apps/web/publ
 os.makedirs(OUT, exist_ok=True)
 
 POSES = 6
+# A seventh pose: standing. An idle unit frozen in the contact pose stands in a
+# full lunge, which is what made the squad around the headquarters look wrong.
+STAND_POSE = 6
 # Stride and proportions of an upright adult, 1.9 m tall with the feet on the ground.
 HIP_Z = 0.95
 SHOULDER_Z = 1.55
@@ -116,19 +119,22 @@ def swing(base, length, angle):
 # radians, thigh positive forward and knee positive folding the shin back. A sine
 # wave cannot do this job: sin(60 deg) == sin(120 deg), which produced two distinct
 # poses out of six on the first attempt. Poses 3-5 are the mirror of 0-2.
-GAIT = (
-    (0.50, 0.05, -0.45, 0.30),  # 0 contact: left heel down in front, right toe back
-    (0.10, 0.10, -0.05, 0.75),  # 1 right leg passes under the body, knee folded
-    (-0.35, 0.45, 0.35, 0.30),  # 2 left pushes off, right reaching forward
-    (0.50, 0.05, -0.45, 0.30),  # 3 contact, mirrored (filled in below)
-    (0.10, 0.10, -0.05, 0.75),  # 4 mirrored
-    (-0.35, 0.45, 0.35, 0.30),  # 5 mirrored
+GAIT_WALK = (
+    (0.38, 0.05, -0.34, 0.26),  # 0 contact: left heel down in front, right toe back
+    (0.08, 0.10, -0.04, 0.62),  # 1 right leg passes under the body, knee folded
+    (-0.28, 0.38, 0.28, 0.26),  # 2 left pushes off, right reaching forward
+    (0.38, 0.05, -0.34, 0.26),  # 3 contact, mirrored (filled in below)
+    (0.08, 0.10, -0.04, 0.62),  # 4 mirrored
+    (-0.28, 0.38, 0.28, 0.26),  # 5 mirrored
 )
 
 
-def build_pose(index, skin, clothes, pack):
-    """One pose of the cycle, built from the GAIT table."""
-    poses = GAIT
+STANDING = ((0.02, 0.02, -0.02, 0.02),)
+
+
+def build_pose(index, skin, clothes, pack, table=None):
+    """One pose of the cycle, built from the walk table (or the standing one)."""
+    poses = GAIT_WALK if table is None else table
     if index >= 3:
         # Mirror: swap the legs and the arms that carry them.
         lt, lk, rt, rk = poses[index]
@@ -146,14 +152,19 @@ def build_pose(index, skin, clothes, pack):
     parts.append(slab("pelvis", (0.30, 0.20, 0.20), (0, 0, hip_z), material=clothes))
     parts.append(prism("torso", (0, 0, hip_z + 0.06), shoulder, 0.15, 0.19, clothes))
     parts.append(slab("chest", (0.36, 0.22, 0.24), (0, -0.04, 1.36 - dip), (lean, 0, 0), clothes))
+    # A shoulder mass: without it the arms are sticks pinned to a narrow box, and the
+    # silhouette measured 28 % of the height at the shoulders against 34 % before.
+    parts.append(slab("shoulders", (0.44, 0.20, 0.13), (0, -0.04, 1.50 - dip), (lean, 0, 0), clothes))
     parts.append(slab("pack", (0.28, 0.16, 0.34), (0, 0.19, 1.28 - dip), (lean, 0, 0), pack))
-    parts.append(prism("neck", shoulder, (0, -0.09, SHOULDER_Z + 0.08 - dip), 0.055, 0.055, skin))
+    # Neck: 7 cm radius and long enough to overlap both the shoulders and the skull, or
+    # the head reads as a crate floating above the body at strategic zoom.
+    parts.append(prism("neck", (0, -0.03, SHOULDER_Z - 0.02 - dip), (0, -0.06, SHOULDER_Z + 0.15 - dip), 0.07, 0.065, skin))
 
     head_rot = (0.10, 0.0, 0.06)
-    head_loc = (0.0, -0.10, 1.72 - dip)
+    head_loc = (0.0, -0.07, 1.74 - dip)
     for ob in (
-        slab("skull", (0.20, 0.23, 0.24), (0, 0, 0), material=skin),
-        slab("jaw", (0.14, 0.15, 0.08), (0, -0.06, -0.10), material=skin),
+        slab("skull", (0.17, 0.20, 0.22), (0, 0, 0), material=skin),
+        slab("jaw", (0.12, 0.13, 0.07), (0, -0.05, -0.09), material=skin),
     ):
         basis = Euler(head_rot, "XYZ").to_matrix()
         for v in ob.data.vertices:
@@ -244,5 +255,13 @@ clothes = mat("roupa", (1.0, 1.0, 1.0), rough=0.9)
 pack = mat("mochila", (0.35, 0.27, 0.18), rough=0.95)
 
 poses = [build_pose(i, skin, clothes, pack) for i in range(POSES)]
+# Standing: the same body with both thighs and knees at rest, so an idle unit does
+# not hold a full lunge with its feet 0.7 m apart.
+standing = build_pose(0, skin, clothes, pack, table=STANDING)
+# Name it pose6, or Blender renames the duplicate to pose0.001 and the loader
+# (which reads the pose from the node name) would draw it as pose 0.
+standing.name = f"pose{STAND_POSE}"
+standing.data.name = standing.name
+poses.append(standing)
 export(poses, "walker")
 print("SURVIVOR DONE")

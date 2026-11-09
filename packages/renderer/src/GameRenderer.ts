@@ -33,12 +33,14 @@ const MAX_TRACERS = 96;
 const UNIT_SCALE = 1.9;
 /**
  * Walk poses baked into both unit models (`tools/blender/survivors.py` and
- * `infected.py`): six keys of a stride, exported as `pose0`…`pose5`. The renderer
- * picks one per unit, so the cycle costs `poses x materials` draw calls and no
- * skeleton — `InstancedMesh` cannot carry one, and a `SkinnedMesh` per unit would
- * cost a draw call per survivor.
+ * `infected.py`): six keys of a stride plus one standing pose, exported as
+ * `pose0`…`pose6`. The renderer picks one per unit, so the cycle costs
+ * `poses x materials` draw calls and no skeleton — `InstancedMesh` cannot carry one,
+ * and a `SkinnedMesh` per unit would cost a draw call per survivor.
  */
-const POSES = 6;
+const WALK_POSES = 6;
+const STAND_POSE = 6;
+const POSES = WALK_POSES + 1;
 /**
  * Metres of travel per pose step. Six steps make one full stride (two footfalls),
  * around 1.6 m, so the planted foot stays with the ground instead of sliding.
@@ -388,7 +390,7 @@ export class GameRenderer {
    * locked to movement keeps the planted foot with the ground, where a phase ticking
    * with time slides the feet whenever the simulation speeds up or slows down.
    */
-  private walkPhase = new Map<EntityId, { x: number; y: number; p: number }>();
+  private walkPhase = new Map<EntityId, { x: number; y: number; p: number; idle: number }>();
   private portrait: string | null = null;
   private portraitTried = false;
   private unitFallback: THREE.InstancedMesh[] = [];
@@ -546,19 +548,26 @@ export class GameRenderer {
     tint: THREE.Color,
   ): void {
     let state = this.walkPhase.get(id);
+    let moved = 0;
     if (!state) {
       // A deterministic per-unit offset, or a squad that walks in lockstep reads as a
       // chorus line instead of four people.
-      state = { x, y: z, p: (id * 0.618) % POSES };
+      state = { x, y: z, p: (id * 0.618) % WALK_POSES, idle: 60 };
       this.walkPhase.set(id, state);
     } else {
-      const d = Math.hypot(x - state.x, z - state.y);
+      moved = Math.hypot(x - state.x, z - state.y);
       state.x = x;
       state.y = z;
       // A jump longer than a stride in one frame is a teleport, not a step.
-      if (d > 1e-4 && d < 2) state.p = (state.p + d / STRIDE_STEP) % POSES;
+      if (moved > 1e-4 && moved < 2) state.p = (state.p + moved / STRIDE_STEP) % WALK_POSES;
     }
-    const pose = Math.floor(state.p) % POSES;
+    if (moved > 1e-4 && moved < 2) state.idle = 0;
+    else state.idle = Math.min(state.idle + 1, 600);
+    // Standing units get the standing pose: freezing them on the contact pose leaves a
+    // squad permanently mid-lunge with its feet almost a metre apart. The idle grace
+    // bridges the frames between simulation ticks, which would otherwise flicker the
+    // pose at 60 fps with a 20 ms tick.
+    const pose = state.idle < 8 ? Math.floor(state.p) % WALK_POSES : STAND_POSE;
     const parts = set[pose];
     if (!parts || parts.length === 0) return;
     const at = buckets[pose];

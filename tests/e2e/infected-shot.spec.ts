@@ -42,13 +42,13 @@ test("the infected model replaces the capsule", async ({ page }) => {
   });
   console.log("INFECTED", JSON.stringify(state));
 
-  // Six poses of three materials each: the cycle is baked into the model.
-  expect(state.poses).toBe(6);
-  expect(state.parts).toBe(18);
+  // Six walk poses plus the standing one, three materials each.
+  expect(state.poses).toBe(7);
+  expect(state.parts).toBe(21);
   expect(state.materials).toEqual(["eyes", "rags", "skin"]);
   // Exactly one part per pose carries the kind tint: the skin. Tinting the rags and
   // the eyes too would multiply them by the skin colour and take them to black.
-  expect(state.tinted).toBe(6);
+  expect(state.tinted).toBe(7);
   expect(state.capsuleHidden).toBe(true);
   expect(state.capsuleCount).toBe(0);
   // Every infected on the map is drawn by exactly one pose, never by two.

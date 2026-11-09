@@ -25,7 +25,8 @@
     "desktop": "pnpm --filter @afterfall/desktop start",
     "assets:textures": "tsx tools/make-textures.ts",
     "assets:check": "tsx tools/asset-check.ts",
-    "assets:props": "tsx tools/props-manifest.ts"
+    "assets:props": "tsx tools/props-manifest.ts",
+    "assets:vfx": "bash tools/effectcraft/bake.sh"
   },
   "engines": {
     "node": ">=22",

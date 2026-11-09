@@ -9,7 +9,7 @@ export class RtsCamera {
   target = new THREE.Vector3();
   yaw = Math.PI * 0.25;
   pitch = 0.92;
-  distance = 170;
+  distance = 120;
   private goalTarget = new THREE.Vector3();
   private goalYaw = this.yaw;
   private goalPitch = this.pitch;

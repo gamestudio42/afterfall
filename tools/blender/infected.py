@@ -1,21 +1,25 @@
 """
-Generates the infected walking model as a GLB: one hunched silhouette that
-replaces the capsule the renderer has used since phase 5.
+Generates the infected model as a GLB: six poses of a lurching walk, exported as six
+objects (`pose0`…`pose5`) in one file, each with the same three materials.
 
-Blender is Z-up: every coordinate below is metres, the feet sit on z = 0 and the
-model faces -Y, the same convention `walker.glb` was authored in. The exporter
-converts to Y-up, so the renderer receives a model facing +Z.
+Blender is Z-up, the model faces -Y (the same convention as `walker.glb`) and the
+feet sit on z = 0. The exporter converts to Y-up, so the renderer receives a model
+facing +Z.
 
-The point of the model is legibility at RTS distance, not detail: a broken spine,
-arms long enough to reach past the knees, torn cloth and two emissive eyes. Three
-materials only (`skin`, `rags`, `eyes`) so the renderer draws it with three
-instanced meshes, exactly like the survivor kit: `skin` carries the per-kind tint,
+Poses instead of a skeleton: the renderer draws units with `InstancedMesh`, which
+cannot carry a skeleton, and one `SkinnedMesh` per infected would cost a draw call
+per unit at six hundred of them. Six baked poses cost `6 x materials` draw calls for
+the whole horde, and the renderer picks the pose from the distance each unit has
+travelled, so the stagger matches the speed.
+
+The point of the silhouette is legibility at RTS distance, not detail: a broken
+spine, arms long enough to reach past the knees, torn cloth and two emissive eyes.
+Three materials only (`skin`, `rags`, `eyes`): `skin` carries the per-kind tint,
 `rags` stays dark, `eyes` is emissive so the infected read at night.
 
-The kind is not modelled here. `INFECTED[kind].scale` and `.color` in
-`@afterfall/content` already separate walker, runner and brute, and the renderer
-feeds both into the instance matrix and the skin colour, so one mesh covers the
-three kinds with no extra draw call.
+The kind is not modelled here: `INFECTED[kind].scale` and `.color` in
+`@afterfall/content` separate walker, runner and brute, and the renderer feeds both
+into the instance matrix and the skin colour.
 
 Usage (headless):
   blender --background --factory-startup --python tools/blender/infected.py -- <out_dir>
@@ -29,12 +33,36 @@ import os
 import sys
 
 import bpy
-from mathutils import Euler, Matrix, Quaternion, Vector
+from mathutils import Euler, Vector
 
 OUT = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "apps/web/public/art/infected"
 os.makedirs(OUT, exist_ok=True)
 
-FRONT = -1.0  # the model looks down -Y, as walker.glb does
+POSES = 6
+# A seventh pose: standing. An idle unit frozen in the contact pose stands in a
+# full lunge, which is what made the squad around the headquarters look wrong.
+STAND_POSE = 6
+# Hunched: hips low, shoulders forward, arms hanging past the knees.
+HIP_Z = 0.92
+SHOULDER_Z = 1.36
+THIGH = 0.44
+SHIN = 0.42
+UPPER_ARM = 0.46
+FOREARM = 0.40
+LEAN = 0.34
+# The swung foot dips below the ground plane; every pose is lifted by this much so
+# the planted foot rests on z = 0.
+LIFT = 0.05
+
+# Six keys of a walk: (left thigh, left knee, right thigh, right knee), radians,
+# thigh positive forward and knee positive folding the shin back. A sine wave cannot
+# do this job: sin(60 deg) == sin(120 deg) collapses six poses into two. Poses 3-5
+# are the mirror of 0-2.
+GAIT_WALK = (
+    (0.46, 0.10, -0.40, 0.45),
+    (0.08, 0.15, -0.04, 0.95),
+    (-0.32, 0.55, 0.34, 0.35),
+)
 
 
 def reset():
@@ -122,28 +150,103 @@ def prism(name, p0, p1, r0, r1, material, sides=6, roll=0.0):
     return obj_from(name, verts, faces, material)
 
 
-def move(ob, rot=(0.0, 0.0, 0.0), loc=(0.0, 0.0, 0.0)):
-    """Rotates and translates an existing mesh, for parts authored in local space."""
-    basis = Euler(rot, "XYZ").to_matrix()
-    for v in ob.data.vertices:
-        v.co = basis @ v.co + Vector(loc)
-    return ob
+def swing(base, length, angle):
+    """A point `length` below `base`, swung `angle` forward (the model faces -Y)."""
+    return Vector(base) + Vector((0.0, -math.sin(angle) * length, -math.cos(angle) * length))
 
 
-def join(name):
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
-    if len(bpy.context.selected_objects) > 1:
-        bpy.ops.object.join()
-    ob = bpy.context.object
-    ob.name = name
-    return ob
+STANDING = ((0.02, 0.03, -0.02, 0.03),)
 
 
-def export(name, ob):
+def build_pose(index, skin, rags, eyes, table=None):
+    """One pose of the lurching walk, from the walk table (or the standing one)."""
+    walk = GAIT_WALK if table is None else table
+    key = walk[index % 3] if len(walk) >= 3 else walk[0]
+    if index >= 3:
+        lt, lk, rt, rk = key[2], key[3], key[0], key[1]
+    else:
+        lt, lk, rt, rk = key
+
+    dip = 0.04 if index % 3 == 1 else 0.0
+    hip_z = HIP_Z - dip
+    shoulder = (0.0, -0.10, SHOULDER_Z - dip)
+    parts = []
+
+    # Pelvis and spine: hips low and pushed back, chest pulled forward.
+    parts.append(slab("pelvis", (0.30, 0.22, 0.20), (0, 0.02, hip_z), (0.12, 0, 0), rags))
+    parts.append(prism("torso", (0, 0.02, hip_z + 0.06), shoulder, 0.15, 0.185, skin))
+    parts.append(slab("chest", (0.38, 0.21, 0.26), (0, -0.07, 1.27 - dip), (LEAN, 0, 0), rags))
+    parts.append(slab("shoulders", (0.46, 0.20, 0.13), (0, -0.10, 1.36 - dip), (LEAN, 0, 0), rags))
+    parts.append(prism("neck", shoulder, (0.01, -0.21, 1.44 - dip), 0.055, 0.055, skin))
+
+    # The head is authored around its own origin, then tilted down and set crooked
+    # so the skull reads as broken rather than as a soldier looking ahead.
+    head_rot = (0.45, 0.0, 0.18)
+    head_loc = (0.015, -0.27, 1.50 - dip)
+    head = [
+        slab("skull", (0.21, 0.23, 0.22), (0, 0, 0), material=skin),
+        slab("jaw", (0.15, 0.13, 0.07), (0, -0.055, -0.10), (0.25, 0, 0), skin),
+    ]
+    for sx in (-0.055, 0.055):
+        head.append(slab(f"eye{sx:+.2f}", (0.05, 0.03, 0.032), (sx, -0.115, -0.005), material=eyes))
+    for ob in head:
+        basis = Euler(head_rot, "XYZ").to_matrix()
+        for v in ob.data.vertices:
+            v.co = basis @ v.co + Vector(head_loc)
+        parts.append(ob)
+
+    for side in (1, -1):
+        thigh_angle, knee_bend = (lt, lk) if side > 0 else (rt, rk)
+        hip = (0.10 * side, 0.02, hip_z)
+        knee = swing(hip, THIGH, thigh_angle)
+        ankle = swing(knee, SHIN, thigh_angle - knee_bend)
+        parts.append(prism(f"thigh{side}", hip, knee, 0.09, 0.075, rags))
+        parts.append(prism(f"shin{side}", knee, ankle, 0.07, 0.05, skin))
+        parts.append(
+            slab(f"foot{side}", (0.10, 0.24, 0.075), (ankle.x, ankle.y - 0.05, 0.04), (thigh_angle - knee_bend, 0, 0), skin)
+        )
+
+        # Long arms that counter-swing, the forearm trailing a little behind.
+        shoulder_pt = (0.235 * side, -0.08, SHOULDER_Z - dip)
+        arm_angle = -0.55 * thigh_angle + 0.12
+        elbow = swing(shoulder_pt, UPPER_ARM, arm_angle)
+        wrist = swing(elbow, FOREARM, arm_angle + 0.30)
+        parts.append(prism(f"arm{side}", shoulder_pt, elbow, 0.075, 0.065, skin))
+        parts.append(prism(f"fore{side}", elbow, wrist, 0.06, 0.048, skin))
+        parts.append(slab(f"hand{side}", (0.085, 0.13, 0.055), (wrist.x, wrist.y, wrist.z - 0.02), (arm_angle, 0, 0), skin))
+
+    # Cloth: a shirt over the chest and torn strips at the waist. They hang from the
+    # pelvis, which dips with the stride, so they follow the body without extra keys.
+    parts.append(prism("shirt", (0, 0.02, hip_z + 0.08), shoulder, 0.19, 0.215, rags))
+    for i, (angle, drop, width) in enumerate(
+        [(-2.44, 0.20, 0.10), (-1.57, 0.30, 0.09), (-0.70, 0.16, 0.11), (0.17, 0.26, 0.08), (1.05, 0.19, 0.10), (1.92, 0.31, 0.09)]
+    ):
+        x = math.cos(angle) * 0.17
+        y = math.sin(angle) * 0.17 + 0.02
+        parts.append(
+            slab(f"hem{i}", (width, 0.025, drop), (x, y, hip_z + 0.10 - drop / 2), (0, 0, angle), rags)
+        )
+
     bpy.ops.object.select_all(action="DESELECT")
-    ob.select_set(True)
-    bpy.context.view_layer.objects.active = ob
+    for ob in parts:
+        ob.select_set(True)
+    bpy.context.view_layer.objects.active = parts[0]
+    bpy.ops.object.join()
+    ob = bpy.context.object
+    ob.name = f"pose{index}"
+    # Name the mesh data too: the glTF mesh name is what three.js keeps on the
+    # primitive, so without this every pose arrives called "pelvis".
+    ob.data.name = ob.name
+    for v in ob.data.vertices:
+        v.co.z += LIFT
+    return ob
+
+
+def export(objs, name):
+    bpy.ops.object.select_all(action="DESELECT")
+    for ob in objs:
+        ob.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
     path = os.path.join(OUT, f"{name}.glb")
     bpy.ops.export_scene.gltf(
         filepath=path,
@@ -156,72 +259,42 @@ def export(name, ob):
         export_cameras=False,
         export_lights=False,
     )
-    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
-    lo = Vector((min(v.co.x for v in ob.data.vertices), min(v.co.y for v in ob.data.vertices), min(v.co.z for v in ob.data.vertices)))
-    hi = Vector((max(v.co.x for v in ob.data.vertices), max(v.co.y for v in ob.data.vertices), max(v.co.z for v in ob.data.vertices)))
-    slots = ", ".join(m.name for m in ob.data.materials)
+    tris = sum(len(p.vertices) - 2 for p in objs[0].data.polygons) * len(objs)
+    slots = ", ".join(m.name for m in objs[0].data.materials)
+    hi = max(v.co.z for v in objs[0].data.vertices)
     print(
-        f"INFECTED {name} verts={len(ob.data.vertices)} tris={tris} bytes={os.path.getsize(path)} "
-        f"bbox_min={tuple(round(v, 3) for v in lo)} bbox_max={tuple(round(v, 3) for v in hi)} "
-        f"height={hi.z - lo.z:.3f} materials=[{slots}]"
+        f"INFECTED {name} poses={len(objs)} tris={tris} bytes={os.path.getsize(path)} "
+        f"height={hi:.3f} materials=[{slots}]"
     )
+    # Prove the poses differ and that the legs alternate, per foot, along the walk axis.
+    ref = [v.co.copy() for v in objs[0].data.vertices]
+    for ob in objs:
+        verts = [v.co for v in ob.data.vertices]
+        feet = [v for v in verts if v.z < 0.20 and abs(v.x) > 0.02]
+        left = [v for v in feet if v.x > 0]
+        right = [v for v in feet if v.x < 0]
+        delta = max((a - b).length for a, b in zip(ref, verts))
+        ly = sum(v.y for v in left) / max(1, len(left))
+        ry = sum(v.y for v in right) / max(1, len(right))
+        print(
+            f"POSE {ob.name} left_foot_y={ly:+.3f} right_foot_y={ry:+.3f} max_delta_vs_pose0={delta:.3f}"
+        )
 
 
 reset()
 
 # `skin` is white on purpose: the renderer tints it with INFECTED[kind].color, so
-# the base colour must not pre-darken it. `rags` stays nearly black and `eyes`
-# is the only emissive surface, which is what makes a horde readable at night.
+# the base colour must not pre-darken it. `rags` stays nearly black and `eyes` is
+# the only emissive surface, which is what makes a horde readable at night.
 skin = mat("skin", (1.0, 1.0, 1.0), rough=0.8)
 rags = mat("rags", (0.16, 0.15, 0.13), rough=0.95)
 eyes = mat("eyes", (0.10, 0.12, 0.06), rough=0.4, emit=(0.62, 0.95, 0.36), emit_strength=6.0)
 
-# --- pelvis and spine: hips low and pushed back, chest pulled forward ---------
-slab("pelvis", (0.30, 0.22, 0.20), (0, 0.02, 0.94), (0.12, 0, 0), rags)
-prism("torso", (0, 0.02, 1.00), (0, -0.07, 1.34), 0.15, 0.185, skin)
-slab("chest", (0.38, 0.21, 0.26), (0, -0.06, 1.29), (0.30, 0, 0), rags)
-slab("shoulders", (0.46, 0.20, 0.13), (0, -0.09, 1.40), (0.30, 0, 0), rags)
-prism("neck", (0, -0.09, 1.40), (0.01, -0.20, 1.49), 0.055, 0.055, skin)
-
-# Head is authored around its own origin, then tilted down and set crooked so the
-# skull reads as broken rather than as a soldier looking straight ahead.
-head_rot = (0.45, 0.0, 0.18)
-head_loc = (0.015, -0.26, 1.55)
-head = [
-    move(slab("skull", (0.21, 0.23, 0.22), (0, 0, 0), material=skin), head_rot, head_loc),
-    move(slab("jaw", (0.15, 0.13, 0.07), (0, -0.055, -0.10), (0.25, 0, 0), skin), head_rot, head_loc),
-]
-for sx in (-0.055, 0.055):
-    head.append(move(slab(f"eye{sx:+.2f}", (0.05, 0.03, 0.032), (sx, -0.115, -0.005), material=eyes), head_rot, head_loc))
-
-# --- arms: past the knees, one reaching forward, one hanging ------------------
-prism("arm_upper_l", (0.235, -0.09, 1.38), (0.31, -0.33, 1.14), 0.075, 0.065, skin)
-prism("arm_fore_l", (0.31, -0.33, 1.14), (0.27, -0.54, 0.97), 0.065, 0.05, skin)
-slab("hand_l", (0.085, 0.13, 0.055), (0.27, -0.585, 0.945), (0.40, 0, 0), skin)
-prism("arm_upper_r", (-0.235, -0.09, 1.38), (-0.30, -0.13, 1.08), 0.075, 0.065, skin)
-prism("arm_fore_r", (-0.30, -0.13, 1.08), (-0.30, -0.22, 0.78), 0.065, 0.05, skin)
-slab("hand_r", (0.085, 0.12, 0.05), (-0.30, -0.26, 0.745), (0.30, 0, 0), skin)
-
-# --- legs: mid-stride, knees bent, the back foot up on its toes --------------
-prism("thigh_l", (0.10, 0.02, 0.92), (0.115, -0.15, 0.50), 0.09, 0.075, skin)
-prism("shin_l", (0.115, -0.15, 0.50), (0.115, -0.20, 0.09), 0.07, 0.05, skin)
-slab("foot_l", (0.10, 0.24, 0.08), (0.115, -0.30, 0.045), (-0.05, 0, 0), skin)
-prism("thigh_r", (-0.10, 0.02, 0.90), (-0.125, 0.10, 0.48), 0.09, 0.075, skin)
-prism("shin_r", (-0.125, 0.10, 0.48), (-0.125, 0.19, 0.09), 0.07, 0.05, skin)
-slab("foot_r", (0.10, 0.24, 0.08), (-0.125, 0.14, 0.055), (0.55, 0, 0), skin)
-
-# --- cloth: a shirt over the chest, torn strips at the waist, short sleeves --
-prism("shirt", (0, 0.02, 1.02), (0, -0.07, 1.33), 0.19, 0.215, rags)
-for i, (angle, drop, width) in enumerate(
-    [(-2.44, 0.20, 0.10), (-1.57, 0.30, 0.09), (-0.70, 0.16, 0.11), (0.17, 0.26, 0.08), (1.05, 0.19, 0.10), (1.92, 0.31, 0.09)]
-):
-    x = math.cos(angle) * 0.17
-    y = math.sin(angle) * 0.17
-    slab(f"hem{i}", (width, 0.025, drop), (x, y + 0.01, 1.02 - drop / 2), (0, 0, angle), rags)
-prism("sleeve_l", (0.235, -0.09, 1.38), (0.27, -0.21, 1.26), 0.10, 0.085, rags)
-prism("sleeve_r", (-0.235, -0.09, 1.38), (-0.27, -0.11, 1.23), 0.10, 0.085, rags)
-prism("trousers_l", (0.10, 0.02, 0.96), (0.112, -0.09, 0.72), 0.115, 0.095, rags)
-prism("trousers_r", (-0.10, 0.02, 0.94), (-0.118, 0.07, 0.70), 0.115, 0.095, rags)
-
-export("infected", join("infected"))
+poses = [build_pose(i, skin, rags, eyes) for i in range(POSES)]
+# Standing: the hunch held still, knees barely bent.
+standing = build_pose(0, skin, rags, eyes, table=STANDING)
+standing.name = f"pose{STAND_POSE}"
+standing.data.name = standing.name
+poses.append(standing)
+export(poses, "infected")
 print("INFECTED DONE")

@@ -1,6 +1,6 @@
 import { TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
-import { STRUCTURES } from "@afterfall/content";
+import { BALANCE, STRUCTURES, TECHS } from "@afterfall/content";
 import type { Simulation } from "../src";
 
 /**
@@ -37,6 +37,8 @@ export interface AutoplayOptions {
   craft?: boolean;
   /** Also builds a farm and a well, and converts a second shelter for beds. */
   economy?: boolean;
+  /** Also buys research, stands a lab up and runs the cure project. */
+  research?: boolean;
 }
 
 export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulation) => void, options: AutoplayOptions = {}): void {
@@ -159,6 +161,67 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
           sim.enqueue({ type: "convert", building: next.index, fn: "shelter" });
           secondShelter = true;
         }
+      }
+    }
+    // Research: buy in a fixed order that reflects what a player needs first —
+    // medicine, then the lab and the cure, then the economy and the walls.
+    if (options.research) {
+      const order = [
+        "serum",
+        "lab",
+        "cure",
+        "scaffolding",
+        "preserves",
+        "armory",
+        "forge",
+        "cistern",
+        "marksmanship",
+        "rations",
+        "salvage",
+        "floodlights",
+      ] as const;
+      for (const id of order) {
+        if (sim.hasTech(id)) continue;
+        const def = TECHS[id];
+        if (def.requires && !sim.hasTech(def.requires)) continue;
+        if (sim.state.research.points >= def.cost) sim.enqueue({ type: "unlockTech", tech: id });
+        break;
+      }
+      // One lab, as close to the base as a cleared building allows.
+      // Not on day one: the lab costs metal and medicine the first nights need.
+      if (
+        !sim.standingLab() &&
+        clock.day >= 3 &&
+        clock.hour >= 9 &&
+        clock.hour < 16 &&
+        (sim.totals().wood ?? 0) >= 20 &&
+        (sim.totals().metal ?? 0) >= 14
+      ) {
+        const hqR = sim.hqEntrance();
+        const near = sim.state.buildings
+          .filter(
+            (b) =>
+              b.fn === "none" &&
+              b.hiddenInfected === 0 &&
+              b.searchProgress >= b.searchTotal &&
+              sim.city.buildings[b.index].type !== "house",
+          )
+          .sort(
+            (a, b) =>
+              Math.hypot(sim.city.buildings[a.index].entrance.x - hqR.x, sim.city.buildings[a.index].entrance.y - hqR.y) -
+              Math.hypot(sim.city.buildings[b.index].entrance.x - hqR.x, sim.city.buildings[b.index].entrance.y - hqR.y),
+          )[0];
+        if (near) sim.enqueue({ type: "convert", building: near.index, fn: "lab" });
+      }
+      // The cure, as soon as it is affordable.
+      if (
+        sim.hasTech("cure") &&
+        !sim.state.research.cure.started &&
+        sim.standingLab() &&
+        sim.state.research.points >= BALANCE.research.cureResearch &&
+        sim.totals().medicine >= BALANCE.research.cureMedicine
+      ) {
+        sim.enqueue({ type: "startCure" });
       }
     }
     if (!fortified && sim.state.tick > 40) {

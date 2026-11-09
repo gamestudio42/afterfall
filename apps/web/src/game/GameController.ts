@@ -299,6 +299,8 @@ export class GameController {
     } else if (key === "escape") {
       if (ui.buildMode) ui.set({ buildMode: null });
       else if (ui.showHelp) ui.set({ showHelp: false });
+      else if (ui.showResearch) ui.set({ showResearch: false });
+      else if (ui.showEcon) ui.set({ showEcon: false });
       else ui.set({ selectedUnits: [], selectedBuilding: -1, selectedStructure: -1 });
       this.renderer.buildPreview = null;
     } else if (key === "f3") {

@@ -15,7 +15,21 @@ protocol and the current balance baseline are in [PLAYTEST.md](PLAYTEST.md).
 4. **Night (20:00–06:00): hold.** Survivors sleep in beds. Hordes enter from the city edge in waves from 21:00; later nights add waves at 23:30 and 02:00. Some roaming infected are drawn to the settlement at 20:00. Infected follow a distance field to the HQ, breaking the weakest walls in their path. When the base is attacked, armed sleepers wake up and defend.
 5. **Dawn: count the cost.** Medicine cures infections and treats the wounded, morale settles, the game autosaves and the surviving horde retreats.
 
-Victory: dawn of day 6 (five nights). Defeat: the HQ falls or everyone dies.
+Victory: the cure, or dawn of day 13 (twelve nights). Defeat: the HQ falls or
+everyone dies.
+
+## Research and the cure
+
+Searching a school, hospital, police station, office or pharmacy yields research
+points once the search completes, and a **laboratory** — an office, school or
+hospital converted to it — earns research every game hour and hosts the cure
+project. Twelve nodes in four branches buy capabilities, not multipliers: cheaper
+meals, deeper wells, bigger packs, faster repairs, a forge that doubles ammo, more
+loot, a deeper ammo reserve, better aim, floodlit towers, a one-dose serum, faster
+lab work, and finally the cure itself. The cure costs 12 medicine and 12 research,
+then advances one step per dawn while its lab still stands: three dawns of holding a
+building the player chose to defend. The ledger panel reports what the last closed
+day produced and consumed, and how many days of each resource remain.
 
 ## Decisions with cost and risk
 - **Scavenge far or near?** Hospitals and police stations are rich but full of infected. Nearby houses are safe but poor.

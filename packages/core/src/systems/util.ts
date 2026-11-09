@@ -29,8 +29,13 @@ export function gainXp(s: SurvivorComp, skill: SkillId, amount: number): void {
   }
 }
 
-export function carrySpace(s: SurvivorComp): number {
-  return CARRY_CAPACITY - bagWeight(s.carry);
+export function carryCapacity(sim: Simulation): number {
+  // Rations: a bigger pack, which is what turns a long trip from two hauls into one.
+  return CARRY_CAPACITY * (sim.hasTech("rations") ? 1.5 : 1);
+}
+
+export function carrySpace(sim: Simulation, s: SurvivorComp): number {
+  return carryCapacity(sim) - bagWeight(s.carry);
 }
 
 export function dist(a: Entity, x: number, y: number): number {
@@ -78,8 +83,10 @@ export function unloadAndRestock(sim: Simulation, e: Entity, node: BuildingState
       sim.alert("alert.armed", { name: s.name }, "info");
     }
   }
-  if (WEAPONS[s.weapon].usesAmmo && s.ammo < PERSONAL_AMMO_MAX) {
-    s.ammo += sim.withdraw("ammo", PERSONAL_AMMO_MAX - s.ammo);
+  // Armory: a deeper personal reserve before a trip.
+  const ammoMax = PERSONAL_AMMO_MAX + (sim.hasTech("armory") ? 15 : 0);
+  if (WEAPONS[s.weapon].usesAmmo && s.ammo < ammoMax) {
+    s.ammo += sim.withdraw("ammo", ammoMax - s.ammo);
   }
 }
 

@@ -25,7 +25,9 @@ export function combatSystem(sim: Simulation): void {
     if (s.stance === "passive" && s.activity.type !== "attack") continue;
     const ranged = WEAPONS[s.weapon].usesAmmo && s.ammo > 0;
     const weapon = ranged ? WEAPONS[s.weapon] : WEAPONS.crowbar;
-    const range = weapon.range + (s.mounted >= 0 ? TOWER_RANGE_BONUS : 0);
+    // Floodlights: a lit perimeter is one the towers can actually cover after dark.
+    const floodlights = sim.hasTech("floodlights") && sim.clock.phase === "night" ? 8 : 0;
+    const range = weapon.range + (s.mounted >= 0 ? TOWER_RANGE_BONUS + floodlights : 0);
     const t = e.transform!;
     let target: Entity | null = null;
     if (s.activity.type === "attack") {
@@ -49,7 +51,8 @@ export function combatSystem(sim: Simulation): void {
     const tgt = target as Entity;
     s.cooldown = weapon.cooldown;
     if (ranged) s.ammo--;
-    const accuracy = Math.min(0.97, weapon.accuracy * (0.8 + s.skills.combat * 0.05) * (s.mounted >= 0 ? 1.1 : 1));
+    const marksmanship = sim.hasTech("marksmanship") ? 1.15 : 1;
+    const accuracy = Math.min(0.97, weapon.accuracy * (0.8 + s.skills.combat * 0.05) * (s.mounted >= 0 ? 1.1 : 1) * marksmanship);
     const tt = tgt.transform!;
     sim.emitFx(ranged ? "shot" : "melee", t.x, t.y, tt.x, tt.y);
     t.heading = Math.atan2(tt.y - t.y, tt.x - t.x);

@@ -1,4 +1,4 @@
-import { BALANCE, RESOURCE_IDS, addToBag, type BuildingFunction, type StructureKind } from "@afterfall/content";
+import { BALANCE, RESOURCE_IDS, addToBag, type BuildingFunction, type StructureKind, type TechId } from "@afterfall/content";
 import type { Simulation } from "./simulation";
 import type { EntityId, Policies, Stance } from "./state";
 import { resolveEvent } from "./systems/events";
@@ -28,7 +28,9 @@ export type Command =
   | { type: "createSquad"; units: EntityId[]; name: string }
   | { type: "disbandSquad"; squad: number }
   | { type: "resolveEvent"; choice: number }
-  | { type: "setPolicy"; policy: Partial<Policies> };
+  | { type: "setPolicy"; policy: Partial<Policies> }
+  | { type: "unlockTech"; tech: TechId }
+  | { type: "startCure" };
 
 function units(sim: Simulation, ids: EntityId[]) {
   return ids.map((id) => sim.state.entities.get(id)).filter((e): e is NonNullable<typeof e> => !!e?.survivor);
@@ -179,6 +181,12 @@ export function applyCommand(sim: Simulation, cmd: Command): void {
       return;
     case "setPolicy":
       Object.assign(st.policies, cmd.policy);
+      return;
+    case "unlockTech":
+      sim.unlockTech(cmd.tech);
+      return;
+    case "startCure":
+      sim.startCure();
       return;
   }
 }

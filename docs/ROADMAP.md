@@ -28,7 +28,15 @@
 - [x] Bots that build a workshop and an economy (farm, well, second shelter), a sweep that takes its options (`pnpm sweep 20 1 fort craft,econ`), a probe that proves the bot really builds, and `docs/BALANCE.md` with four measured experiments
 - [x] Chromium flags against timer throttling in background tabs, so the frame-dependent E2E specs stopped being flaky
 
+## Done — campaign, research and a ledger
+
+- [x] **Research is a tree of capabilities, not multipliers.** Twelve nodes in four branches, from preserves and cisterns to floodlights and the cure, in `packages/content/src/research.ts`; points come from searching knowledge buildings and from a standing laboratory, and the lab is a plain building conversion so the engine of research is never locked behind research. `sim.unlockTech` refuses a node without its prerequisite or its points, and every node has a mechanical hook in the systems: meals, wells, carry weight, repairs, ammo, loot, accuracy, tower range, medicine dose and lab output.
+- [x] **The cure is the ending.** 12 medicine and 12 research to start, then one step per dawn while its lab stands; `outcome.reason` gains `cured`, and the campaign runs twelve nights instead of five (`nightsToWin`), with the horde table extended to ten nights and a flatter extrapolation after it.
+- [x] **A ledger answers "what did the day cost?".** `sim.produce` and `sim.consume` also count into `state.econ`, which rolls into `yesterday` at dawn; the panel shows produced, consumed, stock and days of stock per resource and names the bottleneck. Measured arms and the open mid-game problem are in [BALANCE.md](BALANCE.md).
+- [x] **Saves carry research, the cure and the ledger.** `SAVE_VERSION` 2 with a migration that gives an old save an empty tree and an empty ledger, and a test that round-trips all three.
+
 ## Next
+0. **The mid-game is the wall.** The scripted fort player wins 3 of 10 seeds in twelve nights (2 of 10 without research), and the traces show ammo at zero for most days: the settlement fights the horde with crowbars. Prove the ammo hypothesis by granting ammo at dawn before changing content, then add metal the player must go and get (wrecks in the street, garage doors) rather than more metal in houses, and re-measure with 60 seeds per arm.
 1. **Balance with real play.** Follow [PLAYTEST.md](PLAYTEST.md) to collect human playtests and set a target win rate per difficulty. The scripts can already craft ammo and build an economy, and the measurements say ammo is **not** the bottleneck: difficulty has to come from the early economy, structural defence or nights 3–4, not from the last horde (see [BALANCE.md](BALANCE.md)). Any claim smaller than ten points needs 60–100 seeds per arm.
 2. **Region overlays** (logistics, power).
 3. **Real maps, next steps.** A map view (MapLibre) to pick the area by dragging, water and rail, multipolygon buildings with courtyards, a road graph for long trips on large areas, and an offline importer for bigger regions.

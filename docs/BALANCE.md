@@ -156,3 +156,36 @@ out.
 ones. The conclusions above are: fortification matters (large), ammo does not decide (large), the
 fifth night concentrates attrition (direct count, not statistics), and the economy costs wins in
 open play (large). Anything smaller than that is still undecided.
+
+
+## Campaign length and research (2026-11-09, `feat/campaign-research`)
+
+The campaign moved from five nights to twelve, with the cure as the intended ending.
+Four arms were measured with the scripted players over seeds 1-10. These are bot
+numbers, not human playtest evidence, and ten seeds cannot resolve a difference under
+ten points — that is why the research arm is reported as unresolved rather than as a
+gain.
+
+| arm | nights | wins | what happened |
+|---|---|---|---|
+| fort, craft+econ | 5 | 0 (7 of 10 alive at dawn of day 6) | the old slice no longer has a victory condition at five nights |
+| fort, craft+econ | 12 | 2/10 | eight defeats between night 5 and night 12 |
+| fort, craft+econ+research | 12 | 3/10 | one seed more; inside the noise of ten seeds |
+| open, craft+econ | 20 | 0/10 | without a wall the base falls at night 4-9 |
+
+**The mid-game is the wall, not the last night.** Bots that survive the first five
+nights die between night 5 and night 12 in eight of ten seeds, and the traces show why:
+`ammo` sits at 0 for most days, so the settlement fights the horde with crowbars. The
+workshop recipe was raised from 12 to 30 rounds per 30 work and houses, apartments and
+warehouses yield more metal, which moved the result by one seed — the bottleneck is
+deeper than the recipe, and metal has to come from somewhere the player deliberately
+goes: wrecks, garages, warehouses.
+
+The cure itself works and is reachable: on seed 3 the research bot stood a lab up on
+day 7, finished the tree by day 11 and won by cure on day 13 (`tools/campaign-probe.ts`).
+It is not yet *reliably* reachable, and the tree's nodes were bought but not felt.
+
+Next experiment, in this order: (1) measure with ammo granted at dawn to prove the ammo
+hypothesis before changing content again; (2) if it holds, add metal nodes the player
+must choose to visit (wrecks in the street, garage doors) rather than more metal in
+houses; (3) then re-measure with 60 seeds per arm before claiming anything.

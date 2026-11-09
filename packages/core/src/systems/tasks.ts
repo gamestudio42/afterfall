@@ -249,7 +249,7 @@ export function runTaskActivity(sim: Simulation, e: SurvivorEntity): void {
       if (!goTo(ne)) return;
       unloadAndRestock(sim, e, node);
       for (const id of RESOURCE_IDS) {
-        const want = Math.min(need[id] ?? 0, carrySpace(s));
+        const want = Math.min(need[id] ?? 0, carrySpace(sim, s));
         if (want <= 0) continue;
         const got = sim.withdraw(id, Math.ceil(want), node);
         addToBag(s.carry, id, got);
@@ -299,12 +299,14 @@ export function runTaskActivity(sim: Simulation, e: SurvivorEntity): void {
         if ((s.carry.food ?? 0) >= 8) a.phase = "haul";
         return;
       }
+      // Scaffolding: repairs go up faster, which is what makes a broken wall survivable.
+      const speed = task.type === "repair" && sim.hasTech("scaffolding") ? 1.6 : 1;
       const limit = bagTotal(task.cost) > 0 ? deliveredFraction(task) * task.work : task.work;
       if (task.progress >= limit - 1e-6) {
         a.phase = "fetch";
         return;
       }
-      task.progress = Math.min(limit, task.progress + amount);
+      task.progress = Math.min(limit, task.progress + amount * speed);
       gainXp(s, "construction", MINUTES_PER_TICK * 0.5);
       if (sim.state.tick % 15 === 0) sim.emitFx("build", site.x, site.y);
       if (task.type === "build") advanceBuild(sim, task);
@@ -404,7 +406,9 @@ export function finishStructure(sim: Simulation, e: Entity): void {
 export function completeTask(sim: Simulation, task: Task): void {
   if (task.type === "craft") {
     const ent = sim.city.buildings[task.building].entrance;
-    sim.produce("ammo", BALANCE.ammoRecipe.ammo, ent.x, ent.y);
+    // Forge: the same metal, twice the rounds.
+    const rounds = BALANCE.ammoRecipe.ammo * (sim.hasTech("forge") ? 2 : 1);
+    sim.produce("ammo", rounds, ent.x, ent.y);
     task.delivered = {};
     task.progress = 0;
     for (const id of [...task.assigned]) {

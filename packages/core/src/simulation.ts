@@ -10,12 +10,14 @@ import {
   RESOURCE_IDS,
   SURVIVOR_MAX_HEALTH,
   SURVIVOR_SPEED,
+  TECHS,
   addToBag,
   bagTotal,
   type BuildingFunction,
   type InfectedKind,
   type ResourceBag,
   type ResourceId,
+  type TechId,
   type WeaponId,
 } from "@afterfall/content";
 import { Rng, SIMULATION_TICK_MS, TICKS_PER_DAY, clockFromTick, deriveSeed, type GameClock, type Vec2 } from "@afterfall/shared";
@@ -31,7 +33,7 @@ import { economySystem } from "./systems/economy";
 import { eventSystem } from "./systems/events";
 import { outcomeSystem } from "./systems/outcome";
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 /** Upper bound on ticks processed per update call, to avoid spiral of death. */
 const MAX_TICKS_PER_UPDATE = 80;
 
@@ -225,6 +227,8 @@ export class Simulation {
       outcome: null,
       hordes: [],
       moraleBonus: 0,
+      research: { points: 0, unlocked: [], cure: { started: false, progress: 0, lab: -1 } },
+      econ: { day: 1, produced: {}, consumed: {}, yesterday: { produced: {}, consumed: {} } },
       rngState: this.rng.state,
       lastAttackTick: -99999,
       log: [],
@@ -480,12 +484,71 @@ export class Simulation {
   consume(id: ResourceId, amount: number): number {
     const got = this.withdraw(id, amount);
     addToBag(this.state.stats.consumed, id, got);
+    addToBag(this.state.econ.consumed, id, got);
     return got;
   }
 
   produce(id: ResourceId, amount: number, x: number, y: number): void {
     addToBag(this.state.stats.produced, id, amount);
+    addToBag(this.state.econ.produced, id, amount);
     this.deposit({ [id]: amount }, x, y);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Research
+  // ---------------------------------------------------------------------------
+
+  hasTech(id: TechId): boolean {
+    return this.state.research.unlocked.includes(id);
+  }
+
+  /** Adds research points; the source is a searched building or a standing lab. */
+  addResearch(amount: number): void {
+    if (amount <= 0) return;
+    this.state.research.points += amount;
+  }
+
+  /** Unlocks a tech if it is affordable and its prerequisite is met. */
+  unlockTech(id: TechId): boolean {
+    const def = TECHS[id];
+    const r = this.state.research;
+    if (!def || r.unlocked.includes(id)) return false;
+    if (def.requires && !r.unlocked.includes(def.requires)) return false;
+    if (r.points < def.cost) return false;
+    r.points -= def.cost;
+    r.unlocked.push(id);
+    this.alert("alert.techUnlocked", { tech: id }, "success");
+    return true;
+  }
+
+  /** Any lab still standing, whether or not it hosts the cure. */
+  standingLab(): BuildingState | null {
+    return this.state.buildings.find((b) => b.fn === "lab" && b.hp > 0) ?? null;
+  }
+
+  /** The lab building that hosts the cure project, if any is still standing. */
+  cureLab(): BuildingState | null {
+    const index = this.state.research.cure.lab;
+    if (index < 0) return null;
+    const b = this.state.buildings[index];
+    return b && b.fn === "lab" && b.hp > 0 ? b : null;
+  }
+
+  /** Starts the cure project: needs the tech, a standing lab, medicine and points. */
+  startCure(): boolean {
+    const r = this.state.research;
+    if (r.cure.started || !this.hasTech("cure")) return false;
+    const lab = this.standingLab();
+    if (!lab) return false;
+    if (r.points < BALANCE.research.cureResearch) return false;
+    if (this.totals().medicine < BALANCE.research.cureMedicine) return false;
+    this.consume("medicine", BALANCE.research.cureMedicine);
+    r.points -= BALANCE.research.cureResearch;
+    r.cure.started = true;
+    r.cure.progress = 0;
+    r.cure.lab = lab.index;
+    this.alert("alert.cureStarted", { dawns: BALANCE.research.cureDawns }, "success");
+    return true;
   }
 
   // -------------------------------------------------------------------------

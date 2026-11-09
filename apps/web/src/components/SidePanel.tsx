@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { BUILDING_FUNCTIONS, BUILDING_TYPES, STRUCTURES, bagTotal, type BuildingFunction } from "@afterfall/content";
+import { BALANCE, BUILDING_FUNCTIONS, BUILDING_TYPES, STRUCTURES, bagTotal, type BuildingFunction } from "@afterfall/content";
 import { outstanding, type Entity, type Simulation, type Stance } from "@afterfall/core";
 import { useFrame, useGame, useT } from "../app/hooks";
 import { useUi } from "../app/store";
@@ -87,6 +87,40 @@ function BuildingPanel({ sim, index }: { sim: Simulation; index: number }) {
             </>
           )}
           {repair && <p className="note">{t("panel.repairing")}</p>}
+        </div>
+      )}
+      {st.fn === "lab" && st.hp > 0 && (
+        <div className="panel-section">
+          <h4>{t("cure.title")}</h4>
+          {sim.state.research.cure.started ? (
+            <p className="muted small" data-testid="lab-cure-status">
+              {sim.cureLab()
+                ? t("cure.progress", {
+                    n: sim.state.research.cure.progress,
+                    total: BALANCE.research.cureDawns,
+                  })
+                : t("cure.stalled")}
+            </p>
+          ) : (
+            <>
+              <p className="muted small">{t("cure.hint")}</p>
+              <button
+                className="wide primary"
+                data-testid="lab-start-cure"
+                disabled={
+                  !sim.hasTech("cure") ||
+                  sim.state.research.points < BALANCE.research.cureResearch ||
+                  totals.medicine < BALANCE.research.cureMedicine
+                }
+                onClick={() => game.command({ type: "startCure" })}
+              >
+                {t("cure.start", {
+                  medicine: BALANCE.research.cureMedicine,
+                  research: BALANCE.research.cureResearch,
+                })}
+              </button>
+            </>
+          )}
         </div>
       )}
       {st.fn === "none" && !noBase && (

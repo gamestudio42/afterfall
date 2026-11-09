@@ -228,6 +228,38 @@
       "generator": "Blender 5.2.2 LTS tools/blender/facades.py + tools/pack-facades.ts"
     },
     {
+      "name": "melee_atlas",
+      "file": "melee_atlas.png",
+      "width": 640,
+      "height": 256,
+      "bytes": 60452,
+      "sha256": "961a76cd95bb3acbb5b7e61aeabbf3bae068939ba19bd8916c05aabd2a669032",
+      "generator": "EffectCraft 0.21.1 tools/effectcraft/melee_swipe.build.json + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 5,
+        "rows": 2,
+        "frames": 10,
+        "cell": 128
+      },
+      "coverage": [9.82, 19.57, 31.84, 37.96, 43.53, 49.22, 51.59, 52.53, 52.67, 51.4]
+    },
+    {
+      "name": "muzzle_atlas",
+      "file": "muzzle_atlas.png",
+      "width": 768,
+      "height": 128,
+      "bytes": 75080,
+      "sha256": "29f8202400b6463e09d0848a2ea099dad6168391a0bed74c07bd2f375c4feb24",
+      "generator": "EffectCraft 0.21.1 tools/effectcraft/muzzle_flash.build.json + tools/make-flipbook-atlas.ts",
+      "grid": {
+        "cols": 6,
+        "rows": 1,
+        "frames": 6,
+        "cell": 128
+      },
+      "coverage": [24.77, 48.3, 55.62, 57.17, 45.5, 22.45]
+    },
+    {
       "name": "props_barrier",
       "file": "props/barrier.glb",
       "kind": "glb",
@@ -319,49 +351,17 @@
       "name": "survivors_walker",
       "file": "survivors/walker.glb",
       "kind": "glb",
-      "bytes": 21296,
-      "sha256": "cf2286f4b0344e91d22dfd3c5f5fcdca15a9e685757bea33ab63147304ac327e",
+      "bytes": 103932,
+      "sha256": "35618517c2f10999986a47e7fa3ee1cf84434671c56fa5790cbafed338f37dec",
       "generator": "tools/blender/props.py"
     },
     {
       "name": "infected_infected",
       "file": "infected/infected.glb",
       "kind": "glb",
-      "bytes": 28552,
-      "sha256": "1374b09dbb6670c15765d2f4bb5a9cc74258caef17a620ec706c4f9f5705f848",
+      "bytes": 137076,
+      "sha256": "7e3acfd54122fb11965f4a76c9cf6885bca28da984843e97619e1a78ef2a1c65",
       "generator": "tools/blender/infected.py"
-    },
-    {
-      "name": "melee_atlas",
-      "file": "melee_atlas.png",
-      "width": 640,
-      "height": 256,
-      "bytes": 60452,
-      "sha256": "961a76cd95bb3acbb5b7e61aeabbf3bae068939ba19bd8916c05aabd2a669032",
-      "generator": "EffectCraft 0.21.1 tools/effectcraft/melee_swipe.build.json + tools/make-flipbook-atlas.ts",
-      "grid": {
-        "cols": 5,
-        "rows": 2,
-        "frames": 10,
-        "cell": 128
-      },
-      "coverage": [9.82, 19.57, 31.84, 37.96, 43.53, 49.22, 51.59, 52.53, 52.67, 51.4]
-    },
-    {
-      "name": "muzzle_atlas",
-      "file": "muzzle_atlas.png",
-      "width": 768,
-      "height": 128,
-      "bytes": 75080,
-      "sha256": "29f8202400b6463e09d0848a2ea099dad6168391a0bed74c07bd2f375c4feb24",
-      "generator": "EffectCraft 0.21.1 tools/effectcraft/muzzle_flash.build.json + tools/make-flipbook-atlas.ts",
-      "grid": {
-        "cols": 6,
-        "rows": 1,
-        "frames": 6,
-        "cell": 128
-      },
-      "coverage": [24.77, 48.3, 55.62, 57.17, 45.5, 22.45]
     }
   ]
 }

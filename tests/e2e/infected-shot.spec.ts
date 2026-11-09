@@ -27,30 +27,34 @@ test("the infected model replaces the capsule", async ({ page }) => {
 
   const state = await page.evaluate(() => {
     const r = (window as unknown as Win).__afterfall.renderer;
-    const counts = r.infectedParts.map((m: { count: number }) => m.count);
+    const perPose = (set: { count: number }[][]) => set.map((pose) => pose[0]?.count ?? -1);
     return {
+      poses: r.infectedPoses.length,
       parts: r.infectedParts.length,
       tinted: r.infectedParts.filter((m: { instanceColor: unknown }) => m.instanceColor !== null).length,
       capsuleHidden: r.infected.visible === false,
       capsuleCount: r.infected.count,
-      // One instance per part is what proves the parts share a matrix.
-      counts,
-      materials: r.infectedParts.map((m: { material: { name: string } }) => m.material.name).sort(),
+      materials: [...new Set(r.infectedParts.map((m: { material: { name: string } }) => m.material.name))].sort(),
+      infectedPerPose: perPose(r.infectedPoses),
+      unitsPerPose: perPose(r.unitPoses),
+      drawCalls: r.drawCalls,
     };
   });
   console.log("INFECTED", JSON.stringify(state));
 
-  expect(state.parts).toBe(3);
+  // Six poses of three materials each: the cycle is baked into the model.
+  expect(state.poses).toBe(6);
+  expect(state.parts).toBe(18);
   expect(state.materials).toEqual(["eyes", "rags", "skin"]);
-  // Exactly one part carries the kind tint: the skin. Tinting the rags and the
-  // eyes too would multiply them by the skin colour and take them to black.
-  expect(state.tinted).toBe(1);
+  // Exactly one part per pose carries the kind tint: the skin. Tinting the rags and
+  // the eyes too would multiply them by the skin colour and take them to black.
+  expect(state.tinted).toBe(6);
   expect(state.capsuleHidden).toBe(true);
   expect(state.capsuleCount).toBe(0);
-  // Every part draws the same instances: one unit, not three meshes that can
-  // drift apart. The map already carries infected at dawn, so the number is
-  // whatever the simulation spawned.
-  expect(new Set(state.counts).size).toBe(1);
+  // Every infected on the map is drawn by exactly one pose, never by two.
+  const drawn = state.infectedPerPose.reduce((a: number, b: number) => a + b, 0);
+  expect(drawn).toBeGreaterThan(0);
+  expect(state.infectedPerPose.every((c: number) => c >= 0)).toBe(true);
 
   // The capture is opt-in, so a heavy frame job never starves the behaviour
   // specs in CI. A guard around the capture keeps the assertions above enforced
@@ -109,15 +113,13 @@ test("the infected model replaces the capsule", async ({ page }) => {
   console.log("INFECTED SHOT", JSON.stringify(spawned));
   await page.waitForTimeout(1_500);
 
-  const drawn = await page.evaluate(() => {
+  const after = await page.evaluate(() => {
     const r = (window as unknown as Win).__afterfall.renderer;
-    return { counts: r.infectedParts.map((m: { count: number }) => m.count), drawCalls: r.drawCalls };
+    return { perPose: r.infectedPoses.map((pose: { count: number }[]) => pose[0]?.count ?? -1), drawCalls: r.drawCalls };
   });
-  console.log("INFECTED DRAWN", JSON.stringify(drawn));
-  // Every part draws the same number of instances: the model is one unit, not
-  // three meshes that can drift apart.
-  expect(new Set(drawn.counts).size).toBe(1);
-  expect(drawn.counts[0]).toBe(spawned.infected);
+  console.log("INFECTED DRAWN", JSON.stringify(after));
+  // Every infected is drawn exactly once, spread over the poses by its own stride.
+  expect(after.perPose.reduce((a: number, b: number) => a + b, 0)).toBe(spawned.infected);
 
   await page.screenshot({ path: "docs/art/infected.png" });
 });

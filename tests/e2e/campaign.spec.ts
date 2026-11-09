@@ -41,9 +41,13 @@ test("research buys a capability, and the ledger shows what the day cost", async
 
   await expect(page.getByTestId("tech-cistern")).toBeDisabled(); // needs preserves
   await page.getByTestId("tech-preserves").click();
-  await expect.poll(async () => page.evaluate(() => (window as unknown as Win).__afterfall.sim.hasTech("preserves"))).toBe(true);
-  await expect(page.getByTestId("tech-cistern")).toBeEnabled();
-  await expect(page.getByTestId("research-points")).toContainText("8");
+  await expect
+    .poll(async () => page.evaluate(() => (window as unknown as Win).__afterfall.sim.hasTech("preserves")), { timeout: 15_000 })
+    .toBe(true);
+  // The panel re-renders on the frame counter, which on a software renderer can take
+  // a second; poll the derived state instead of asserting it on the next tick.
+  await expect.poll(() => page.getByTestId("tech-cistern").isEnabled(), { timeout: 15_000 }).toBe(true);
+  await expect.poll(() => page.getByTestId("research-points").textContent(), { timeout: 15_000 }).toContain("8");
 
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("research")).toBeHidden();

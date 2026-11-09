@@ -29,8 +29,14 @@ const MAX_UNITS = 64;
 const MAX_INFECTED = 600;
 const MAX_STRUCTURES = 1200;
 const MAX_TRACERS = 96;
-/** Units are drawn larger than life so they read at strategic zoom levels. */
-const UNIT_SCALE = 1.9;
+/**
+ * Units are drawn at life size. They used to be 1.9x, for legibility at the map
+ * zoom, but once the models read as people that made a survivor 3.65 m tall — 2.6
+ * times the car and taller than the door module — so the whole world looked wrong.
+ * The default camera distance came down with it (see `camera.ts`), which buys back
+ * most of the pixels the scale gave up.
+ */
+const UNIT_SCALE = 1.0;
 /**
  * Walk poses baked into both unit models (`tools/blender/survivors.py` and
  * `infected.py`): six keys of a stride plus one standing pose, exported as

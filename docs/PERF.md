@@ -78,3 +78,27 @@ cure victory. Sixty seeds per arm now run in about eight minutes.
 
 This is a simulation-side win; it says nothing about the 60 fps budget, which is still a
 render question and still unmeasured on a GPU.
+
+## The spatial hash stopped clearing the whole map (2026-11-10, PR #51)
+
+With storage and hauling in, the slow campaign seed was back to 54 s, so it was profiled
+again. The answer had moved: **44% of the samples were in `SpatialHash.clear`**.
+
+The hash kept every bucket it had ever created and `clear()` walked them all, twice per
+tick. Buckets are cheap and never removed, so over a twelve-night run the map filled with
+the cells anything had passed through, and clearing them cost more than the queries the
+hash exists to answer.
+
+Clearing is now a generation counter: a bucket belonging to an older generation is treated
+as empty and is emptied on its next insert. `query` skips stale buckets, `insert` claims
+them, and `clear()` is an increment. The new `liveBuckets` accessor is what the test
+asserts on: walking one agent across a thousand ticks must leave at most two live buckets,
+which is the regression this fixes.
+
+Same seed: **54 s → 23 s**. Together with the reachability change above, a seed that took
+400 s before this work now takes 23 s.
+
+What a profile shows after both fixes is flat — no function above 7.5% — which means the
+next win is structural rather than local: the simulation in a Web Worker, or LOD and chunk
+streaming for large imported cities. The 60 fps budget is still a render question and is
+still unmeasured on a GPU.

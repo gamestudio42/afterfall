@@ -127,8 +127,10 @@ export class GameRenderer {
   /** One instanced mesh per material per kind, once `art/structures` lands. */
   private decals: THREE.Mesh | null = null;
   private decalState = "";
+  private _glow: THREE.Texture | null = null;
   private markPoles: THREE.InstancedMesh | null = null;
   private markFlags: THREE.InstancedMesh | null = null;
+  private doorGlow: THREE.InstancedMesh | null = null;
   private markState = "";
   private decalMat: THREE.MeshStandardMaterial | null = null;
   private structureModels = new Map<StructureKind, { parts: THREE.InstancedMesh[]; ids: EntityId[] }>();
@@ -517,6 +519,58 @@ export class GameRenderer {
     if (flags.instanceColor) flags.instanceColor.needsUpdate = true;
     this.markPoles = poles;
     this.markFlags = flags;
+
+    // The warm pool under the door: at night the settlement has to look warm from
+    // across the street while the rest of the city stays cold and blue.
+    if (this.doorGlow) {
+      this.scene.remove(this.doorGlow);
+      this.doorGlow.geometry.dispose();
+      this.doorGlow = null;
+    }
+    const glow = this.glowTexture();
+    if (!glow) return;
+    const pools = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: glow,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        color: 0xffb066,
+      }),
+      taken.length,
+    );
+    taken.forEach(({ def }, i) => {
+      const x = def.entrance.x + def.facing.x * 1.1;
+      const z = def.entrance.y + def.facing.y * 1.1;
+      tmpQ.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+      tmpM.compose(new THREE.Vector3(x, 0.11, z), tmpQ, tmpS.set(5.2, 5.2, 1));
+      pools.setMatrixAt(i, tmpM);
+    });
+    pools.instanceMatrix.needsUpdate = true;
+    pools.frustumCulled = false;
+    this.scene.add(pools);
+    this.doorGlow = pools;
+  }
+
+  /** The radial falloff the lamp halos use, drawn once into a canvas. */
+  private glowTexture(): THREE.Texture | null {
+    if (this._glow) return this._glow;
+    if (typeof document === "undefined") return null;
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, "rgba(255,214,150,1)");
+    g.addColorStop(0.4, "rgba(255,186,110,0.4)");
+    g.addColorStop(1, "rgba(255,170,90,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    this._glow = new THREE.CanvasTexture(canvas);
+    return this._glow;
   }
 
   /** Rebuilds the wear and the door signs only when the settlement actually changed. */
@@ -986,11 +1040,20 @@ export class GameRenderer {
     fog.near = lerp(150, 220, daylight);
     fog.far = lerp(520, 620, daylight);
     this.buildings?.setNight(1 - daylight);
+    if (this.doorGlow) {
+      const lit = Math.max(0, Math.min(1, (1 - daylight) * 1.2 - 0.1));
+      (this.doorGlow.material as THREE.MeshBasicMaterial).opacity = lit * 0.55;
+      this.doorGlow.visible = lit > 0.01;
+    }
     const hq = sim.state.hq;
     if (hq >= 0) {
       const b = sim.city.buildings[hq];
-      this.hqLight.position.set(b.entrance.x, 6, b.entrance.y);
-      this.hqLight.intensity = (1 - daylight) * 400;
+      // At door height: over the roof it turns the roof into a white plate, which is
+      // what the first cut of the night did.
+      this.hqLight.position.set(b.entrance.x, 3.1, b.entrance.y);
+      // A generator that is not quite healthy: the base flickers, the city does not.
+      const flicker = 0.93 + 0.07 * Math.sin(sim.state.tick * 0.021) * Math.sin(sim.state.tick * 0.0037);
+      this.hqLight.intensity = (1 - daylight) * 260 * flicker;
       this.hqMarker.visible = true;
       // Flag on the roof, near the first corner of the outline.
       const corner = outlineOf(b)[0];

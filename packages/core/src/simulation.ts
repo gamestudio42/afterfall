@@ -211,6 +211,7 @@ export class Simulation {
         keepAmmo: BALANCE.policies.keepAmmo,
         recallBeforeDusk: true,
         autoDefend: true,
+        haulAbove: BALANCE.policies.haulAbove,
       },
       stats: {
         infectedKilled: 0,
@@ -220,6 +221,7 @@ export class Simulation {
         buildingsSearched: 0,
         produced: {},
         consumed: {},
+        wasted: {},
         eventsOccurred: 0,
         navFailures: 0,
         hordesSpawned: 0,
@@ -228,7 +230,7 @@ export class Simulation {
       hordes: [],
       moraleBonus: 0,
       research: { points: 0, unlocked: [], cure: { started: false, progress: 0, lab: -1 } },
-      econ: { day: 1, produced: {}, consumed: {}, yesterday: { produced: {}, consumed: {} } },
+      econ: { day: 1, produced: {}, consumed: {}, wasted: {}, yesterday: { produced: {}, consumed: {}, wasted: {} } },
       rngState: this.rng.state,
       lastAttackTick: -99999,
       log: [],
@@ -491,7 +493,15 @@ export class Simulation {
   produce(id: ResourceId, amount: number, x: number, y: number): void {
     addToBag(this.state.stats.produced, id, amount);
     addToBag(this.state.econ.produced, id, amount);
-    this.deposit({ [id]: amount }, x, y);
+    const left = this.deposit({ [id]: amount }, x, y);
+    const lost = left[id] ?? 0;
+    if (lost > 0) {
+      // A store that is full refuses the harvest, and the player has to be told: this is
+      // the only reason to convert a building into a warehouse.
+      addToBag(this.state.stats.wasted, id, lost);
+      addToBag(this.state.econ.wasted, id, lost);
+      this.alertOnce("alert.storageFull", 3000, { resource: id }, "warning", { x, y });
+    }
   }
 
   // ---------------------------------------------------------------------------

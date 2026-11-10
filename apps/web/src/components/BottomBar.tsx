@@ -96,6 +96,19 @@ export function BottomBar() {
             />
           </label>
           <label>
+            {t("policy.haulAbove")}
+            <select
+              value={p.haulAbove ?? 0.9}
+              onChange={(e) => game.command({ type: "setPolicy", policy: { haulAbove: Number(e.target.value) } })}
+            >
+              {[0.6, 0.75, 0.9, 1].map((v) => (
+                <option key={v} value={v}>
+                  {Math.round(v * 100)}%
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             {t("policy.autoRepair")}
             <select
               value={p.autoRepairBelow}

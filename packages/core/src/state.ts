@@ -146,15 +146,17 @@ export interface BuildingState {
   explored: boolean;
 }
 
-export type TaskType = "build" | "convert" | "repair" | "farm" | "craft" | "guard";
+export type TaskType = "build" | "convert" | "repair" | "farm" | "craft" | "guard" | "haul";
 
 export interface Task {
   id: number;
   type: TaskType;
   /** Structure entity ids (build/repair/farm/guard) */
   structures: EntityId[];
-  /** Building index (convert/repair/craft), or -1. */
+  /** Building index (convert/repair/craft), or -1. The source node for a haul. */
   building: number;
+  /** Destination building index for a haul task. */
+  to?: number;
   convertTo?: BuildingFunction;
   priority: number;
   maxWorkers: number;
@@ -195,6 +197,8 @@ export interface Policies {
   keepAmmo: number;
   recallBeforeDusk: boolean;
   autoDefend: boolean;
+  /** A storage node above this fraction hands its excess to one with room. */
+  haulAbove: number;
 }
 
 /** Research points, unlocked capabilities, and the cure project. */
@@ -215,7 +219,9 @@ export interface EconState {
   day: number;
   produced: ResourceBag;
   consumed: ResourceBag;
-  yesterday: { produced: ResourceBag; consumed: ResourceBag };
+  /** Resources a full store refused: produced and then lost. */
+  wasted: ResourceBag;
+  yesterday: { produced: ResourceBag; consumed: ResourceBag; wasted: ResourceBag };
 }
 
 export interface Stats {
@@ -226,6 +232,8 @@ export interface Stats {
   buildingsSearched: number;
   produced: ResourceBag;
   consumed: ResourceBag;
+  /** Resources a full store refused: produced and then lost. */
+  wasted: ResourceBag;
   eventsOccurred: number;
   navFailures: number;
   hordesSpawned: number;

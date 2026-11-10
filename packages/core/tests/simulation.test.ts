@@ -464,3 +464,56 @@ describe("task priority", () => {
     expect(sim.state.tasks.get(high!.id)!.assigned.length).toBeGreaterThan(0);
   });
 });
+
+describe("logistics", () => {
+  /** Converts a nearby building and returns its index, finished on the spot. */
+  function warehouse(sim: Simulation, nth: number): number {
+    const hq = sim.city.buildings[sim.state.hq];
+    const near = sim.state.buildings
+      .filter((b) => b.fn === "none" && b.index !== sim.state.hq)
+      .sort(
+        (a, b) =>
+          Math.hypot(sim.city.buildings[a.index].entrance.x - hq.entrance.x, sim.city.buildings[a.index].entrance.y - hq.entrance.y) -
+          Math.hypot(sim.city.buildings[b.index].entrance.x - hq.entrance.x, sim.city.buildings[b.index].entrance.y - hq.entrance.y),
+      )[nth];
+    sim.setBuildingFunction(near.index, "storage");
+    return near.index;
+  }
+
+  it("refuses the harvest when every store is full, and says so", () => {
+    const sim = started(5);
+    const hq = sim.state.buildings[sim.state.hq];
+    hq.storage = {};
+    const at = sim.city.buildings[sim.state.hq].entrance;
+    sim.produce("food", hq.storageCapacity + 50, at.x, at.y);
+    expect(sim.storageUsed(hq)).toBeLessThanOrEqual(hq.storageCapacity);
+    expect(sim.state.stats.wasted.food ?? 0).toBeGreaterThan(0);
+    expect(sim.state.alerts.some((a) => a.key === "alert.storageFull")).toBe(true);
+  });
+
+  it("moves stock from a full store to an empty one, and loses nothing", () => {
+    const sim = started(5);
+    const a = warehouse(sim, 0);
+    const b = warehouse(sim, 1);
+    const src = sim.state.buildings[a];
+    const dst = sim.state.buildings[b];
+    expect(src.storageCapacity).toBeGreaterThan(0);
+    expect(dst.storageCapacity).toBeGreaterThan(0);
+    // The source sits at the threshold, the destination is empty.
+    src.storage = { food: Math.floor(src.storageCapacity * 0.95) };
+    dst.storage = {};
+    for (const e of sim.survivors()) {
+      e.survivor.manual = false;
+      e.survivor.stance = "passive";
+    }
+    const before = src.storage.food ?? 0;
+    const ok = runUntil(sim, () => [...sim.state.tasks.values()].some((t) => t.type === "haul"), 400);
+    expect(ok).toBe(true);
+    // Workers carry it across, one trip at a time.
+    runUntil(sim, () => (dst.storage.food ?? 0) > 0, 4000);
+    expect(dst.storage.food ?? 0).toBeGreaterThan(0);
+    // Nothing was thrown away on the way: a haul is a transfer, not a conversion.
+    expect(sim.state.stats.wasted.food ?? 0).toBe(0);
+    expect(src.storage.food ?? 0).toBeLessThan(before);
+  });
+});

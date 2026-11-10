@@ -26,6 +26,8 @@ const PRIORITY: Record<TaskType, number> = {
   convert: 50,
   craft: 35,
   farm: 40,
+  // Logistics is background work: it never takes hands from a wall or a bed.
+  haul: 25,
 };
 
 export function createTask(sim: Simulation, type: TaskType, init: Partial<Task>): Task {
@@ -149,6 +151,7 @@ function createAutomaticTasks(sim: Simulation): void {
       createTask(sim, "repair", { structures: [e.id], cost, work: Math.max(2, def.work * missing * 0.6), maxWorkers: 2 });
     }
   }
+  createHaulTask(sim);
   for (const b of st.buildings) {
     if (b.fn === "none" || b.hp <= 0) continue;
     if (b.hp < b.maxHp * threshold && !repairing.has(`b${b.index}`)) {
@@ -156,6 +159,38 @@ function createAutomaticTasks(sim: Simulation): void {
       createTask(sim, "repair", { building: b.index, cost: { wood: Math.ceil(20 * missing) }, work: 60 * missing, maxWorkers: 3 });
     }
   }
+}
+
+/**
+ * Logistics: a store that is nearly full hands its excess to one with room, so a harvest
+ * is not refused because the headquarters happens to be the nearest store. One haul at a
+ * time, never above the priority of a wall.
+ */
+function createHaulTask(sim: Simulation): void {
+  const st = sim.state;
+  if ([...st.tasks.values()].some((t) => t.type === "haul" && t.status !== "completed")) return;
+  const threshold = st.policies.haulAbove ?? BALANCE.policies.haulAbove;
+  const nodes = sim.storageNodes();
+  if (nodes.length < 2) return;
+  const fill = (b: (typeof nodes)[number]) => (b.storageCapacity > 0 ? sim.storageUsed(b) / b.storageCapacity : 0);
+  const source = [...nodes].sort((a, b) => fill(b) - fill(a))[0];
+  if (!source || fill(source) < threshold) return;
+  const dest = [...nodes]
+    .filter((b) => b !== source)
+    .sort((a, b) => b.storageCapacity - sim.storageUsed(b) - (a.storageCapacity - sim.storageUsed(a)))[0];
+  if (!dest) return;
+  const room = dest.storageCapacity - sim.storageUsed(dest);
+  // Bring the source down to a little under its threshold, not to the brim.
+  const target = source.storageCapacity * Math.max(0, threshold - 0.15);
+  const excess = sim.storageUsed(source) - target;
+  const amount = Math.floor(Math.min(BALANCE.logistics.haulBatch, room, Math.max(0, excess)));
+  if (amount < 5) return;
+  // Move whatever occupies the most space, so the trip is worth the hands.
+  const id = RESOURCE_IDS.filter((r) => (source.storage[r] ?? 0) >= amount).sort(
+    (a, b) => (source.storage[b] ?? 0) - (source.storage[a] ?? 0),
+  )[0];
+  if (!id) return;
+  createTask(sim, "haul", { building: source.index, to: dest.index, cost: { [id]: amount }, work: 0, maxWorkers: 2 });
 }
 
 /** Where workers need to stand to work on a task. */
@@ -237,9 +272,13 @@ export function runTaskActivity(sim: Simulation, e: SurvivorEntity): void {
         a.phase = "work";
         return;
       }
-      const node = sim.nearestStorage(e.transform!.x, e.transform!.y, (b) =>
-        RESOURCE_IDS.some((id) => (need[id] ?? 0) > 0 && (b.storage[id] ?? 0) > 0),
-      );
+      // A haul fetches from its own source, never from whichever store is closest.
+      const node =
+        task.type === "haul" && task.building >= 0
+          ? sim.state.buildings[task.building]
+          : sim.nearestStorage(e.transform!.x, e.transform!.y, (b) =>
+              RESOURCE_IDS.some((id) => (need[id] ?? 0) > 0 && (b.storage[id] ?? 0) > 0),
+            );
       if (!node) {
         if (canWork) a.phase = "work";
         else releaseFromTask(sim, e);
@@ -261,14 +300,27 @@ export function runTaskActivity(sim: Simulation, e: SurvivorEntity): void {
       return;
     }
     case "deliver": {
-      if (!goTo(site)) return;
+      const drop = task.type === "haul" && task.to !== undefined ? sim.city.buildings[task.to].entrance : site;
+      if (!goTo(drop)) return;
       for (const id of RESOURCE_IDS) {
         const v = s.carry[id] ?? 0;
         if (v <= 0) continue;
         addToBag(task.delivered, id, v);
         addToBag(task.inTransit, id, -v);
+        if (task.type === "haul" && task.to !== undefined) {
+          // Into the destination's shelves, not onto its doorstep.
+          const dest = sim.state.buildings[task.to];
+          const space = dest.storageCapacity - sim.storageUsed(dest);
+          const put = Math.min(space, v);
+          if (put > 0) addToBag(dest.storage, id, put);
+        }
       }
       s.carry = {};
+      if (task.type === "haul") {
+        if (bagTotal(outstanding(task)) <= 1e-6) completeTask(sim, task);
+        else a.phase = "fetch";
+        return;
+      }
       a.phase = bagTotal(outstanding(task)) > 0 && deliveredFraction(task) * task.work <= task.progress + 0.05 ? "fetch" : "work";
       return;
     }

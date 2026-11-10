@@ -87,7 +87,7 @@ function dawn(sim: Simulation): void {
 /** Rolls today's flows into yesterday, for the ledger panel. */
 function rollLedger(sim: Simulation): void {
   const econ = sim.state.econ;
-  econ.yesterday = { produced: { ...econ.produced }, consumed: { ...econ.consumed } };
+  econ.yesterday = { produced: { ...econ.produced }, consumed: { ...econ.consumed }, wasted: { ...econ.wasted } };
   econ.produced = {};
   econ.consumed = {};
   econ.day = sim.clock.day;

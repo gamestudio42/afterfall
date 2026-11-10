@@ -96,7 +96,7 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
       )[0];
   };
 
-  const convert = (fn: "shelter" | "workshop" | "lab", excludeTypes: string[] = []) => {
+  const convert = (fn: keyof typeof BUILDING_FUNCTIONS, excludeTypes: string[] = []) => {
     const target = spareBuilding(excludeTypes);
     if (!target) return false;
     sim.enqueue({ type: "convert", building: target.index, fn });
@@ -180,6 +180,13 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
           sim.enqueue({ type: "placeStructures", kind: "well", cells });
           acted = true;
         }
+      }
+      // A warehouse once the headquarters is nearly full: past that line the settlement
+      // throws its own harvest away, and the trace cannot tell it from a bad season.
+      const hqNode = sim.state.buildings[sim.state.hq];
+      const hqFill = hqNode && hqNode.storageCapacity > 0 ? sim.storageUsed(hqNode) / hqNode.storageCapacity : 0;
+      if (!acted && options.economy && !hasFunction("storage") && hqFill >= 0.85 && canPay(stock, BUILDING_FUNCTIONS.storage.cost, 0)) {
+        acted = convert("storage", ["house"]);
       }
       // One tower is defence; the second is a luxury that costs the farm its wood.
       const towerCap = options.economy && !builtKind("farm") ? 1 : 2;

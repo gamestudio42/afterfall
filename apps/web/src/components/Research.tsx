@@ -89,7 +89,7 @@ export function EconomyModal() {
   const set = useUi((s) => s.set);
   const sim = game.sim!;
   const stock = sim.totals();
-  const { produced, consumed } = sim.state.econ.yesterday;
+  const { produced, consumed, wasted } = sim.state.econ.yesterday;
   const pop = sim.survivorCount();
   let worst: { id: ResourceId; days: number } | null = null;
   for (const id of RESOURCE_IDS) {
@@ -109,6 +109,7 @@ export function EconomyModal() {
               <th>{t("econ.resource")}</th>
               <th>{t("econ.produced")}</th>
               <th>{t("econ.consumed")}</th>
+              <th>{t("econ.wasted")}</th>
               <th>{t("econ.stock")}</th>
               <th>{t("econ.days")}</th>
             </tr>
@@ -117,6 +118,7 @@ export function EconomyModal() {
             {RESOURCE_IDS.map((id) => {
               const made = produced[id] ?? 0;
               const used = consumed[id] ?? 0;
+              const lost = wasted[id] ?? 0;
               const have = stock[id] ?? 0;
               const days = used > 0 ? have / used : null;
               const low = days !== null && days < 2;
@@ -125,6 +127,7 @@ export function EconomyModal() {
                   <td>{t(`res.${id}`)}</td>
                   <td>{made.toFixed(0)}</td>
                   <td>{used.toFixed(0)}</td>
+                  <td className={lost > 0 ? "low" : undefined}>{lost > 0 ? `-${lost.toFixed(0)}` : "—"}</td>
                   <td>{have.toFixed(0)}</td>
                   <td>{days === null ? "—" : days.toFixed(1)}</td>
                 </tr>

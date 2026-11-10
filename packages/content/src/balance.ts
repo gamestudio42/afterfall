@@ -26,7 +26,11 @@ export const BALANCE = {
     autoRepairBelow: 0.7,
     keepAmmo: 60,
     recallHour: 17,
+    /** Above this fill, a store with room takes the excess of a fuller one. */
+    haulAbove: 0.9,
   },
+  /** Logistics: how much one haul task moves, and how much a carrier takes. */
+  logistics: { haulBatch: 40 },
   /** Infected roaming the city at the start, per 1000 m² of road. */
   wanderersAtStart: 22,
   /** Night horde schedule, indexed by night number (1-based). */

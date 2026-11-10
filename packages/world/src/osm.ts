@@ -59,6 +59,45 @@ export class OsmImportError extends Error {
 }
 
 /** Overpass QL for everything the importer reads inside the play area plus a margin. */
+
+/** Share of a footprint that falls inside a street corridor. */
+function streetFraction(poly: Vec2[], roads: { kind: string; line: Vec2[] }[]): number {
+  const corridors = roads.map((r) => ({ line: r.line, half: (ROAD_WIDTH[r.kind] ?? 8) / 2 }));
+  const b = polygonBounds(poly);
+  const step = Math.max(0.8, Math.min(b.w, b.h) / 10);
+  let total = 0;
+  let on = 0;
+  for (let y = b.y; y <= b.y + b.h; y += step) {
+    for (let x = b.x; x <= b.x + b.w; x += step) {
+      if (!pointInPolygon(x, y, poly)) continue;
+      total++;
+      for (const c of corridors) {
+        if (distToPolyline(x, y, c.line) <= c.half) {
+          on++;
+          break;
+        }
+      }
+    }
+  }
+  return total > 0 ? on / total : 0;
+}
+
+/** Share of `poly` that falls inside `other`, sampled on a grid over its bounding box. */
+function insideFraction(poly: Vec2[], other: Vec2[]): number {
+  const b = polygonBounds(poly);
+  const step = Math.max(0.6, Math.min(b.w, b.h) / 12);
+  let total = 0;
+  let inside = 0;
+  for (let y = b.y; y <= b.y + b.h; y += step) {
+    for (let x = b.x; x <= b.x + b.w; x += step) {
+      if (!pointInPolygon(x, y, poly)) continue;
+      total++;
+      if (pointInPolygon(x, y, other)) inside++;
+    }
+  }
+  return total > 0 ? inside / total : 0;
+}
+
 export function overpassQuery(lat: number, lon: number, size: number): string {
   const b = bbox(lat, lon, size / 2 + 40);
   const box = `${b.south.toFixed(6)},${b.west.toFixed(6)},${b.north.toFixed(6)},${b.east.toFixed(6)}`;
@@ -174,6 +213,29 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   }
 
   if (rawRoads.length === 0) throw new OsmImportError("noStreets", "No streets in this area");
+
+  // OSM sometimes maps one volume twice: a tower over its annex, or a building drawn again
+  // as a part. Both are stamped and both are drawn, so the smaller one's walls cut through
+  // the larger one's roof and out over the street — the slabs the fourth playtest report
+  // showed. Keep the bigger of a pair and drop the one that sits inside it.
+  const deduped: RawBuilding[] = [];
+  for (const rb of rawBuildings) {
+    const box = polygonBounds(rb.poly);
+    const swallowed = rawBuildings.some((other) => {
+      if (other === rb || other.area <= rb.area) return false;
+      const ob = polygonBounds(other.poly);
+      if (box.x + box.w <= ob.x || ob.x + ob.w <= box.x || box.y + box.h <= ob.y || ob.y + ob.h <= box.y) return false;
+      return insideFraction(rb.poly, other.poly) > 0.6;
+    });
+    if (!swallowed) deduped.push(rb);
+  }
+  // And a footprint that lies on a street is not a building the player can use: it would
+  // swallow the road the survivors walk on. OSM has a few of these (a monument over a
+  // passage, a mall mapped across an arcade). Keep the ones that merely overhang the
+  // sidewalk; drop the ones that sit on the carriageway.
+  const onStreet = deduped.filter((rb) => streetFraction(rb.poly, rawRoads) < 0.4);
+  rawBuildings.length = 0;
+  rawBuildings.push(...onStreet);
 
   // Nearest to the center first, so a cap keeps the heart of the area.
   rawBuildings.sort(

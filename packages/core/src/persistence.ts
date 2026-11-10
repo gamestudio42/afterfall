@@ -79,7 +79,13 @@ export function migrate(save: SaveGame): SaveGame {
           ...save.worldState,
           version: 2,
           research: { points: 0, unlocked: [], cure: { started: false, progress: 0, lab: -1 } },
-          econ: { day: clockFromTick(save.worldState.tick).day, produced: {}, consumed: {}, yesterday: { produced: {}, consumed: {} } },
+          econ: {
+            day: clockFromTick(save.worldState.tick).day,
+            produced: {},
+            consumed: {},
+            wasted: {},
+            yesterday: { produced: {}, consumed: {}, wasted: {} },
+          },
         },
       } as SaveGame;
     case 2:

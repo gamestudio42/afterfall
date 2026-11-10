@@ -286,3 +286,16 @@ destination had become unreachable behind the ring — 93% of the frame in `find
 of it in the heap alone. Reachability is now answered by connected components before the
 search starts. Sixty seeds per arm fit in about eight minutes, which is what makes the
 table above possible at all.
+
+## Storage and hauling (2026-11-10, PR #50)
+
+The headquarters reaches its 600 cap around night 8 and, before this, silently refused
+everything after that — the ledger could not show it because `produce` ignored what
+`deposit` returned. On seed 2 the settlement went from 135 food at day 7 to 1,103 at day
+11 once a warehouse existed and hauling kept the excess moving; total wasted food over
+the campaign is now zero instead of a couple of hundred a day.
+
+It does not change who wins. Thirty seeds, twelve nights: **14/30 with the research tree
+and 16/30 without**, the same dead heat as before, which says the arm is limited by the
+night, not by the larder. Recorded so nobody reads the food numbers as a difficulty
+change.

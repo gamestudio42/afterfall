@@ -4,6 +4,7 @@ import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } fr
 import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
+import { axialYaw } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround, TEXTURED_TINT, type GroundMaterials } from "./cityMeshes";
 import { loadArtTextures, type ArtTextures } from "./textures";
@@ -969,14 +970,14 @@ export class GameRenderer {
     for (const model of this.structureModels.values()) model.ids.length = 0;
     for (const model of this.structureModels.values()) for (const part of model.parts) part.count = 0;
 
-    // Gates are axial: read the neighbours to decide which way the leaf faces, because
-    // a gate crossing a north-south wall would otherwise show its side.
-    const gateAlongZ = (s: { cx: number; cy: number }): boolean => {
+    // Walls and gates are axial pieces: their long side has to run along the line they
+    // are part of, or a north-south wall is drawn as a row of slabs lying across the
+    // line. The neighbours in the navigation grid decide; a corner (both axes) and a
+    // lone piece default to the east-west orientation the model is authored in.
+    const wallYaw = (s: { cx: number; cy: number }): number => {
       const g = sim.grid;
-      const at = (x: number, y: number) => (g.inBounds(x, y) ? g.structureAt[g.index(x, y)] : -2);
-      const nz = at(s.cx, s.cy - 1) >= 0 || at(s.cx, s.cy + 1) >= 0;
-      const nx = at(s.cx - 1, s.cy) >= 0 || at(s.cx + 1, s.cy) >= 0;
-      return nz && !nx;
+      const at = (x: number, y: number) => g.inBounds(x, y) && g.structureAt[g.index(x, y)] >= 0;
+      return axialYaw(at(s.cx, s.cy - 1), at(s.cx, s.cy + 1), at(s.cx + 1, s.cy), at(s.cx - 1, s.cy));
     };
 
     const tmpQ2 = new THREE.Quaternion();
@@ -990,7 +991,12 @@ export class GameRenderer {
       if (!s.built) {
         if (b >= MAX_STRUCTURES) continue;
         const frac = Math.max(0.08, s.progress / def.work);
-        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ.identity(), tmpS.set(size - 0.1, Math.max(0.2, def.height * frac), size - 0.1));
+        // The ghost wears the same footprint and the same orientation as the finished
+        // piece: a wall under construction is a thin slab along its line, not a cube.
+        const axial = s.kind === "wall" || s.kind === "gate";
+        const yawB = axial ? wallYaw(s) : 0;
+        tmpQ2.setFromAxisAngle(up, yawB);
+        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(size - 0.1, Math.max(0.2, def.height * frac), axial ? 0.5 : size - 0.1));
         this.blueprints.setMatrixAt(b, tmpM);
         this.blueprints.setColorAt(b, tmpC.setHex(e.id === this.selection.structure ? 0xffd34d : 0x6fd0ff));
         this.blueprintIds[b++] = e.id;
@@ -1010,7 +1016,7 @@ export class GameRenderer {
       }
       if (model.ids.length >= MAX_STRUCTURES) continue;
       const n = model.ids.length;
-      const yaw = s.kind === "gate" && gateAlongZ(s) ? Math.PI / 2 : 0;
+      const yaw = s.kind === "wall" || s.kind === "gate" ? wallYaw(s) : 0;
       tmpQ2.setFromAxisAngle(up, yaw);
       tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(1, 1, 1));
       const hpFrac = e.health ? e.health.hp / e.health.max : 1;

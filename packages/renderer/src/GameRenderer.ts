@@ -911,7 +911,7 @@ export class GameRenderer {
         const d = Math.min(1, st.hiddenInfected / 8);
         tmpC.setRGB(0.3 + 0.6 * d, 0.3 * (1 - d) + 0.15, 0.3 * (1 - d) + 0.15);
       } else {
-        if (st.fn !== "none") tmpC.lerp(new THREE.Color(FUNCTION_TINT[st.fn] ?? 0xffffff), 0.22);
+        if (st.fn !== "none") tmpC.lerp(new THREE.Color(FUNCTION_TINT[st.fn] ?? 0xffffff), 0.12);
         else if (st.searchProgress >= st.searchTotal) {
           const grey = 0.299 * tmpC.r + 0.587 * tmpC.g + 0.114 * tmpC.b;
           tmpC.lerp(new THREE.Color(grey, grey, grey), 0.45).multiplyScalar(0.78);

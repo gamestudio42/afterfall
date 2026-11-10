@@ -150,3 +150,49 @@ function area(poly: { x: number; y: number }[]): number {
     }, 0) / 2,
   );
 }
+
+describe("street width and footprint", () => {
+  const widthOf = (city: { roads: { width?: number }[] }) => city.roads.map((r) => r.width ?? 0);
+
+  it("takes a street's width from the tag when OSM gives one", () => {
+    const data = syntheticOverpass();
+    const kLon = 111_320 * Math.cos((FIXTURE_CENTER.lat * Math.PI) / 180);
+    const at = (dx: number, dy: number) => ({ lat: FIXTURE_CENTER.lat - dy / 111_132, lon: FIXTURE_CENTER.lon + dx / kLon });
+    const withWidth = {
+      elements: [
+        ...data.elements,
+        {
+          type: "way" as const,
+          id: 9101,
+          tags: { highway: "residential", width: "5.5" },
+          geometry: [at(-200, 30), at(200, 30)],
+        },
+      ],
+    };
+    const city = cityFromOverpass(withWidth, opts);
+    expect(widthOf(city).some((w) => Math.abs(w - 5.5) < 0.01)).toBe(true);
+  });
+
+  it("leaves no footprint inside a carriageway", () => {
+    // The ribbon is drawn from the way's own width, so a footprint mapped into the street
+    // paints asphalt over the lot and the building reads as standing on the road.
+    const city = cityFromOverpass(syntheticOverpass(), opts);
+    for (const b of city.buildings) {
+      for (const p of b.footprint ?? []) {
+        for (const r of city.roads) {
+          for (let i = 1; i < (r.path?.length ?? 0); i++) {
+            const a = r.path![i - 1];
+            const q = r.path![i];
+            const dx = q.x - a.x;
+            const dy = q.y - a.y;
+            const l2 = dx * dx + dy * dy || 1;
+            let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
+            t = Math.max(0, Math.min(1, t));
+            const d = Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)) - (r.width ?? 8) / 2;
+            expect(d).toBeGreaterThan(-0.001);
+          }
+        }
+      }
+    }
+  });
+});

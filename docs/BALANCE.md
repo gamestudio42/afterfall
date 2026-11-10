@@ -197,3 +197,36 @@ only to tune a curve nobody has played is the wrong order.
 
 Kept from the experiment: `ammoSubsidy` in the autoplay options, so "would more ammo
 change this?" can be answered in one run instead of a rule change.
+
+### The reservation bot made it worse (2026-11-09)
+
+The next attempt was a scripted player that keeps material back for its next goal: one
+build decision at a time, an explicit reserve of wood and metal, scavenging aimed at
+the building type the settlement needs (knowledge while a tech is unaffordable, metal
+when storage is under twenty, medicine under four), and two towers before the wall
+ring.
+
+Measured over seeds 1-20, twelve nights: **2/20 with research and 1/20 without**,
+against 3/10 and 2/10 for the simple player. Worse, and the trace says why: the two
+towers cost twenty-four wood, the ring costs about forty more, and the ring never
+became affordable again. The reservation traded "no workshop" for "no wall", and no
+wall is the worse trade — the base falls on night five to seven instead of ten to
+thirteen.
+
+Two more levers were tried against the same baseline and also failed:
+
+- **Pausing the workshop while a conversion is short of metal** (the bot setting
+  `keepAmmo` to zero, the way a player pauses production). Ammo stops, the horde walks
+  in, the headquarters falls on night five.
+- **A cheaper recipe** (metal 1 for 60 rounds instead of 2 for 30). The workshop stops
+  competing with construction, but the settlement spends the savings on nothing: the
+  same defeats, one night earlier.
+
+The conclusion is not a number, it is about the instrument. Metal is the single
+currency that ammo, towers, walls and every conversion draw on, and the city's supply
+is finite: over twelve nights the stock never rose above its starting twelve. Any
+ordering that fixes one shortage creates another, and each measurement costs ten
+minutes. **A campaign cannot be tuned by hand-written heuristics in `autoplay`.** The
+honest options are a human playtest, or a bot with a real strategy layer (goal queue
+with affordability and a wall step that is taken once, not conditionally) — and that
+second one is a project, not a tweak.

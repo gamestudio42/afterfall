@@ -46,3 +46,35 @@ something else changes.
   empty part of the map and the render costs 1.7 ms. It is in the table to show
   that the simulation cost is small even before anything is built, not as a
   baseline for the art pass.
+
+## Pathfinding was the wall, not the renderer (2026-11-10, PR #49)
+
+A campaign seed with a twenty-two survivor settlement took **400 s of CPU** in the
+headless runner, which made a 60-seed balance arm impossible. A CPU profile of one seed
+(`node --cpu-prof`, 145k samples) put it beyond doubt:
+
+| function | self time |
+| --- | --- |
+| `findPath` | 44.0% |
+| `MinHeap.pop` | 40.6% |
+| `passableIndex` | 8.5% |
+
+The heap is a correct binary heap; it was simply popped millions of times. Once the
+settlement walls itself in, a large share of destinations become unreachable — a task
+site outside the ring, a building the ring sealed — and A* answered "no" by expanding
+the whole 35k-cell grid, once per unit, on every retry. Nothing about the search was
+wrong; the question was.
+
+`NavGrid` now keeps connected components of its passable cells (one array per agent,
+because survivors may cross a gate and infected may not), rebuilt lazily when `version`
+changes — walls and gates, so rarely. `findPath` compares the start and goal components
+first and returns in constant time when they differ. The flood fill uses the same
+no-corner-cutting rule as the search, and `packages/world/tests/navgrid.test.ts` pins
+that a rejected pair really is unreachable, that a gate splits the two agents, and that
+a version bump recomputes.
+
+Measured on the same seed: **400 s → 13 s**, and the result changed from a timeout to a
+cure victory. Sixty seeds per arm now run in about eight minutes.
+
+This is a simulation-side win; it says nothing about the 60 fps budget, which is still a
+render question and still unmeasured on a GPU.

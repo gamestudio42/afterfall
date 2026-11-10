@@ -230,3 +230,59 @@ minutes. **A campaign cannot be tuned by hand-written heuristics in `autoplay`.*
 honest options are a human playtest, or a bot with a real strategy layer (goal queue
 with affordability and a wall step that is taken once, not conditionally) — and that
 second one is a project, not a tweak.
+
+## The instrument plays a build order now (2026-11-10, PR #49)
+
+The conclusion above was right about the mechanism and wrong about the cure. The bot did
+not need a strategy layer; it had three bugs that together read as "no strategy":
+
+1. **The workshop was requested on the building the shelter had just taken.** At 11:00 the
+   bot picked the nearest building with `fn === "none"`, which was still the shelter's
+   building — the conversion is only applied when its task *finishes*, and a second
+   conversion on a building that already has a task is refused silently. The bot set
+   `workshop = true` either way and never asked again: twelve days without a workshop, and
+   every arm measured defence with no ammo production at all.
+2. **A strict `if/else` chain made every step wait for the first.** With no searched
+   building on day one, "convert a shelter" failed, and the same chain skipped the towers:
+   the settlement entered night two with no defence.
+3. **`hp > 0` filtered out every candidate building.** An unconverted building has
+   `hp: 0` and `maxHp: 0` — `maxHp` is only written when a function is applied — so the
+   filter meant to skip rubble skipped the entire city.
+
+With those fixed the bot plays a recognisable opening: one tower, the shelter, the
+workshop, the farm, the well, the ring as one blueprint two minutes in, then the lab, the
+tree and the cure. It also lowers `keepAmmo` to 20 while a metal-hungry structure is still
+owed, which is the decision the old bot never made.
+
+Two structural facts came out of the traces and are worth keeping:
+
+- **The ring belongs at minute two, not after the economy.** A version that placed it in
+  affordable slabs, holding wood back for the farm, lost every seed of ten (0/10): the
+  blueprint is a queue that fills as wood arrives, so starving it buys nothing and delays
+  the only thing that keeps the horde out.
+- **Metal is still the contested currency**, but the workshop now exists to spend it.
+
+### Measured, 12 nights, seeds 1–60
+
+| arm | wins | of which cured |
+| --- | --- | --- |
+| fort + craft + econ + research | 24/60 | 24 |
+| fort + craft + econ | 25/60 | 0 |
+
+The win rate is a dead heat; the **ending is not**. With the tree the settlement cures the
+outbreak; without it, the same settlement merely survives to night twelve. The research
+tree therefore does not buy survival — it buys the ending — and a version of the campaign
+that wants research to matter defensively needs a mechanical effect strong enough to move
+a 60-seed arm, not a cost adjustment.
+
+Before this run the bot never built a workshop, so the 3/10 vs 2/10 table above measured
+the absence of a build order, not the value of research.
+
+### The instrument is fast enough to answer it
+
+A seed with a twenty-two survivor settlement took **400 s** before and **13 s** after the
+change described in `PERF.md`: A* was expanding the entire grid for every unit whose
+destination had become unreachable behind the ring — 93% of the frame in `findPath`, 41%
+of it in the heap alone. Reachability is now answered by connected components before the
+search starts. Sixty seeds per arm fit in about eight minutes, which is what makes the
+table above possible at all.

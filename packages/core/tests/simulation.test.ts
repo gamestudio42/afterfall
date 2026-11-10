@@ -414,3 +414,53 @@ describe("noise", () => {
     expect(fx).toMatchObject({ type: "noise", x: 12, y: 34, r: 45 });
   });
 });
+
+describe("task priority", () => {
+  it("clamps what the command accepts and stores it on the task", () => {
+    const sim = started(4);
+    for (const e of sim.survivors()) {
+      e.survivor.manual = true;
+      e.survivor.stance = "passive";
+    }
+    const hq = sim.city.buildings[sim.state.hq];
+    const g = sim.grid;
+    const cy = Math.floor(hq.entrance.y / g.cell) + (hq.facing.y > 0 ? 2 : -2);
+    const cx = Math.floor(hq.entrance.x / g.cell);
+    sim.enqueue({ type: "placeStructures", kind: "wall", cells: [[cx, cy]] });
+    sim.tick();
+    const task = [...sim.state.tasks.values()].find((x) => x.type === "build")!;
+    expect(task).toBeTruthy();
+    sim.enqueue({ type: "setTaskPriority", task: task.id, priority: 95 });
+    sim.tick();
+    expect(sim.state.tasks.get(task.id)!.priority).toBe(95);
+    sim.enqueue({ type: "setTaskPriority", task: task.id, priority: 400 });
+    sim.tick();
+    expect(sim.state.tasks.get(task.id)!.priority).toBe(100);
+    sim.enqueue({ type: "setTaskPriority", task: task.id, priority: -20 });
+    sim.tick();
+    expect(sim.state.tasks.get(task.id)!.priority).toBe(0);
+  });
+
+  it("hands the workers to the task the player raised", () => {
+    const sim = started(4);
+    for (const e of sim.survivors()) {
+      e.survivor.manual = false;
+      e.survivor.stance = "passive";
+    }
+    const hq = sim.city.buildings[sim.state.hq];
+    const g = sim.grid;
+    const cy = Math.floor(hq.entrance.y / g.cell) + (hq.facing.y > 0 ? 2 : -2);
+    const cx = Math.floor(hq.entrance.x / g.cell);
+    // Two walls apart from each other, so two build tasks exist at once.
+    sim.enqueue({ type: "placeStructures", kind: "wall", cells: [[cx, cy]] });
+    sim.enqueue({ type: "placeStructures", kind: "wall", cells: [[cx + 2, cy]] });
+    sim.tick();
+    const builds = [...sim.state.tasks.values()].filter((x) => x.type === "build");
+    expect(builds.length).toBeGreaterThanOrEqual(2);
+    const [low, high] = builds;
+    sim.enqueue({ type: "setTaskPriority", task: low!.id, priority: 10 });
+    sim.enqueue({ type: "setTaskPriority", task: high!.id, priority: 100 });
+    for (let i = 0; i < 40; i++) sim.tick();
+    expect(sim.state.tasks.get(high!.id)!.assigned.length).toBeGreaterThan(0);
+  });
+});

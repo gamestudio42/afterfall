@@ -13,7 +13,7 @@ export function BottomBar() {
   const game = useGame();
   const sim = game.sim!;
   const ui = useUi();
-  const [open, setOpen] = useState<"build" | "policies" | null>(null);
+  const [open, setOpen] = useState<"build" | "policies" | "tasks" | null>(null);
   const totals = sim.totals();
   const started = sim.state.started;
   const p = sim.state.policies;
@@ -49,6 +49,38 @@ export function BottomBar() {
               </button>
             );
           })}
+        </div>
+      )}
+      {open === "tasks" && (
+        <div className="drawer tasks" data-testid="task-menu">
+          {[...sim.state.tasks.values()].length === 0 && <small className="muted">{t("tasks.none")}</small>}
+          {[...sim.state.tasks.values()]
+            .sort((a, b) => b.priority - a.priority || a.id - b.id)
+            .map((task) => (
+              <div key={task.id} className="task-row" data-testid={`task-${task.id}`}>
+                <span className={`dot ${task.status}`} title={t(`status.${task.status}`)} />
+                <strong>{t(`task.${task.type}`)}</strong>
+                <small className="muted">
+                  {task.status} · {task.assigned.length}/{task.maxWorkers} · {task.priority}
+                </small>
+                <button
+                  data-testid={`task-up-${task.id}`}
+                  disabled={task.priority >= 100}
+                  title={t("tasks.raise")}
+                  onClick={() => game.command({ type: "setTaskPriority", task: task.id, priority: Math.min(100, task.priority + 10) })}
+                >
+                  ↑
+                </button>
+                <button
+                  data-testid={`task-down-${task.id}`}
+                  disabled={task.priority <= 0}
+                  title={t("tasks.lower")}
+                  onClick={() => game.command({ type: "setTaskPriority", task: task.id, priority: Math.max(0, task.priority - 10) })}
+                >
+                  ↓
+                </button>
+              </div>
+            ))}
         </div>
       )}
       {open === "policies" && (
@@ -102,6 +134,14 @@ export function BottomBar() {
           onClick={() => setOpen(open === "build" ? null : "build")}
         >
           {t("bar.build")}
+        </button>
+        <button
+          className={open === "tasks" ? "active" : ""}
+          disabled={!started}
+          data-testid="open-tasks"
+          onClick={() => setOpen(open === "tasks" ? null : "tasks")}
+        >
+          {t("bar.tasks")}
         </button>
         <div className="squads">
           <span className="muted">{t("bar.squads")}</span>

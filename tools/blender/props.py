@@ -176,4 +176,61 @@ ob.select_set(True)
 bpy.ops.object.shade_flat()
 export("barrier", ob)
 
+
+# --- ambulance: box body, cab, red stripe, light bar, four wheels -----------
+reset()
+body = mat("ambulance_body", (0.86, 0.87, 0.85), rough=0.5)
+stripe = mat("ambulance_stripe", (0.62, 0.09, 0.09), rough=0.6)
+glass = mat("ambulance_glass", (0.10, 0.12, 0.14), rough=0.25)
+tyre = mat("tyre", (0.05, 0.05, 0.05), rough=0.95)
+beacon_r = mat("beacon_red", (0.75, 0.10, 0.10), rough=0.25)
+beacon_b = mat("beacon_blue", (0.12, 0.22, 0.70), rough=0.25)
+# Body and cab, 2.2 m wide and 5.4 m long, like the van it is.
+box((2.20, 3.40, 1.95), (0, -0.85, 1.55), material=body)
+box((2.16, 1.70, 1.45), (0, 1.55, 1.30), material=body)
+box((2.10, 0.10, 0.78), (0, 2.38, 1.62), rot=(0.18, 0, 0), material=glass)
+for sx in (-1.11, 1.11):
+    box((0.04, 3.30, 0.22), (sx, -0.85, 1.35), material=stripe)
+    box((0.04, 1.30, 0.80), (sx, 1.35, 1.75), material=glass)
+box((1.90, 0.08, 0.30), (0, 0.88, 1.05), material=stripe)
+# Light bar on the cab roof.
+box((0.55, 0.22, 0.16), (-0.32, 1.45, 2.10), material=beacon_r)
+box((0.55, 0.22, 0.16), (0.32, 1.45, 2.10), material=beacon_b)
+for sx in (-0.95, 0.95):
+    for sy in (-1.95, 1.45):
+        cyl(0.36, 0.24, (sx, sy, 0.36), rot=(0, math.pi / 2, 0), material=tyre)
+export("ambulance", join("ambulance"))
+
+# --- shipping container: steel box with corrugated sides and a door bar ----
+reset()
+paint = mat("container_paint", (0.42, 0.20, 0.16), rough=0.85, metal=0.15)
+rust = mat("container_rust", (0.34, 0.19, 0.12), rough=0.95, metal=0.1)
+box((2.44, 6.06, 2.59), (0, 0, 1.30), material=paint)
+# Corrugation: thin ribs down both long sides, and a rust band along the base.
+for i in range(11):
+    y = -2.6 + i * 0.52
+    for sx in (-1.23, 1.23):
+        box((0.06, 0.10, 2.30), (sx, y, 1.30), material=rust)
+box((2.48, 6.10, 0.16), (0, 0, 0.20), material=rust)
+# Door bars on one end.
+for sx in (-0.55, 0.55):
+    box((0.08, 0.08, 2.10), (sx, 3.06, 1.30), material=rust)
+export("container", join("container"))
+
+# --- crates: a stack of four boxes and a pallet -----------------------------
+reset()
+crate = mat("crate", (0.44, 0.33, 0.20), rough=0.95)
+crate2 = mat("crate_pale", (0.52, 0.42, 0.28), rough=0.95)
+pallet = mat("pallet", (0.38, 0.29, 0.19), rough=0.95)
+# Pallet: three bearers and five boards.
+for sy in (-0.42, 0, 0.42):
+    box((1.20, 0.12, 0.12), (0, sy, 0.06), material=pallet)
+for sy in (-0.48, -0.24, 0, 0.24, 0.48):
+    box((1.20, 0.14, 0.04), (0, sy, 0.14), material=pallet)
+# Crates, two on the bottom and one turned across the top.
+box((0.62, 0.58, 0.58), (-0.30, -0.18, 0.45), rot=(0, 0, 0.08), material=crate)
+box((0.56, 0.54, 0.54), (0.34, 0.12, 0.43), rot=(0, 0, -0.12), material=crate2)
+box((0.58, 0.46, 0.44), (-0.06, -0.02, 0.96), rot=(0, 0, 0.35), material=crate)
+export("crates", join("crates"))
+
 print("PROPS DONE")

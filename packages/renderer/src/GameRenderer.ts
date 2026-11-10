@@ -7,6 +7,7 @@ import { RtsCamera } from "./camera";
 import { axialYaw, cornerBlockScale } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround, TEXTURED_TINT, type GroundMaterials } from "./cityMeshes";
+import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Doors } from "./doors";
@@ -124,6 +125,14 @@ export class GameRenderer {
   private structureIds: EntityId[] = [];
   private blueprintIds: EntityId[] = [];
   /** One instanced mesh per material per kind, once `art/structures` lands. */
+  private decals: THREE.Mesh | null = null;
+  private decalState = "";
+  private _glow: THREE.Texture | null = null;
+  private markPoles: THREE.InstancedMesh | null = null;
+  private markFlags: THREE.InstancedMesh | null = null;
+  private doorGlow: THREE.InstancedMesh | null = null;
+  private markState = "";
+  private decalMat: THREE.MeshStandardMaterial | null = null;
   private structureModels = new Map<StructureKind, { parts: THREE.InstancedMesh[]; ids: EntityId[] }>();
   private structuresReady = false;
   private markers: THREE.Group = new THREE.Group();
@@ -393,6 +402,196 @@ export class GameRenderer {
    * can change while it runs, so a token guards against a stale kit landing on
    * a new map.
    */
+  /**
+   * Lays the street wear down for this map. One merged mesh, one draw call, rebuilt only
+   * when the city changes; the texture streams in like the surface maps and, until it
+   * lands, the mesh simply draws nothing.
+   */
+  private buildDecals(sim: Simulation): void {
+    if (this.decals) {
+      this.scene.remove(this.decals);
+      this.decals.geometry.dispose();
+      this.decals = null;
+    }
+    const looted = new Set<number>();
+    const kept = new Set<number>();
+    sim.state.buildings.forEach((st, i) => {
+      if (st.fn !== "none") kept.add(i);
+      else if (st.searchProgress >= st.searchTotal) looted.add(i);
+    });
+    const placements = placeDecals(sim.city, sim.city.seed ?? 1, 3600, looted, kept);
+    if (placements.length === 0) return;
+    if (!this.decalMat) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 1,
+        metalness: 0,
+        transparent: true,
+        alphaTest: 0.08,
+        depthWrite: false,
+        vertexColors: true,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      });
+      this.decalMat = mat;
+      new THREE.TextureLoader().load(
+        `${this.artBase}art/decals.png`,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = 4;
+          mat.map = tex;
+          mat.needsUpdate = true;
+        },
+        undefined,
+        () => {
+          /* a missing atlas leaves the streets plain, never broken */
+        },
+      );
+    }
+    const mesh = new THREE.Mesh(decalGeometry(placements), this.decalMat);
+    // Above the carriageway (0.01), the lane dashes (0.03) and the kerb top (0.06).
+    mesh.position.y = 0.07;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
+    this.decals = mesh;
+  }
+
+  /**
+   * A flag on every building the survivors have taken over, in the colour of what it is
+   * for. A awning on the wall is invisible from an RTS camera; a flag reads from any
+   * angle and from the whole zoom range, and it is the one thing on the street that gets
+   * brighter as the settlement grows.
+   */
+  private buildMarks(sim: Simulation): void {
+    for (const m of [this.markPoles, this.markFlags]) {
+      if (!m) continue;
+      this.scene.remove(m);
+      m.geometry.dispose();
+    }
+    this.markPoles = null;
+    this.markFlags = null;
+    const taken: { def: (typeof sim.city.buildings)[number]; fn: string }[] = [];
+    sim.city.buildings.forEach((def, i) => {
+      const st = sim.state.buildings[i];
+      if (st && st.fn !== "none") taken.push({ def, fn: st.fn });
+    });
+    if (taken.length === 0) return;
+
+    const poles = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.06, 0.09, 4.4, 6),
+      new THREE.MeshStandardMaterial({ color: 0x3b3a36, roughness: 0.9, metalness: 0 }),
+      taken.length,
+    );
+    const flags = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1.5, 0.9),
+      new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
+      taken.length,
+    );
+    const color = new THREE.Color();
+    const up = new THREE.Vector3(0, 1, 0);
+    taken.forEach(({ def, fn }, i) => {
+      // On the roof edge facing the street. At the foot of the wall a flag is swallowed
+      // by the building it belongs to, which is exactly how the first cut failed.
+      const x = def.entrance.x + def.facing.x * 0.6;
+      const z = def.entrance.y + def.facing.y * 0.6;
+      const base = def.height + 0.05;
+      tmpM.compose(new THREE.Vector3(x, base + 2.1, z), tmpQ.setFromAxisAngle(up, 0), tmpS.set(1, 1, 1));
+      poles.setMatrixAt(i, tmpM);
+      // The face turned to the street, not the edge: a flag seen edge-on is four pixels
+      // of nothing. Hung off one side of the pole, like a real one.
+      const yaw = Math.atan2(def.facing.x, def.facing.y);
+      const off = 0.78;
+      tmpM.compose(
+        new THREE.Vector3(x + Math.cos(yaw) * off, base + 3.7, z - Math.sin(yaw) * off),
+        tmpQ.setFromAxisAngle(up, yaw),
+        tmpS.set(1, 1, 1),
+      );
+      flags.setMatrixAt(i, tmpM);
+      flags.setColorAt(i, color.setHex(FUNCTION_TINT[fn] ?? 0xffffff));
+    });
+    for (const m of [poles, flags]) {
+      m.instanceMatrix.needsUpdate = true;
+      m.frustumCulled = false;
+      this.scene.add(m);
+    }
+    if (flags.instanceColor) flags.instanceColor.needsUpdate = true;
+    this.markPoles = poles;
+    this.markFlags = flags;
+
+    // The warm pool under the door: at night the settlement has to look warm from
+    // across the street while the rest of the city stays cold and blue.
+    if (this.doorGlow) {
+      this.scene.remove(this.doorGlow);
+      this.doorGlow.geometry.dispose();
+      this.doorGlow = null;
+    }
+    const glow = this.glowTexture();
+    if (!glow) return;
+    const pools = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: glow,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        color: 0xffb066,
+      }),
+      taken.length,
+    );
+    taken.forEach(({ def }, i) => {
+      const x = def.entrance.x + def.facing.x * 1.1;
+      const z = def.entrance.y + def.facing.y * 1.1;
+      tmpQ.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+      tmpM.compose(new THREE.Vector3(x, 0.11, z), tmpQ, tmpS.set(5.2, 5.2, 1));
+      pools.setMatrixAt(i, tmpM);
+    });
+    pools.instanceMatrix.needsUpdate = true;
+    pools.frustumCulled = false;
+    this.scene.add(pools);
+    this.doorGlow = pools;
+  }
+
+  /** The radial falloff the lamp halos use, drawn once into a canvas. */
+  private glowTexture(): THREE.Texture | null {
+    if (this._glow) return this._glow;
+    if (typeof document === "undefined") return null;
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, "rgba(255,214,150,1)");
+    g.addColorStop(0.4, "rgba(255,186,110,0.4)");
+    g.addColorStop(1, "rgba(255,170,90,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    this._glow = new THREE.CanvasTexture(canvas);
+    return this._glow;
+  }
+
+  /** Rebuilds the wear and the door signs only when the settlement actually changed. */
+  private refreshBuildingArt(sim: Simulation): void {
+    let loot = "";
+    let owned = "";
+    sim.state.buildings.forEach((st, i) => {
+      if (st.fn !== "none") owned += `${i}:${st.fn},`;
+      else if (st.searchProgress >= st.searchTotal) loot += `${i},`;
+    });
+    const decalSig = `${loot}|${owned}`;
+    if (decalSig !== this.decalState) {
+      this.decalState = decalSig;
+      this.buildDecals(sim);
+    }
+    if (owned !== this.markState) {
+      this.markState = owned;
+      this.buildMarks(sim);
+    }
+  }
+
   private dressStreets(sim: Simulation): void {
     for (const m of this.propScene?.meshes ?? []) this.scene.remove(m);
     this.propScene = null;
@@ -691,6 +890,7 @@ export class GameRenderer {
     this.scene.add(this.doors.group);
     this.refreshBuildingColors();
     this.dressStreets(sim);
+    this.buildDecals(sim);
     this.rts.setBounds(0, city.width, 0, city.height);
     this.rts.jumpTo(city.width / 2, city.height / 2);
     this.lastFxSeq = sim.fxSeq;
@@ -711,9 +911,11 @@ export class GameRenderer {
         const d = Math.min(1, st.hiddenInfected / 8);
         tmpC.setRGB(0.3 + 0.6 * d, 0.3 * (1 - d) + 0.15, 0.3 * (1 - d) + 0.15);
       } else {
-        if (st.fn !== "none") tmpC.lerp(new THREE.Color(FUNCTION_TINT[st.fn] ?? 0xffffff), 0.55);
-        else if (st.searchProgress >= st.searchTotal) tmpC.multiplyScalar(0.55);
-        else if (!st.explored) tmpC.multiplyScalar(0.82);
+        if (st.fn !== "none") tmpC.lerp(new THREE.Color(FUNCTION_TINT[st.fn] ?? 0xffffff), 0.12);
+        else if (st.searchProgress >= st.searchTotal) {
+          const grey = 0.299 * tmpC.r + 0.587 * tmpC.g + 0.114 * tmpC.b;
+          tmpC.lerp(new THREE.Color(grey, grey, grey), 0.45).multiplyScalar(0.78);
+        } else if (!st.explored) tmpC.multiplyScalar(0.82);
         if (st.cache) tmpC.lerp(new THREE.Color(0x4ee0c0), 0.5);
       }
       if (i === this.hoverBuilding) tmpC.lerp(new THREE.Color(0xffffff), 0.18);
@@ -723,6 +925,7 @@ export class GameRenderer {
       this.buildings!.setColors(i, tmpC, roofC, st.fn !== "none" ? 1 : 0);
     });
     this.buildings.commitColors();
+    this.refreshBuildingArt(sim);
   }
 
   resize(width: number, height: number): void {
@@ -837,11 +1040,20 @@ export class GameRenderer {
     fog.near = lerp(150, 220, daylight);
     fog.far = lerp(520, 620, daylight);
     this.buildings?.setNight(1 - daylight);
+    if (this.doorGlow) {
+      const lit = Math.max(0, Math.min(1, (1 - daylight) * 1.2 - 0.1));
+      (this.doorGlow.material as THREE.MeshBasicMaterial).opacity = lit * 0.55;
+      this.doorGlow.visible = lit > 0.01;
+    }
     const hq = sim.state.hq;
     if (hq >= 0) {
       const b = sim.city.buildings[hq];
-      this.hqLight.position.set(b.entrance.x, 6, b.entrance.y);
-      this.hqLight.intensity = (1 - daylight) * 400;
+      // At door height: over the roof it turns the roof into a white plate, which is
+      // what the first cut of the night did.
+      this.hqLight.position.set(b.entrance.x, 3.1, b.entrance.y);
+      // A generator that is not quite healthy: the base flickers, the city does not.
+      const flicker = 0.93 + 0.07 * Math.sin(sim.state.tick * 0.021) * Math.sin(sim.state.tick * 0.0037);
+      this.hqLight.intensity = (1 - daylight) * 260 * flicker;
       this.hqMarker.visible = true;
       // Flag on the roof, near the first corner of the outline.
       const corner = outlineOf(b)[0];

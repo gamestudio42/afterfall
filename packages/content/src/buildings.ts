@@ -22,14 +22,14 @@ export interface BuildingTypeDefinition {
   adaptations: BuildingFunction[];
 }
 
-export type BuildingFunction = "none" | "hq" | "shelter" | "storage" | "workshop";
+export type BuildingFunction = "none" | "hq" | "shelter" | "storage" | "workshop" | "lab";
 
 export const BUILDING_TYPES: Record<BuildingType, BuildingTypeDefinition> = {
   house: {
     id: "house",
     floors: [1, 2],
     color: 0xc9b79c,
-    loot: { food: 4, water: 3, wood: 3, medicine: 1, metal: 1, ammo: 1 },
+    loot: { food: 4, water: 3, wood: 3, medicine: 1, metal: 2, ammo: 1 },
     lootDensity: 9,
     infected: [0, 2],
     survivorChance: 0.08,
@@ -39,7 +39,7 @@ export const BUILDING_TYPES: Record<BuildingType, BuildingTypeDefinition> = {
     id: "apartment",
     floors: [3, 6],
     color: 0xb0a395,
-    loot: { food: 4, water: 3, wood: 2, medicine: 1, metal: 1, ammo: 0.5 },
+    loot: { food: 4, water: 3, wood: 2, medicine: 1, metal: 2, ammo: 0.5 },
     lootDensity: 4,
     infected: [1, 5],
     survivorChance: 0.15,
@@ -83,13 +83,13 @@ export const BUILDING_TYPES: Record<BuildingType, BuildingTypeDefinition> = {
     lootDensity: 3,
     infected: [1, 4],
     survivorChance: 0.08,
-    adaptations: ["shelter", "storage", "workshop"],
+    adaptations: ["shelter", "storage", "workshop", "lab"],
   },
   warehouse: {
     id: "warehouse",
     floors: [1, 1],
     color: 0x9b8a78,
-    loot: { wood: 6, metal: 6, water: 1, food: 1 },
+    loot: { wood: 6, metal: 10, water: 1, food: 1 },
     lootDensity: 8,
     infected: [1, 4],
     survivorChance: 0.05,
@@ -113,7 +113,7 @@ export const BUILDING_TYPES: Record<BuildingType, BuildingTypeDefinition> = {
     lootDensity: 3,
     infected: [6, 12],
     survivorChance: 0.3,
-    adaptations: ["shelter", "storage"],
+    adaptations: ["shelter", "storage", "lab"],
   },
   school: {
     id: "school",
@@ -123,7 +123,7 @@ export const BUILDING_TYPES: Record<BuildingType, BuildingTypeDefinition> = {
     lootDensity: 5,
     infected: [3, 7],
     survivorChance: 0.25,
-    adaptations: ["shelter", "storage", "workshop"],
+    adaptations: ["shelter", "storage", "workshop", "lab"],
   },
   police: {
     id: "police",
@@ -155,6 +155,9 @@ export const BUILDING_FUNCTIONS: Record<BuildingFunction, BuildingFunctionDefini
   shelter: { id: "shelter", cost: { wood: 8, metal: 2 }, work: 120, bedsPer100m2: 2.2, storagePer100m2: 0, maxHp: 1500 },
   storage: { id: "storage", cost: { wood: 6 }, work: 90, bedsPer100m2: 0, storagePer100m2: 120, maxHp: 1500 },
   workshop: { id: "workshop", cost: { wood: 6, metal: 8 }, work: 160, bedsPer100m2: 0, storagePer100m2: 0, maxHp: 1500 },
+  // The lab is where the cure is researched: it has to be defended like the HQ,
+  // because it is the only building that advances the cure project.
+  lab: { id: "lab", cost: { wood: 8, metal: 10, medicine: 2 }, work: 200, bedsPer100m2: 0, storagePer100m2: 0, maxHp: 1200 },
 };
 
 /** Fixed capacity of the headquarters regardless of its size. */

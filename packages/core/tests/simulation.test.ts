@@ -344,11 +344,14 @@ describe("determinism and persistence", () => {
 });
 
 describe("headless scenario", () => {
-  it("a scripted player who walls the base in survives five nights (seed 3)", () => {
+  it("a scripted player who walls the base in survives the first week (seed 3)", () => {
     const sim = createSimulation({ seed: 3 });
     autoplay(sim, 6, undefined, { fortify: true });
     const r = getReport(sim);
-    expect(r.outcome).toBe("victory:survived");
+    // The campaign now runs to twenty nights, so six days is no longer a victory;
+    // what this guards is that the fort is still standing and building.
+    expect(r.outcome).toBeNull();
+    expect(r.survivorsAlive).toBeGreaterThan(0);
     expect(r.structuresBuilt).toBeGreaterThan(30);
   });
 

@@ -16,6 +16,11 @@ export function outcomeSystem(sim: Simulation): void {
     sim.alert("alert.defeat", {}, "danger");
     return;
   }
+  if (st.research.cure.progress >= BALANCE.research.cureDawns) {
+    st.outcome = { type: "victory", reason: "cured", tick: st.tick };
+    sim.alert("alert.victoryCured", {}, "success");
+    return;
+  }
   if (st.tick >= tickAt(BALANCE.nightsToWin + 1, 6)) {
     st.outcome = { type: "victory", reason: "survived", tick: st.tick };
     sim.alert("alert.victory", {}, "success");

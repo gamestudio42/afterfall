@@ -4,3 +4,4 @@ export * from "./structures";
 export * from "./units";
 export * from "./balance";
 export * from "./events";
+export * from "./research";

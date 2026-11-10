@@ -101,6 +101,19 @@ export function TopBar() {
           {Math.floor(storage.used)}/{storage.capacity}
         </span>
       </div>
+      <div className="panels">
+        <button
+          className={`chip panel-open ${sim.state.research.points > 0 ? "ready" : ""}`}
+          data-testid="open-research"
+          title={t("research.title")}
+          onClick={() => set({ showResearch: true })}
+        >
+          {t("research.chip", { n: Math.floor(sim.state.research.points) })}
+        </button>
+        <button className="chip" data-testid="open-econ" title={t("econ.title")} onClick={() => set({ showEcon: true })}>
+          {t("econ.chip")}
+        </button>
+      </div>
     </header>
   );
 }

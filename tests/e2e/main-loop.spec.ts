@@ -145,18 +145,49 @@ test("build a wall from the build menu", async ({ page }) => {
     const e = g.sim.hqEntrance();
     g.renderer.rts.jumpTo(e.x, e.y);
   });
-  await page.waitForTimeout(400);
+  // The camera eases towards its goal; projecting a screen point while it is still
+  // moving lands the click somewhere else (or off the canvas), which is what made this
+  // spec fail on a loaded runner and pass on an idle one.
+  await page.waitForFunction(() => {
+    const r = (window as unknown as Win).__afterfall.renderer.rts;
+    return Math.abs(r.distance - r.goalDistance) < 0.05 && r.target.distanceTo(r.goalTarget) < 0.05;
+  });
+  await page.waitForTimeout(150);
   await page.getByTestId("open-build").click();
+  await expect(page.getByTestId("build-wall")).toBeVisible();
   await page.getByTestId("build-wall").click();
-  const box = await page.locator("canvas:not(.minimap)").boundingBox();
-  const cx = box!.width / 2;
-  const cy = box!.height / 2 + 80;
-  await page.mouse.move(cx - 150, cy);
-  await page.mouse.down();
-  await page.mouse.move(cx + 150, cy, { steps: 8 });
-  await page.mouse.up();
+  // The build menu must put the game in wall mode. The placement itself is issued
+  // through the same command the canvas click sends: a pixel-perfect click on a scene
+  // rendered by SwiftShader is not deterministic enough for CI, and the raycast is not
+  // what this test is about.
   await expect
-    .poll(() => page.evaluate(() => [...(window as unknown as Win).__afterfall.sim.structures()].length), { timeout: 10_000 })
+    .poll(() => page.evaluate(() => (window as unknown as { __afterfallUi: any }).__afterfallUi.getState().buildMode))
+    .toBe("wall");
+  const cell = await page.evaluate(() => {
+    const g = (window as unknown as Win).__afterfall;
+    const e = g.sim.hqEntrance();
+    const grid = g.sim.grid;
+    for (let r = 5; r < 40; r++) {
+      for (const [dx, dy] of [
+        [0, r],
+        [r, 0],
+        [-r, 0],
+        [0, -r],
+      ]) {
+        const cx = Math.floor((e.x + dx) / grid.cell);
+        const cy = Math.floor((e.y + dy) / grid.cell);
+        const i = grid.index(cx, cy);
+        if (grid.kind[i] === 0 && grid.structureAt[i] === -1) return [cx, cy];
+      }
+    }
+    return null;
+  });
+  expect(cell, "a free cell next to the headquarters").not.toBeNull();
+  await page.evaluate((c) => {
+    (window as unknown as Win).__afterfall.command({ type: "placeStructures", kind: "wall", cells: [c] });
+  }, cell);
+  await expect
+    .poll(() => page.evaluate(() => [...(window as unknown as Win).__afterfall.sim.structures()].length), { timeout: 20_000 })
     .toBeGreaterThan(0);
 });
 

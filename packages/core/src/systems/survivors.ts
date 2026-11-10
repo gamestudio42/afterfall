@@ -1,4 +1,4 @@
-import { BALANCE, RESOURCE_IDS, WEAPONS, addToBag, bagTotal, type ResourceId } from "@afterfall/content";
+import { BALANCE, RESOURCE_IDS, WEAPONS, addToBag, bagTotal, researchYield, type ResourceId } from "@afterfall/content";
 import { TICK_SECONDS } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
 import type { Entity, SurvivorComp } from "../state";
@@ -312,7 +312,9 @@ function scavenge(sim: Simulation, e: SurvivorEntity, hourFloat: number): void {
       const before = Math.floor(b.searchProgress);
       b.searchProgress = Math.min(b.searchTotal, b.searchProgress + rate);
       let reveal = Math.floor(b.searchProgress) - before;
-      while (reveal-- > 0 && bagTotal(b.remainingLoot) > 0 && carrySpace(s) > 0.5) {
+      // Salvage: a practised eye finds the extra box in the back room.
+      if (sim.hasTech("salvage") && sim.rng.chance(0.25)) reveal++;
+      while (reveal-- > 0 && bagTotal(b.remainingLoot) > 0 && carrySpace(sim, s) > 0.5) {
         const id = sim.rng.weighted(b.remainingLoot as Record<ResourceId, number>);
         // Ammo is light, so it is found in boxes.
         const amount = id === "ammo" ? Math.min(b.remainingLoot.ammo ?? 0, 6) : 1;
@@ -340,10 +342,17 @@ function scavenge(sim: Simulation, e: SurvivorEntity, hourFloat: number): void {
       }
       const nowDepleted = bagTotal(b.remainingLoot) <= 0;
       if (nowDepleted && b.searchProgress < b.searchTotal) b.searchProgress = b.searchTotal;
-      if (carrySpace(s) <= 0.5 || nowDepleted || recall) {
+      if (carrySpace(sim, s) <= 0.5 || nowDepleted || recall) {
         if (nowDepleted && b.searchProgress >= b.searchTotal && !sim.state.eventCooldowns[`searched:${b.index}`]) {
           sim.state.eventCooldowns[`searched:${b.index}`] = 1;
           sim.state.stats.buildingsSearched++;
+          // Knowledge lives in schools, hospitals, offices, police stations and
+          // pharmacies; the search has to finish for it to be worth anything.
+          const points = researchYield(def.type);
+          if (points > 0) {
+            sim.addResearch(points);
+            sim.alert("alert.researchFound", { type: def.type, points }, "success", { x: ent.x, y: ent.y });
+          }
           sim.alert("alert.buildingDepleted", { type: def.type }, "info", { x: ent.x, y: ent.y });
         }
         exitBuilding(sim, e);

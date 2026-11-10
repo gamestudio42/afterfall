@@ -1,4 +1,4 @@
-import type { BuildingFunction, InfectedKind, ResourceBag, ResourceId, StructureKind, WeaponId } from "@afterfall/content";
+import type { BuildingFunction, InfectedKind, ResourceBag, ResourceId, StructureKind, TechId, WeaponId } from "@afterfall/content";
 import type { Vec2 } from "@afterfall/shared";
 
 export type EntityId = number;
@@ -197,6 +197,27 @@ export interface Policies {
   autoDefend: boolean;
 }
 
+/** Research points, unlocked capabilities, and the cure project. */
+export interface ResearchState {
+  points: number;
+  unlocked: TechId[];
+  cure: {
+    started: boolean;
+    /** Dawns completed while the lab stood. */
+    progress: number;
+    /** Building index of the lab that started the project, or -1. */
+    lab: number;
+  };
+}
+
+/** Today's production and consumption, rolled at dawn for the ledger panel. */
+export interface EconState {
+  day: number;
+  produced: ResourceBag;
+  consumed: ResourceBag;
+  yesterday: { produced: ResourceBag; consumed: ResourceBag };
+}
+
 export interface Stats {
   infectedKilled: number;
   survivorsLost: number;
@@ -212,7 +233,7 @@ export interface Stats {
 
 export interface Outcome {
   type: "victory" | "defeat";
-  reason: "survived" | "allDead" | "hqDestroyed";
+  reason: "survived" | "cured" | "allDead" | "hqDestroyed";
   tick: number;
 }
 
@@ -258,6 +279,8 @@ export interface GameState {
   rngState: number;
   /** Last time (tick) the settlement was attacked. */
   lastAttackTick: number;
+  research: ResearchState;
+  econ: EconState;
   log: { tick: number; key: string; params: Record<string, string | number> }[];
 }
 

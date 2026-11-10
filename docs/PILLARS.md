@@ -77,13 +77,23 @@ the thing being moved.
 | Beds, food, water, medicine, morale and skills | 4 | Dawn / hold |
 | Refugees, trader, radio cache, storm and accident | 4 | Day / dawn |
 | OpenStreetMap places and real footprints | 1 | Choose |
-| Dawn autosave and the five-night victory | 4 | Count |
+| Dawn autosave, the ledger and the twenty-night campaign | 4 | Count |
+| Research, the laboratory and the cure | 1, 4 | Choose / build / count |
 
 ## Out of scope for this slice
 
-Research, diplomacy, vehicles, energy and water networks, chunk streaming and
-large-region logistics are roadmap items, not current pillars. They should not
-be added until a pillar needs them and a playable slice can prove them.
+Vehicles, diplomacy, energy and water networks, chunk streaming and large-region
+logistics are roadmap items, not current pillars. They should not be added until a
+pillar needs them and a playable slice can prove them.
+
+Research is no longer on that list. Pillar 1 promises that progress is visible on
+the map and survives the night, and a five-night slice kept that promise only until
+the fifth dawn: the settlement had nowhere to go, and every night asked the same
+question. The campaign now runs twelve nights and ends with a cure, so the tech tree
+and the laboratory serve pillar 1 (the city is reclaimed by becoming able to leave
+it) and pillar 4 (the community invests in its own future). A node that does not
+change a decision — a flat multiplier — is still out of scope: each one must name a
+capability the player can describe in one sentence.
 
 ## Using this document
 

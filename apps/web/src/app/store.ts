@@ -21,6 +21,8 @@ export interface UiState {
   overlay: OverlayMode;
   dragRect: { x0: number; y0: number; x1: number; y1: number } | null;
   showHelp: boolean;
+  showResearch: boolean;
+  showEcon: boolean;
   showDev: boolean;
   outcomeAck: boolean;
   toast: string | null;
@@ -77,6 +79,8 @@ export const useUi = create<UiState>((set) => ({
   overlay: "none",
   dragRect: null,
   showHelp: false,
+  showResearch: false,
+  showEcon: false,
   showDev: false,
   outcomeAck: false,
   toast: null,

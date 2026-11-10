@@ -807,3 +807,99 @@ canvas.world.hidden {
 .menu-buttons + .menu-buttons {
   margin-top: 10px;
 }
+
+/* Research tree and the economy ledger */
+.wide-modal {
+  width: min(760px, 100%);
+}
+.panels {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.chip.panel-open.ready {
+  color: var(--accent-2);
+  border-color: var(--accent-2);
+}
+.research-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 4px 0 10px;
+  flex-wrap: wrap;
+}
+.research-head .points {
+  font-weight: 700;
+  color: var(--accent-2);
+}
+.tech-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.tech-branch h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.tech {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 7px 8px;
+}
+.tech small {
+  color: var(--muted);
+  line-height: 1.25;
+}
+.tech .cost {
+  font-size: 11px;
+  color: var(--accent-2);
+}
+.tech.done {
+  border-color: var(--accent-2);
+  opacity: 0.75;
+}
+.tech.done .cost {
+  color: var(--accent-2);
+}
+.tech:disabled:not(.done) {
+  opacity: 0.45;
+}
+.cure-row {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.cure-row h4 {
+  margin: 0 0 4px;
+}
+.ledger {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.ledger th,
+.ledger td {
+  text-align: right;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.ledger th:first-child,
+.ledger td:first-child {
+  text-align: left;
+}
+.ledger th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.ledger tr.low td {
+  color: var(--danger);
+}

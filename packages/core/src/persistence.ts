@@ -1,3 +1,4 @@
+import { clockFromTick } from "@afterfall/shared";
 import type { CityMap } from "@afterfall/world";
 import { Simulation, SAVE_VERSION } from "./simulation";
 import type { Entity, GameState, Task } from "./state";
@@ -69,6 +70,19 @@ export function migrate(save: SaveGame): SaveGame {
   if (save.version > SAVE_VERSION) throw new Error(`Save version ${save.version} is newer than supported ${SAVE_VERSION}`);
   switch (save.version) {
     case 1:
+      // v2 adds research and the economy ledger. An old save starts with no research
+      // spent and an empty ledger, which is exactly where that campaign left off.
+      return {
+        ...save,
+        version: 2,
+        worldState: {
+          ...save.worldState,
+          version: 2,
+          research: { points: 0, unlocked: [], cure: { started: false, progress: 0, lab: -1 } },
+          econ: { day: clockFromTick(save.worldState.tick).day, produced: {}, consumed: {}, yesterday: { produced: {}, consumed: {} } },
+        },
+      } as SaveGame;
+    case 2:
       return save;
     default:
       throw new Error(`Unsupported save version ${save.version}`);

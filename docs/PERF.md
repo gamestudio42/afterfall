@@ -133,3 +133,40 @@ a single prop-heavy scene would cost. What would justify them is a map an order 
 magnitude larger than the importer allows, or a measured GPU budget that this project has
 never had. The crash was the real blocker for large maps, and it is fixed and pinned by a
 test that builds 435 buildings and checks every triangle still points at a real one.
+
+## The horde is not the cost either (2026-11-10, PR #53)
+
+`docs/PERF.md` has said since the first probe that the night sample was quiet — no wave
+had spawned when it was taken — so the one scenario the game is named after had never
+been measured. Two hundred and fifty-six infected, a base, night, twelve hundred ticks:
+
+| scene | ticks | infected | ms per tick |
+| --- | --- | --- | --- |
+| day, 28 survivors, 1,553-building city | 1,200 | 0 | ~0.13 |
+| night, same map, horde at the walls | 1,200 | 256 | **0.164** |
+
+A tick is 0.13–0.16 ms, and the simulation runs about one tick per frame at normal speed,
+so the whole simulation is under 1% of a 16.7 ms budget with a horde.
+
+The same night in the browser, drawing only — 283 infected, 111 buildings, 80 draw calls,
+191,914 triangles — took **1.6 ms per `renderFrame`** at 1280 by 720 under SwiftShader. That
+number is not comparable to the 320 ms in the first table of this document, which timed the
+whole frame loop with the UI and the shadow pass; it says the draw submission is cheap and
+nothing more, and it is still software rasterisation, not a GPU. Twenty-eight
+survivors cost about as much as two hundred and fifty infected, because a survivor plans
+paths and a horde mostly walks downhill on a flow field.
+
+That closes the three structural items the roadmap still carried:
+
+- **Simulation in a Web Worker** — moving 0.16 ms off the main thread buys nothing, and it
+  costs a serialised boundary between the worker and everything that reads `sim.state`.
+  Rejected on measurement, not on effort.
+- **Aggregated distant hordes** — the horde is already cheap; aggregation would trade
+  visible behaviour for a rounding error.
+- **Chunk streaming and LOD** — one city builds in 845 ms and draws in 19 calls, flat from
+  133 to 1,553 buildings.
+
+What is left is the renderer, and the renderer cannot be judged here: every frame number
+in this document comes from SwiftShader, which rasterises on the CPU. The 60 fps budget at
+1080p with a hundred buildings, forty survivors and one night horde is still exactly as
+unverified as it was on day one, and no amount of local optimisation changes that.

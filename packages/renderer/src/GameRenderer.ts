@@ -1025,16 +1025,21 @@ export class GameRenderer {
       }
       const axial = s.kind === "wall" || s.kind === "gate";
       const yaw = axial ? wallYaw(s) : 0;
-      const placements = axial && isCorner(s) ? [yaw, yaw + Math.PI / 2] : [yaw];
+      // A junction is a solid block for the whole cell. Drawing both slabs crossed left
+      // two dead arms poking a metre out of every corner, which read as battlements; the
+      // cell block fills the four quadrants the slabs cannot reach.
+      const corner = axial && isCorner(s);
+      const placements: { yaw: number; thick: number }[] = [{ yaw, thick: corner ? def.size * cell : 1 }];
       const hpFrac = e.health ? e.health.hp / e.health.max : 1;
       tmpC.setHex(0xffffff);
       if (hpFrac < 0.99) tmpC.lerp(new THREE.Color(0x8a2a20), (1 - hpFrac) * 0.8);
       if (e.id === this.selection.structure) tmpC.lerp(new THREE.Color(0xffd34d), 0.4);
-      for (const angle of placements) {
+      for (const placement of placements) {
         if (model.ids.length >= MAX_STRUCTURES) break;
         const n = model.ids.length;
-        tmpQ2.setFromAxisAngle(up, angle);
-        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(1, 1, 1));
+        tmpQ2.setFromAxisAngle(up, placement.yaw);
+        // The wall model's slab is 0.5 m thick, so a full cell needs a 4x on that axis.
+        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(1, 1, placement.thick));
         for (const part of model.parts) {
           part.setMatrixAt(n, tmpM);
           part.setColorAt(n, tmpC);

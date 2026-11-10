@@ -6,7 +6,7 @@ import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
 import { axialYaw, cornerBlockScale } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
-import { buildCityGround, TEXTURED_TINT, type GroundMaterials } from "./cityMeshes";
+import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
 import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
@@ -617,14 +617,15 @@ export class GameRenderer {
   private applyArt(art: ArtTextures): void {
     const g = this.groundMats;
     if (g) {
-      const set = (key: keyof GroundMaterials, tex: THREE.Texture | null) => {
+      const set = (key: keyof GroundMaterials, tex: THREE.Texture | null, tint = TEXTURED_TINT[key]) => {
         const mat = g[key];
         if (!mat || !tex || mat.map === tex) return;
         mat.map = tex;
-        mat.color.setHex(TEXTURED_TINT[key]);
+        mat.color.setHex(tint);
         mat.needsUpdate = true;
       };
-      set("ground", art.grass);
+      // An imported map has no blocks, so its base is street-level paving, not a lawn.
+      set("ground", this.groundImported ? art.concrete : art.grass, this.groundImported ? URBAN_GROUND_TINT : TEXTURED_TINT.ground);
       set("blocks", art.sidewalk);
       set("curbs", art.concrete);
       set("roads", art.asphalt);
@@ -642,6 +643,7 @@ export class GameRenderer {
   }
 
   private groundMats: GroundMaterials | null = null;
+  private groundImported = false;
   private art: ArtTextures;
   private propScene: PropScene | null = null;
   /** Meshes of the survivor model: one instanced mesh per pose and part. */
@@ -873,6 +875,7 @@ export class GameRenderer {
     const ground = buildCityGround(city);
     this.cityGroup = ground.group;
     this.groundMats = ground.materials;
+    this.groundImported = ground.imported;
     this.applyArt(this.art);
     this.scene.add(this.cityGroup);
 

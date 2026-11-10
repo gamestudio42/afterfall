@@ -51,6 +51,9 @@ function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferG
  * the bare ground reads a little more yellow; the parks keep white because the
  * grass map is already the park's green.
  */
+/** The paved base of an imported map: concrete under a light, neutral tint. */
+export const URBAN_GROUND_TINT = 0xb9b5ad;
+
 export const TEXTURED_TINT: Record<keyof GroundMaterials, number> = {
   roads: 0xa7abae,
   ground: 0xe9c8ff,
@@ -118,13 +121,25 @@ function worldUv(geo: THREE.BufferGeometry, tile: number): void {
   geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
 }
 
-/** Static ground, roads, sidewalks, lane markings and parks. */
-export function buildCityGround(city: CityMap): { group: THREE.Group; materials: GroundMaterials } {
+/**
+ * Static ground, roads, sidewalks, lane markings and parks.
+ *
+ * A generated city is blocks with a sidewalk each and grass between them; an imported
+ * one has streets and buildings and nothing else, so its base has to be paved — painting
+ * it grass turned a dense neighbourhood into a lawn with buildings standing on it.
+ */
+export function buildCityGround(city: CityMap): {
+  group: THREE.Group;
+  materials: GroundMaterials;
+  /** True for an imported map: streets and footprints, no blocks. */
+  imported: boolean;
+} {
   const group = new THREE.Group();
   group.name = "ground";
 
+  const imported = city.blocksX === 0 || city.blockSize <= 0;
   const margin = 400;
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x4a4d40, roughness: 1 });
+  const groundMat = new THREE.MeshStandardMaterial({ color: imported ? 0x6f6d66 : 0x4a4d40, roughness: 1 });
   const materials: GroundMaterials = { ground: groundMat, blocks: null, curbs: null, roads: null, parks: null };
   const groundGeo = plane(-margin, -margin, city.width + margin * 2, city.height + margin * 2, -0.05);
   worldUv(groundGeo, 12);
@@ -167,12 +182,16 @@ export function buildCityGround(city: CityMap): { group: THREE.Group; materials:
   const roads = city.roads.flatMap((r) =>
     r.path ? ribbon(r.path, r.width ?? 8, 0.01) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.01)],
   );
-  const roadGeo = mergeGeometries(roads);
-  worldUv(roadGeo, 6);
-  materials.roads = new THREE.MeshStandardMaterial({ color: 0x34363a, roughness: 0.9 });
-  const roadMesh = new THREE.Mesh(roadGeo, materials.roads);
-  roadMesh.receiveShadow = true;
-  group.add(roadMesh);
+  // A map with no roads at all (a fixture, or a save from one) used to crash here:
+  // `mergeGeometries([])` reads `geometries[0].index` without checking.
+  if (roads.length) {
+    const roadGeo = mergeGeometries(roads);
+    worldUv(roadGeo, 6);
+    materials.roads = new THREE.MeshStandardMaterial({ color: 0x34363a, roughness: 0.9 });
+    const roadMesh = new THREE.Mesh(roadGeo, materials.roads);
+    roadMesh.receiveShadow = true;
+    group.add(roadMesh);
+  }
 
   // Dashed center lines, skipping intersections.
   const dashes: THREE.BufferGeometry[] = [];
@@ -217,5 +236,5 @@ export function buildCityGround(city: CityMap): { group: THREE.Group; materials:
     trunks.castShadow = crowns.castShadow = true;
     group.add(trunks, crowns);
   }
-  return { group, materials };
+  return { group, materials, imported };
 }

@@ -102,3 +102,34 @@ What a profile shows after both fixes is flat — no function above 7.5% — whi
 next win is structural rather than local: the simulation in a Web Worker, or LOD and chunk
 streaming for large imported cities. The 60 fps budget is still a render question and is
 still unmeasured on a GPU.
+
+## A large city could not be built at all (2026-11-10, PR #52)
+
+Before deciding anything about level of detail or streaming, the obvious question was
+what a large map costs today. The answer was not a cost: **it crashed.**
+
+`BuildingBatch` concatenated its vertex groups with `push(...array)`. Spreading a
+few hundred thousand numbers as call arguments overflows the stack, so a ten-block city
+(435 buildings, 43k triangles) threw `RangeError: Maximum call stack size exceeded`
+inside the constructor. Six blocks worked, ten did not — and a real imported
+neighbourhood is far past ten. The fix is typed arrays and `set` with a running offset;
+`owner` is per triangle, so its offset moves in triangles while the vertex buffers move in
+vertices, which is the part that broke the existing ray-hit test until it was corrected.
+
+Measured after the fix, one renderer per page load, eighteen blocks by eighteen:
+
+| buildings | build | draw calls | triangles | frame (SwiftShader) |
+| --- | --- | --- | --- | --- |
+| 1,553 | 845 ms | 19 | 132,884 | 4.8 ms |
+
+That is a 1.2 km square with more buildings than any imported map the game accepts (the
+importer stays under a 600 m square). The renderer still batches everything into 19 draw
+calls and 133k triangles, and the frame time does not move between six blocks and eighteen.
+
+**So chunk streaming and level of detail are deferred, on measurement rather than on
+taste.** They exist to bound a cost that is not there yet: the geometry is a one-off
+845 ms on map load, the draw-call count is flat, and the triangle count is a fifth of what
+a single prop-heavy scene would cost. What would justify them is a map an order of
+magnitude larger than the importer allows, or a measured GPU budget that this project has
+never had. The crash was the real blocker for large maps, and it is fixed and pinned by a
+test that builds 435 buildings and checks every triangle still points at a real one.

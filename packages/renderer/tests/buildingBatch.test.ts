@@ -126,3 +126,23 @@ describe("building batch", () => {
     expect(color.getX(groupOf(batch, "roof").start)).toBeCloseTo(0.2, 5);
   });
 });
+
+describe("large cities", () => {
+  it("builds a map far bigger than the old stack could take", () => {
+    // Ten blocks by ten is 435 buildings and about 43k triangles — smaller than a real
+    // imported neighbourhood, and enough to overflow the stack when the groups were
+    // concatenated with `push(...array)`.
+    const city = Array.from({ length: 435 }, (_, i) => building(i, i % 3 === 0 ? "shop" : "house", (i % 21) * 14, 2 + (i % 4)));
+    const batch = new BuildingBatch(city);
+    const pos = batch.mesh.geometry.getAttribute("position");
+    expect(pos.count).toBeGreaterThan(40_000);
+    // Every triangle belongs to a building that exists, read back through the API the
+    // renderer itself uses for picking.
+    const triangles = pos.count / 3;
+    for (let t = 0; t < triangles; t += 97) {
+      const owner = batch.ownerOfTriangle(t);
+      expect(owner).toBeGreaterThanOrEqual(0);
+      expect(owner).toBeLessThan(city.length);
+    }
+  });
+});

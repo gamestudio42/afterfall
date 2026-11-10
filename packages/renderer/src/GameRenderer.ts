@@ -979,6 +979,15 @@ export class GameRenderer {
       const at = (x: number, y: number) => g.inBounds(x, y) && g.structureAt[g.index(x, y)] >= 0;
       return axialYaw(at(s.cx, s.cy - 1), at(s.cx, s.cy + 1), at(s.cx + 1, s.cy), at(s.cx - 1, s.cy));
     };
+    // A junction needs both orientations: the slab only fills its own axis, so an L or T
+    // cell left as one slab shows a shoulder-width notch where the other run stops.
+    const isCorner = (s: { cx: number; cy: number }): boolean => {
+      const g = sim.grid;
+      const at = (x: number, y: number) => g.inBounds(x, y) && g.structureAt[g.index(x, y)] >= 0;
+      const nz = at(s.cx, s.cy - 1) || at(s.cx, s.cy + 1);
+      const nx = at(s.cx + 1, s.cy) || at(s.cx - 1, s.cy);
+      return nz && nx;
+    };
 
     const tmpQ2 = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -1014,21 +1023,25 @@ export class GameRenderer {
         this.structureIds[n] = e.id;
         continue;
       }
-      if (model.ids.length >= MAX_STRUCTURES) continue;
-      const n = model.ids.length;
-      const yaw = s.kind === "wall" || s.kind === "gate" ? wallYaw(s) : 0;
-      tmpQ2.setFromAxisAngle(up, yaw);
-      tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(1, 1, 1));
+      const axial = s.kind === "wall" || s.kind === "gate";
+      const yaw = axial ? wallYaw(s) : 0;
+      const placements = axial && isCorner(s) ? [yaw, yaw + Math.PI / 2] : [yaw];
       const hpFrac = e.health ? e.health.hp / e.health.max : 1;
       tmpC.setHex(0xffffff);
       if (hpFrac < 0.99) tmpC.lerp(new THREE.Color(0x8a2a20), (1 - hpFrac) * 0.8);
       if (e.id === this.selection.structure) tmpC.lerp(new THREE.Color(0xffd34d), 0.4);
-      for (const part of model.parts) {
-        part.setMatrixAt(n, tmpM);
-        part.setColorAt(n, tmpC);
-        part.count = n + 1;
+      for (const angle of placements) {
+        if (model.ids.length >= MAX_STRUCTURES) break;
+        const n = model.ids.length;
+        tmpQ2.setFromAxisAngle(up, angle);
+        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(1, 1, 1));
+        for (const part of model.parts) {
+          part.setMatrixAt(n, tmpM);
+          part.setColorAt(n, tmpC);
+          part.count = n + 1;
+        }
+        model.ids[n] = e.id;
       }
-      model.ids[n] = e.id;
     }
 
     this.structures.count = this.structureIds.length;

@@ -108,11 +108,11 @@ def wall():
     reset()
     materials()
     parts = []
-    parts.append(box((2.0, 0.42, 1.9), (0, 0, 0.95), material=CONCRETE))
-    parts.append(box((2.0, 0.36, 0.7), (0, 0, 2.25), material=CONCRETE))
+    parts.append(box((2.0, 0.50, 1.9), (0, 0, 0.95), material=CONCRETE))
+    parts.append(box((2.0, 0.44, 0.7), (0, 0, 2.25), material=CONCRETE))
     # A broken top: two blocks of different heights, so the silhouette is not a slab.
-    parts.append(box((0.9, 0.30, 0.26), (-0.5, 0, 2.73), material=CONCRETE))
-    parts.append(box((0.5, 0.28, 0.16), (0.66, 0, 2.68), material=CONCRETE))
+    parts.append(box((0.9, 0.38, 0.26), (-0.5, 0, 2.73), material=CONCRETE))
+    parts.append(box((0.5, 0.36, 0.16), (0.66, 0, 2.68), material=CONCRETE))
     # A timber band across both faces and a diagonal brace, what makes it read as
     # something people built rather than a poured block.
     for y in (-0.24, 0.24):

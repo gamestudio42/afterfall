@@ -392,7 +392,7 @@
       "file": "structures/wall.glb",
       "kind": "glb",
       "bytes": 9564,
-      "sha256": "6ccf4320feda365057a5aac1f27963051f8f39020010c611612dac05b892eb7f",
+      "sha256": "5db5d2ce59bccc1ca2f9793589d03ba2c668a08368d5707fcd95f9c9eea2b72c",
       "generator": "tools/blender/structures.py"
     },
     {

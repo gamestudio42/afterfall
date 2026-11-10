@@ -47,25 +47,65 @@ whether they already knew the system.
 
 ### Scripted balance sweep
 
-- Date: 2026-10-31
-- Base: `main` at `02c8d10`
-- Command: `pnpm sweep 40 1`
-- Seeds: 1 through 40
-- Result: **open 29/40 (72.5%)**, **fort 31/40 (77.5%)**
-- Notes: the open bot wins most runs but loses several on night 5; the fort
-  bot trades early wall investment for a stronger late position. By default
-  neither bot builds a workshop; the later 20-seed experiments with the
-  `craft` and `econ` options show that ammo is not the binding constraint
-  (see `docs/BALANCE.md`).
+- Date: 2026-11-09
+- Base: `main` after #42 (campaign, research and the cure)
+- Command: `pnpm sweep 10 1 fort craft,econ,research 12` and the same without `research`
+- Seeds: 1 through 10, twelve nights
+- Result: **3/10 with research, 2/10 without**. One seed of difference is inside the
+  noise of ten seeds, so the tree is recorded as unresolved, not as a gain.
+- Caveats that matter more than the number: the scripted player is a five-night player.
+  Its build order trades walls for conversions and never both, and a trace of one seed
+  (`tools/campaign-probe.ts`) shows it spending the first day's wood on a wall ring and
+  then leaving every conversion blocked for days. Three attempts to give it a strategy
+  layer (a reservation, a paused workshop, a cheaper ammo recipe) all measured worse and
+  are recorded in `docs/BALANCE.md`. **The sweep cannot answer whether the campaign is
+  fun, fair, or even the right length.**
 
-This reproduces the targets written in `docs/GDD.md`. It is a regression
-baseline, not evidence that a human player will feel the same difficulty.
+Historical: the five-night slice measured **open 29/40 (72.5%)** and **fort 31/40
+(77.5%)** on 2026-10-31 (`main` at `02c8d10`). Those numbers belong to a game that ended
+at dawn of day 6 and are kept only as a regression baseline for the first five nights.
 
 ### Human sessions
 
 No human playtest has been recorded yet. The roadmap lists "balance with real
 play" as the next step. Until a session is logged here, do not claim that the
 game is fun, too hard, or too easy.
+
+## Campaign session script (12 nights)
+
+The next open question is not a number, it is whether twelve nights with a cure hold a
+player's attention and feel fair. One session answers more than a sweep:
+
+1. **Setup.** New game, generated city, seed written down. Difficulty untouched.
+2. **Play, uncoached.** Do not say where the research panel is, do not say the lab exists.
+   Stop at the first defeat, at the cure, or at dawn of night 13.
+3. **Ask the ledger to be opened** at dawn of nights 3, 6 and 9 and read out loud: what
+   the last day produced, what it consumed, and which resource has the fewest days left.
+4. **Ask one question at every dawn, before anything else:** "what are you worried
+   about right now?" Write the answer down verbatim. That sentence is the tension curve.
+5. **After the run**, before showing any numbers, ask the player to explain what killed
+   them or what they were doing when they won.
+
+### Questions, each mapped to a decision
+
+| ask | if the answer is bad, change |
+|---|---|
+| When did you first think you were going to lose? | before night 5 in most runs: the early curve is too steep |
+| Which night felt unfair rather than hard? And what did you think caused it? | cannot name a cause: legibility failure (pillar 2), not a balance failure |
+| Did you ever change a build because of a night you saw coming? | never: the night is a timer, not a promise |
+| What did you buy first in research, and did you notice the effect on the next day? | cannot name an effect: the node is a multiplier, cut or recast it |
+| Did you build a laboratory? If not, why? | never reached it by night 8: the cure path is too slow or too expensive |
+| Did you ever stop a job to afford another one? Which resource ran out? | always the same resource every run: that is a design hole, not difficulty |
+| Describe the last ten minutes of play. | "waited and repaired": the endgame is empty (the failure we are trying to avoid) |
+| Would you start a second run, and what would you do differently? | no and nothing: no replay pull |
+
+### Recording template
+
+| run | seed | who | outcome | day | pop | research bought | first "I might lose" | first confusion | quote |
+|---|---|---|---|---|---|---|---|---|---|
+
+Separate observation from interpretation as above, and never treat the designer's own
+run as the target.
 
 ## When the build changes
 

@@ -158,34 +158,42 @@ fifth night concentrates attrition (direct count, not statistics), and the econo
 open play (large). Anything smaller than that is still undecided.
 
 
-## Campaign length and research (2026-11-09, `feat/campaign-research`)
+## Campaign length and research (2026-11-09, merged in #42)
 
 The campaign moved from five nights to twelve, with the cure as the intended ending.
-Four arms were measured with the scripted players over seeds 1-10. These are bot
-numbers, not human playtest evidence, and ten seeds cannot resolve a difference under
-ten points — that is why the research arm is reported as unresolved rather than as a
-gain.
+Measured with the scripted fort player over seeds 1-10: **3/10 wins with research,
+2/10 without**, which is inside the noise of ten seeds and is recorded as unresolved,
+not as a gain. A first pass blamed ammo starvation and raised the workshop recipe; a
+second pass blamed metal and halved its price. Both were wrong, and the probe that
+disproved them is the part worth keeping.
 
-| arm | nights | wins | what happened |
-|---|---|---|---|
-| fort, craft+econ | 5 | 0 (7 of 10 alive at dawn of day 6) | the old slice no longer has a victory condition at five nights |
-| fort, craft+econ | 12 | 2/10 | eight defeats between night 5 and night 12 |
-| fort, craft+econ+research | 12 | 3/10 | one seed more; inside the noise of ten seeds |
-| open, craft+econ | 20 | 0/10 | without a wall the base falls at night 4-9 |
+### What the trace actually shows
 
-**The mid-game is the wall, not the last night.** Bots that survive the first five
-nights die between night 5 and night 12 in eight of ten seeds, and the traces show why:
-`ammo` sits at 0 for most days, so the settlement fights the horde with crowbars. The
-workshop recipe was raised from 12 to 30 rounds per 30 work and houses, apartments and
-warehouses yield more metal, which moved the result by one seed — the bottleneck is
-deeper than the recipe, and metal has to come from somewhere the player deliberately
-goes: wrecks, garages, warehouses.
+`tools/campaign-probe.ts <seed> <days> <plain|research|full>` prints one seed day by
+day. On seed 3 the workshop produces **5,550 rounds over twelve days** while metal
+sits between 30 and 104 in storage: `ammo 0` in the sweep rows is the *stock at dawn*,
+not the supply, because the rounds are made and spent the same day. Ammo is therefore
+not the constraint, and neither is the recipe (metal 2 vs 1 changed 3/10 to 3/10 on the
+same seeds, seed for seed).
 
-The cure itself works and is reachable: on seed 3 the research bot stood a lab up on
-day 7, finished the tree by day 11 and won by cure on day 13 (`tools/campaign-probe.ts`).
-It is not yet *reliably* reachable, and the tree's nodes were bought but not felt.
+What kills the colony is the night. On seed 7 the population falls 4 → 1 between day 2
+and day 7 with `convert:blocked` for days: the scripted player walls the base in on day
+one, spends all forty wood on the ring, and never stands a workshop up. That is a flaw
+in the instrument, not in the game, and it is why the sweep rows were read as "no
+ammo": no workshop means no rounds at all.
 
-Next experiment, in this order: (1) measure with ammo granted at dawn to prove the ammo
-hypothesis before changing content again; (2) if it holds, add metal nodes the player
-must choose to visit (wrecks in the street, garage doors) rather than more metal in
-houses; (3) then re-measure with 60 seeds per arm before claiming anything.
+### The instrument cannot answer this yet
+
+The scripted player is a five-night player. Beyond that it starves one resource to
+build another — walls or conversions, never both — and its result is dominated by that
+ordering rather than by the curve. Two runs of the same arm with only the build order
+changed moved the win rate from 3/10 to 2/20 and removed the walls entirely (3-4
+structures per seed, all towers).
+
+So the next step is **not** another content change. It is either a human playtest
+(`docs/PLAYTEST.md`), which is what the roadmap already asks for, or a bot that keeps a
+reserve for the next conversion — the second is a real piece of work, and building it
+only to tune a curve nobody has played is the wrong order.
+
+Kept from the experiment: `ammoSubsidy` in the autoplay options, so "would more ammo
+change this?" can be answered in one run instead of a rule change.

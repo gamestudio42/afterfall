@@ -12,6 +12,7 @@ const flags = new Set((process.argv[5] ?? "").split(","));
 const craft = flags.has("craft");
 const economy = flags.has("econ");
 const research = flags.has("research");
+const ammoSubsidy = flags.has("subsidy") ? 100 : undefined;
 const days = Number(process.argv[6] ?? 6);
 
 for (const fortify of modes) {
@@ -19,7 +20,7 @@ for (const fortify of modes) {
   const rows: string[] = [];
   for (let seed = first; seed < first + count; seed++) {
     const sim = createSimulation({ seed });
-    autoplay(sim, days, undefined, { fortify, craft, economy, research });
+    autoplay(sim, days, undefined, { fortify, craft, economy, research, ammoSubsidy });
     const r = getReport(sim);
     if (r.outcome?.startsWith("victory")) wins++;
     rows.push(

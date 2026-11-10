@@ -39,6 +39,12 @@ export interface AutoplayOptions {
   economy?: boolean;
   /** Also buys research, stands a lab up and runs the cure project. */
   research?: boolean;
+  /**
+   * Rounds deposited at the headquarters at every dawn. An experiment lever, not a
+   * strategy: it answers "would more ammo change the outcome?" without touching the
+   * content, so a hypothesis can be dropped before a rule is changed for it.
+   */
+  ammoSubsidy?: number;
 }
 
 export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulation) => void, options: AutoplayOptions = {}): void {
@@ -55,8 +61,14 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
   let well = false;
   let secondShelter = false;
   let fortified = !options.fortify;
+  let subsidyDay = 0;
   while (sim.state.tick < end && !(sim.state.outcome && sim.state.outcome.type === "defeat")) {
     const clock = clockFromTick(sim.state.tick);
+    if (options.ammoSubsidy && clock.hour === 6 && clock.day !== subsidyDay) {
+      subsidyDay = clock.day;
+      const hqS = sim.hqEntrance();
+      sim.deposit({ ammo: options.ammoSubsidy }, hqS.x, hqS.y);
+    }
     if (sim.state.pendingEvent) sim.enqueue({ type: "resolveEvent", choice: 0 });
     if (sim.state.tick % (TICKS_PER_GAME_MINUTE * 30) === 0 && clock.hour >= 7 && clock.hour < 15) {
       const hq = sim.hqEntrance();

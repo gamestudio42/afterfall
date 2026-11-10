@@ -215,6 +215,7 @@ function main(): void {
     assets: { file: string; width: number; height: number; bytes: number; sha256: string; generator: string }[];
   };
   const entry = {
+    name: "decals",
     file: "decals.png",
     width: W,
     height: H,

@@ -71,6 +71,13 @@ Two constraints learned the hard way still apply to every new asset:
 - **No video with alpha reaches either engine.** Godot 4.7.2 has no `VideoStreamWebm`, and an OGV transcode loses alpha (`Requested planes not available`). Anything animated goes PNG sequence → atlas → flipbook, never a video file.
 - **No asset enters the repository unverified.** Every asset is listed in `manifest.json` and checked by `pnpm assets:check`; a render once claimed by an agent was fabricated and left no file on disk.
 
+## Done — the five built structures have models
+
+- [x] **Walls, gates, towers, gardens and wells are no longer one box.** `tools/blender/structures.py` builds the kit in metres to the simulation's own footprints (a cell is 2 m): a 2 m concrete wall with timber banding and a ruined parapet, a gateway with posts, a lintel and a barred leaf, a 6 m watch tower with railed platform, ladder, sandbags and roof, an 8 m garden of five raised beds with cabbages, fence, barrel and crate, and a stone well with an A-frame, windlass, rope, bucket and canopy. 144 to 1,820 triangles each, 218 KB in all.
+- [x] **The renderer loads one instanced mesh per material per kind** (`loadStructureModels`), keeps the old box drawing until they land and if any file is missing, and picks a structure across every model. Gates read their neighbours in the navigation grid to decide whether the leaf runs north-south, so a gate in a north-south wall is not drawn sideways. Blueprints keep the box as a translucent ghost of the right size.
+- [x] **Metal stays at 0.15 metalness.** Three.js here has no environment map, so the first export rendered every steel bar black; the same reason the towers' roofs and the gate leaf looked dead.
+- [x] Capture in `docs/art/structures.png`, and `campaign.spec.ts` asserts the five models load instead of silently falling back to the box.
+
 ## Next — art
 
 The goal before the first human playtest is a coherent, finished-looking city.

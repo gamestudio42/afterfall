@@ -122,6 +122,9 @@ export class GameRenderer {
   private lastFxSeq = 0;
   private structureIds: EntityId[] = [];
   private blueprintIds: EntityId[] = [];
+  /** One instanced mesh per material per kind, once `art/structures` lands. */
+  private structureModels = new Map<StructureKind, { parts: THREE.InstancedMesh[]; ids: EntityId[] }>();
+  private structuresReady = false;
   private markers: THREE.Group = new THREE.Group();
   selection: Selection = { units: [], building: -1, structure: -1 };
   private selectionOutlineOf = -1;
@@ -326,6 +329,65 @@ export class GameRenderer {
   }
 
   /**
+   * Loads the five structure models and keeps one instanced mesh per material per kind.
+   * Until they arrive (or if a file is missing) the single box mesh keeps drawing, so a
+   * broken download costs a silhouette and nothing else.
+   */
+  private async loadStructureModels(): Promise<void> {
+    const kinds: StructureKind[] = ["wall", "gate", "tower", "farm", "well"];
+    const loaded = new Map<StructureKind, THREE.InstancedMesh[]>();
+    await Promise.all(
+      kinds.map(async (kind) => {
+        let gltf;
+        try {
+          gltf = await new GLTFLoader().loadAsync(`${this.artBase}art/structures/${kind}.glb`);
+        } catch {
+          return;
+        }
+        gltf.scene.updateMatrixWorld(true);
+        const parts: THREE.InstancedMesh[] = [];
+        gltf.scene.traverse((child) => {
+          if (!(child instanceof THREE.Mesh)) return;
+          const geo = child.geometry.clone();
+          geo.applyMatrix4(child.matrixWorld);
+          const src = child.material as THREE.MeshStandardMaterial;
+          const mat = new THREE.MeshStandardMaterial({
+            name: src.name,
+            color: src.color.clone(),
+            roughness: src.roughness ?? 0.85,
+            metalness: src.metalness ?? 0,
+            flatShading: true,
+          });
+          const inst = new THREE.InstancedMesh(geo, mat, MAX_STRUCTURES);
+          inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          // White keeps the material's own colour; damage and selection lerp from here.
+          inst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_STRUCTURES * 3).fill(1), 3);
+          inst.count = 0;
+          inst.castShadow = true;
+          inst.receiveShadow = true;
+          inst.frustumCulled = false;
+          this.scene.add(inst);
+          parts.push(inst);
+        });
+        if (parts.length > 0) loaded.set(kind, parts);
+      }),
+    );
+    // Every kind has to arrive: a half-loaded kit would show walls and not gates.
+    if (loaded.size !== kinds.length) {
+      for (const parts of loaded.values()) {
+        for (const part of parts) {
+          this.scene.remove(part);
+          part.geometry.dispose();
+        }
+      }
+      return;
+    }
+    for (const [kind, parts] of loaded) this.structureModels.set(kind, { parts, ids: [] });
+    this.structuresReady = true;
+    this.structures.visible = false;
+  }
+
+  /**
    * Drops the prop kit on the sidewalks. Loading is asynchronous and the city
    * can change while it runs, so a token guards against a stale kit landing on
    * a new map.
@@ -461,6 +523,9 @@ export class GameRenderer {
     // The capsule keeps drawing until the model lands, then it is hidden: a
     // missing GLB costs an infected its silhouette and nothing else.
     void this.loadInfectedModel();
+    // The box above keeps drawing until the five models land; if they never do, the
+    // game still shows a structure, just a crude one.
+    void this.loadStructureModels();
     const bar = new THREE.PlaneGeometry(1, 0.14);
     this.hpBg = this.instanced(
       bar,
@@ -689,11 +754,27 @@ export class GameRenderer {
 
   pickStructure(ndcX: number, ndcY: number): EntityId {
     const r = this.ray(ndcX, ndcY);
-    const a = r.intersectObject(this.structures, false)[0];
-    const b = r.intersectObject(this.blueprints, false)[0];
-    if (a && (!b || a.distance <= b.distance)) return this.structureIds[a.instanceId!] ?? -1;
-    if (b) return this.blueprintIds[b.instanceId!] ?? -1;
-    return -1;
+    let best: { id: EntityId; d: number } | null = null;
+    for (const { parts, ids } of this.structureModels.values()) {
+      for (const part of parts) {
+        const hit = r.intersectObject(part, false)[0];
+        if (!hit || hit.instanceId === undefined) continue;
+        const id = ids[hit.instanceId] ?? -1;
+        if (id >= 0 && (!best || hit.distance < best.d)) best = { id, d: hit.distance };
+      }
+    }
+    if (!this.structuresReady) {
+      const hit = r.intersectObject(this.structures, false)[0];
+      if (hit && hit.instanceId !== undefined) {
+        const id = this.structureIds[hit.instanceId] ?? -1;
+        if (id >= 0 && (!best || hit.distance < best.d)) best = { id, d: hit.distance };
+      }
+    }
+    const blue = r.intersectObject(this.blueprints, false)[0];
+    if (blue && blue.instanceId !== undefined && (!best || blue.distance < best.d)) {
+      return this.blueprintIds[blue.instanceId] ?? -1;
+    }
+    return best?.id ?? -1;
   }
 
   /** Screen position (CSS pixels) of a world point. */
@@ -881,39 +962,77 @@ export class GameRenderer {
   }
 
   private updateStructures(sim: Simulation): void {
-    let n = 0;
     let b = 0;
-    this.structureIds.length = 0;
     this.blueprintIds.length = 0;
+    this.structureIds.length = 0;
     const cell = sim.grid.cell;
+    for (const model of this.structureModels.values()) model.ids.length = 0;
+    for (const model of this.structureModels.values()) for (const part of model.parts) part.count = 0;
+
+    // Gates are axial: read the neighbours to decide which way the leaf faces, because
+    // a gate crossing a north-south wall would otherwise show its side.
+    const gateAlongZ = (s: { cx: number; cy: number }): boolean => {
+      const g = sim.grid;
+      const at = (x: number, y: number) => (g.inBounds(x, y) ? g.structureAt[g.index(x, y)] : -2);
+      const nz = at(s.cx, s.cy - 1) >= 0 || at(s.cx, s.cy + 1) >= 0;
+      const nx = at(s.cx - 1, s.cy) >= 0 || at(s.cx + 1, s.cy) >= 0;
+      return nz && !nx;
+    };
+
+    const tmpQ2 = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
     for (const e of sim.structures()) {
       const s = e.structure;
       const def = STRUCTURES[s.kind];
       const size = def.size * cell;
       const cx = (s.cx + def.size / 2) * cell;
       const cz = (s.cy + def.size / 2) * cell;
-      if (s.built) {
-        if (n >= MAX_STRUCTURES) continue;
-        const inset = s.kind === "wall" || s.kind === "gate" ? 0 : 0.3;
-        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ.identity(), tmpS.set(size - inset, def.height, size - inset));
-        this.structures.setMatrixAt(n, tmpM);
-        tmpC.setHex(def.color);
-        const hpFrac = e.health ? e.health.hp / e.health.max : 1;
-        if (hpFrac < 0.99) tmpC.lerp(new THREE.Color(0x8a2a20), (1 - hpFrac) * 0.8);
-        if (e.id === this.selection.structure) tmpC.lerp(new THREE.Color(0xffd34d), 0.4);
-        this.structures.setColorAt(n, tmpC);
-        this.structureIds[n++] = e.id;
-      } else {
+      if (!s.built) {
         if (b >= MAX_STRUCTURES) continue;
         const frac = Math.max(0.08, s.progress / def.work);
         tmpM.compose(tmpV.set(cx, 0, cz), tmpQ.identity(), tmpS.set(size - 0.1, Math.max(0.2, def.height * frac), size - 0.1));
         this.blueprints.setMatrixAt(b, tmpM);
         this.blueprints.setColorAt(b, tmpC.setHex(e.id === this.selection.structure ? 0xffd34d : 0x6fd0ff));
         this.blueprintIds[b++] = e.id;
+        continue;
+      }
+      const model = this.structureModels.get(s.kind);
+      if (!model) {
+        // Fallback box, until the models land.
+        if (this.structureIds.length >= MAX_STRUCTURES) continue;
+        const n = this.structureIds.length;
+        const inset = s.kind === "wall" || s.kind === "gate" ? 0 : 0.3;
+        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ.identity(), tmpS.set(size - inset, def.height, size - inset));
+        this.structures.setMatrixAt(n, tmpM);
+        this.structures.setColorAt(n, tmpC.setHex(def.color));
+        this.structureIds[n] = e.id;
+        continue;
+      }
+      if (model.ids.length >= MAX_STRUCTURES) continue;
+      const n = model.ids.length;
+      const yaw = s.kind === "gate" && gateAlongZ(s) ? Math.PI / 2 : 0;
+      tmpQ2.setFromAxisAngle(up, yaw);
+      tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(1, 1, 1));
+      const hpFrac = e.health ? e.health.hp / e.health.max : 1;
+      tmpC.setHex(0xffffff);
+      if (hpFrac < 0.99) tmpC.lerp(new THREE.Color(0x8a2a20), (1 - hpFrac) * 0.8);
+      if (e.id === this.selection.structure) tmpC.lerp(new THREE.Color(0xffd34d), 0.4);
+      for (const part of model.parts) {
+        part.setMatrixAt(n, tmpM);
+        part.setColorAt(n, tmpC);
+        part.count = n + 1;
+      }
+      model.ids[n] = e.id;
+    }
+
+    this.structures.count = this.structureIds.length;
+    this.blueprints.count = b;
+    for (const model of this.structureModels.values()) {
+      for (const part of model.parts) {
+        part.instanceMatrix.needsUpdate = true;
+        if (part.instanceColor) part.instanceColor.needsUpdate = true;
       }
     }
-    this.structures.count = n;
-    this.blueprints.count = b;
     for (const m of [this.structures, this.blueprints]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;

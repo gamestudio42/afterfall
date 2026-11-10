@@ -362,6 +362,46 @@
       "bytes": 160488,
       "sha256": "b21e8d31726f88bce1c16afd7ff2303bbcdf5320c7b81dab209297e587778e68",
       "generator": "tools/blender/infected.py"
+    },
+    {
+      "name": "structures_farm",
+      "file": "structures/farm.glb",
+      "kind": "glb",
+      "bytes": 134636,
+      "sha256": "c80b4a90f7dcc6eedbe0b7a933f63d952dbf1ce863eb3a471ccdf7d81e7ef48d",
+      "generator": "tools/blender/structures.py"
+    },
+    {
+      "name": "structures_gate",
+      "file": "structures/gate.glb",
+      "kind": "glb",
+      "bytes": 15580,
+      "sha256": "d6a758fd4423b04edb6bc0711320b080241947db27672ab6c62ed9d961765327",
+      "generator": "tools/blender/structures.py"
+    },
+    {
+      "name": "structures_tower",
+      "file": "structures/tower.glb",
+      "kind": "glb",
+      "bytes": 39512,
+      "sha256": "59dd9dc177fc21c3f80274d5c1db072791aa52ab640fdda6a442d04d37609556",
+      "generator": "tools/blender/structures.py"
+    },
+    {
+      "name": "structures_wall",
+      "file": "structures/wall.glb",
+      "kind": "glb",
+      "bytes": 9564,
+      "sha256": "6ccf4320feda365057a5aac1f27963051f8f39020010c611612dac05b892eb7f",
+      "generator": "tools/blender/structures.py"
+    },
+    {
+      "name": "structures_well",
+      "file": "structures/well.glb",
+      "kind": "glb",
+      "bytes": 17636,
+      "sha256": "7cdd5d21a0cfe065fc2d4dfed458cd591c1d2b6bfa5c90369d59de40901e7a3a",
+      "generator": "tools/blender/structures.py"
     }
   ]
 }

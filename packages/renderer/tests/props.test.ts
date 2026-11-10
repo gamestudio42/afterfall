@@ -143,3 +143,52 @@ describe("rooftop props", () => {
     expect([...placeRoofProps([roofBuilding(0, "office", 3, 2.4, 2.4)], 1).values()].flat()).toEqual([]);
   });
 });
+
+describe("district props", () => {
+  it("gives an industrial block containers and a commercial one crates", () => {
+    const map: CityMap = {
+      ...city(2),
+      buildings: [
+        {
+          id: "w",
+          index: 0,
+          type: "warehouse",
+          zone: "industrial",
+          rect: { x: 10, y: 10, w: 20, h: 20 },
+          area: 400,
+          floors: 1,
+          height: 8,
+          entrance: { x: 10, y: 20 },
+          facing: { x: -1, y: 0 },
+        },
+      ] as BuildingDef[],
+    };
+    const kinds = new Set(placeProps(map, grid(CellKind.Free), 7).keys());
+    expect(kinds.has("container")).toBe(true);
+    expect(kinds.has("ambulance")).toBe(false);
+  });
+
+  it("parks an ambulance on a block with a pharmacy, and only there", () => {
+    const base = city(2);
+    const withPharmacy: CityMap = {
+      ...base,
+      buildings: [
+        {
+          id: "p",
+          index: 0,
+          type: "pharmacy",
+          zone: "commercial",
+          rect: { x: 10, y: 10, w: 16, h: 16 },
+          area: 256,
+          floors: 2,
+          height: 7,
+          entrance: { x: 10, y: 18 },
+          facing: { x: -1, y: 0 },
+        },
+      ] as BuildingDef[],
+    };
+    const plain: CityMap = { ...base, buildings: [] };
+    expect(placeProps(withPharmacy, grid(CellKind.Free), 7).has("ambulance")).toBe(true);
+    expect(placeProps(plain, grid(CellKind.Free), 7).has("ambulance")).toBe(false);
+  });
+});

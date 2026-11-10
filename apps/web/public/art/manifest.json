@@ -260,6 +260,22 @@
       "coverage": [24.77, 48.3, 55.62, 57.17, 45.5, 22.45]
     },
     {
+      "file": "decals.png",
+      "width": 512,
+      "height": 256,
+      "bytes": 78767,
+      "sha256": "2d4b393a098e5f7e81ad9f07b22434db280e7c5a90e96e6e2b181fd6aa0ccf73",
+      "generator": "tools/make-decals.ts"
+    },
+    {
+      "name": "props_ambulance",
+      "file": "props/ambulance.glb",
+      "kind": "glb",
+      "bytes": 17840,
+      "sha256": "4d9360b98751b1697c279420732a7ea3c65bf62d22fe6d540b2e31d5b7caabdc",
+      "generator": "tools/blender/props.py"
+    },
+    {
       "name": "props_barrier",
       "file": "props/barrier.glb",
       "kind": "glb",
@@ -273,6 +289,22 @@
       "kind": "glb",
       "bytes": 12404,
       "sha256": "ac314863f8060d6f54417deb20fc22624a8c96aff7ea2b258d5e8d5b934e9cda",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_container",
+      "file": "props/container.glb",
+      "kind": "glb",
+      "bytes": 18768,
+      "sha256": "b93be3ad9f35c28367186903fb93e026355ac1701046db5e01fb4e044fd45b3e",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_crates",
+      "file": "props/crates.glb",
+      "kind": "glb",
+      "bytes": 9748,
+      "sha256": "17f7a6fe322f8c7f7a5db313184db8a9cc3b8962f67b4252e30bbd3777d0c7bb",
       "generator": "tools/blender/props.py"
     },
     {
@@ -402,14 +434,6 @@
       "bytes": 17636,
       "sha256": "7cdd5d21a0cfe065fc2d4dfed458cd591c1d2b6bfa5c90369d59de40901e7a3a",
       "generator": "tools/blender/structures.py"
-    },
-    {
-      "file": "decals.png",
-      "width": 512,
-      "height": 256,
-      "bytes": 78767,
-      "sha256": "2d4b393a098e5f7e81ad9f07b22434db280e7c5a90e96e6e2b181fd6aa0ccf73",
-      "generator": "tools/make-decals.ts"
     }
   ]
 }

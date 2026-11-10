@@ -908,6 +908,14 @@ export class GameRenderer {
    * tall facade hides the road behind it. This draws the answer on the ground.
    */
   private buildFootprintOverlay(sim: Simulation): void {
+    // A new map rebuilds the city but not the scene: the previous overlay stayed behind,
+    // so a second game drew the footprints of the first one over empty lots.
+    const previous = this.scene.getObjectByName("feet") as THREE.LineSegments | undefined;
+    if (previous) {
+      this.scene.remove(previous);
+      previous.geometry.dispose();
+      (previous.material as THREE.Material).dispose();
+    }
     if (!globalThis.location?.search.includes("feet=1")) return;
     const pts: number[] = [];
     for (const b of sim.city.buildings) {

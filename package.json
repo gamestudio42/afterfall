@@ -24,6 +24,7 @@
     "sweep": "tsx tools/balance-sweep.ts",
     "desktop": "pnpm --filter @afterfall/desktop start",
     "assets:textures": "tsx tools/make-textures.ts",
+    "assets:decals": "tsx tools/make-decals.ts",
     "assets:check": "tsx tools/asset-check.ts",
     "assets:props": "tsx tools/props-manifest.ts",
     "assets:vfx": "bash tools/effectcraft/bake.sh"

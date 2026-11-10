@@ -7,6 +7,7 @@ import { RtsCamera } from "./camera";
 import { axialYaw, cornerBlockScale } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround, TEXTURED_TINT, type GroundMaterials } from "./cityMeshes";
+import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Doors } from "./doors";
@@ -124,6 +125,8 @@ export class GameRenderer {
   private structureIds: EntityId[] = [];
   private blueprintIds: EntityId[] = [];
   /** One instanced mesh per material per kind, once `art/structures` lands. */
+  private decals: THREE.Mesh | null = null;
+  private decalMat: THREE.MeshStandardMaterial | null = null;
   private structureModels = new Map<StructureKind, { parts: THREE.InstancedMesh[]; ids: EntityId[] }>();
   private structuresReady = false;
   private markers: THREE.Group = new THREE.Group();
@@ -393,6 +396,56 @@ export class GameRenderer {
    * can change while it runs, so a token guards against a stale kit landing on
    * a new map.
    */
+  /**
+   * Lays the street wear down for this map. One merged mesh, one draw call, rebuilt only
+   * when the city changes; the texture streams in like the surface maps and, until it
+   * lands, the mesh simply draws nothing.
+   */
+  private buildDecals(sim: Simulation): void {
+    if (this.decals) {
+      this.scene.remove(this.decals);
+      this.decals.geometry.dispose();
+      this.decals = null;
+    }
+    const placements = placeDecals(sim.city, sim.city.seed ?? 1);
+    if (placements.length === 0) return;
+    if (!this.decalMat) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 1,
+        metalness: 0,
+        transparent: true,
+        alphaTest: 0.08,
+        depthWrite: false,
+        vertexColors: true,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      });
+      this.decalMat = mat;
+      new THREE.TextureLoader().load(
+        `${this.artBase}art/decals.png`,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = 4;
+          mat.map = tex;
+          mat.needsUpdate = true;
+        },
+        undefined,
+        () => {
+          /* a missing atlas leaves the streets plain, never broken */
+        },
+      );
+    }
+    const mesh = new THREE.Mesh(decalGeometry(placements), this.decalMat);
+    // Above the carriageway (0.01), the lane dashes (0.03) and the kerb top (0.06).
+    mesh.position.y = 0.07;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
+    this.decals = mesh;
+  }
+
   private dressStreets(sim: Simulation): void {
     for (const m of this.propScene?.meshes ?? []) this.scene.remove(m);
     this.propScene = null;
@@ -691,6 +744,7 @@ export class GameRenderer {
     this.scene.add(this.doors.group);
     this.refreshBuildingColors();
     this.dressStreets(sim);
+    this.buildDecals(sim);
     this.rts.setBounds(0, city.width, 0, city.height);
     this.rts.jumpTo(city.width / 2, city.height / 2);
     this.lastFxSeq = sim.fxSeq;

@@ -402,6 +402,14 @@
       "bytes": 17636,
       "sha256": "7cdd5d21a0cfe065fc2d4dfed458cd591c1d2b6bfa5c90369d59de40901e7a3a",
       "generator": "tools/blender/structures.py"
+    },
+    {
+      "file": "decals.png",
+      "width": 512,
+      "height": 256,
+      "bytes": 78767,
+      "sha256": "2d4b393a098e5f7e81ad9f07b22434db280e7c5a90e96e6e2b181fd6aa0ccf73",
+      "generator": "tools/make-decals.ts"
     }
   ]
 }

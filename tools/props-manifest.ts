@@ -12,12 +12,13 @@ import { resolve } from "node:path";
 const ART = resolve(import.meta.dirname, "../apps/web/public/art");
 const MANIFEST = resolve(ART, "manifest.json");
 
-const dirs = ["props", "survivors", "infected"];
+const dirs = ["props", "survivors", "infected", "structures"];
 /** Every folder of GLBs, and the script that bakes it. */
 const GENERATORS: Record<string, string> = {
   props: "tools/blender/props.py",
   survivors: "tools/blender/props.py",
   infected: "tools/blender/infected.py",
+  structures: "tools/blender/structures.py",
 };
 const files = dirs.flatMap((dir) =>
   readdirSync(resolve(ART, dir))

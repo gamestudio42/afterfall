@@ -59,3 +59,22 @@ test("research buys a capability, and the ledger shows what the day cost", async
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("economy")).toBeHidden();
 });
+
+test("the built structures wear their models, not the fallback box", async ({ page }) => {
+  await startGame(page);
+  // Five GLBs arrive asynchronously; a missing or broken file silently keeps the box,
+  // which is exactly the regression this guards.
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as Win).__afterfall.renderer.structuresReady), { timeout: 20_000 })
+    .toBe(true);
+  const parts = await page.evaluate(() => {
+    const r = (window as unknown as Win).__afterfall.renderer;
+    const kinds: string[] = [];
+    for (const [kind, model] of r.structureModels) kinds.push(`${kind}:${model.parts.length}`);
+    return kinds.sort();
+  });
+  // One instanced mesh per material per kind: walls and gates are single-material, the
+  // tower, the garden and the well carry wood, metal, soil, plants or stone as well.
+  expect(parts.length).toBe(5);
+  for (const entry of parts) expect(Number(entry.split(":")[1])).toBeGreaterThan(0);
+});

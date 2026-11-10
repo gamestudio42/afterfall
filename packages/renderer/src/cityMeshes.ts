@@ -32,6 +32,34 @@ function ribbon(path: { x: number; y: number }[], width: number, y: number): THR
   return out;
 }
 
+/**
+ * The sidewalk of an imported road, as two strips beside it instead of one wide strip
+ * under it. A strip under the road shares its plane within a few millimetres, and at a
+ * distance the depth buffer cannot separate them: the light ribbon striped through the
+ * asphalt and shimmered as the camera moved (playtest video). Removing the overlap makes
+ * the question moot, whatever the camera distance.
+ */
+export function sidewalk(path: { x: number; y: number }[], roadWidth: number, width: number, y: number): THREE.BufferGeometry[] {
+  const out: THREE.BufferGeometry[] = [];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 0.05) continue;
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    for (const side of [-1, 1]) {
+      const off = side * (roadWidth / 2 + width / 2);
+      const g = new THREE.PlaneGeometry(len + width, width);
+      g.rotateX(-Math.PI / 2);
+      g.rotateY(-Math.atan2(b.y - a.y, b.x - a.x));
+      g.translate((a.x + b.x) / 2 + nx * off, y, (a.y + b.y) / 2 + ny * off);
+      out.push(g);
+    }
+  }
+  return out;
+}
+
 /** A flat filled outline (parks of imported maps). */
 function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferGeometry {
   const shape = new THREE.Shape(poly.map((p) => new THREE.Vector2(p.x, -p.y)));
@@ -155,7 +183,10 @@ export function buildCityGround(city: CityMap): {
       blocks.push(plane(city.roadWidth + i * pitch, city.roadWidth + j * pitch, city.blockSize, city.blockSize, 0.06));
   // Imported maps have no blocks: their sidewalks run along the roads instead,
   // a ribbon wider than the road laid just under it.
-  for (const r of city.roads) if (r.path) blocks.push(...ribbon(r.path, (r.width ?? 8) + SIDEWALK_WIDTH * 2, 0.005));
+  // Imported maps: the sidewalk is a ribbon wider than the road, laid just under it.
+  // The gap is deliberately generous — at five millimetres the two surfaces fought in the
+  // depth buffer at distance and the ribbon striped through the asphalt (playtest video).
+  for (const r of city.roads) if (r.path) blocks.push(...sidewalk(r.path, r.width ?? 8, SIDEWALK_WIDTH, 0.02));
   if (blocks.length) {
     const blockGeo = mergeGeometries(blocks.map((g) => (g.index ? g.toNonIndexed() : g)));
     worldUv(blockGeo, SIDEWALK_TILE);
@@ -180,14 +211,22 @@ export function buildCityGround(city: CityMap): {
   }
 
   const roads = city.roads.flatMap((r) =>
-    r.path ? ribbon(r.path, r.width ?? 8, 0.01) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.01)],
+    r.path ? ribbon(r.path, r.width ?? 8, 0.03) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.03)],
   );
   // A map with no roads at all (a fixture, or a save from one) used to crash here:
   // `mergeGeometries([])` reads `geometries[0].index` without checking.
   if (roads.length) {
     const roadGeo = mergeGeometries(roads);
     worldUv(roadGeo, 6);
-    materials.roads = new THREE.MeshStandardMaterial({ color: 0x34363a, roughness: 0.9 });
+    materials.roads = new THREE.MeshStandardMaterial({
+      color: 0x34363a,
+      roughness: 0.9,
+      // The asphalt sits a centimetre or two above whatever is under it (a sidewalk
+      // ribbon, a park edge); a depth bias makes it win even at the far end of the map.
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
     const roadMesh = new THREE.Mesh(roadGeo, materials.roads);
     roadMesh.receiveShadow = true;
     group.add(roadMesh);
@@ -202,8 +241,8 @@ export function buildCityGround(city: CityMap): {
       const along = s;
       const inIntersection = along % pitch < city.roadWidth + 1 || along % pitch > pitch - 1;
       if (inIntersection) continue;
-      if (r.horizontal) dashes.push(plane(r.rect.x + along, r.rect.y + r.rect.h / 2 - 0.1, 3, 0.2, 0.03));
-      else dashes.push(plane(r.rect.x + r.rect.w / 2 - 0.1, r.rect.y + along, 0.2, 3, 0.03));
+      if (r.horizontal) dashes.push(plane(r.rect.x + along, r.rect.y + r.rect.h / 2 - 0.1, 3, 0.2, 0.05));
+      else dashes.push(plane(r.rect.x + r.rect.w / 2 - 0.1, r.rect.y + along, 0.2, 3, 0.05));
     }
   }
   if (dashes.length) group.add(new THREE.Mesh(mergeGeometries(dashes), new THREE.MeshBasicMaterial({ color: 0x8c8a6e })));

@@ -4,7 +4,7 @@ import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } fr
 import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
-import { axialYaw } from "./structureLayout";
+import { axialYaw, cornerBlockScale } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { buildCityGround, TEXTURED_TINT, type GroundMaterials } from "./cityMeshes";
 import { loadArtTextures, type ArtTextures } from "./textures";
@@ -1028,8 +1028,10 @@ export class GameRenderer {
       // A junction is a solid block for the whole cell. Drawing both slabs crossed left
       // two dead arms poking a metre out of every corner, which read as battlements; the
       // cell block fills the four quadrants the slabs cannot reach.
-      const corner = axial && isCorner(s);
-      const placements: { yaw: number; thick: number }[] = [{ yaw, thick: corner ? def.size * cell : 1 }];
+      // Only walls become a pier: scaling a gate four times on its thickness would
+      // stretch its bars into slabs.
+      const corner = s.kind === "wall" && isCorner(s);
+      const placements: { yaw: number; thick: number }[] = [{ yaw, thick: corner ? cornerBlockScale(size) : 1 }];
       const hpFrac = e.health ? e.health.hp / e.health.max : 1;
       tmpC.setHex(0xffffff);
       if (hpFrac < 0.99) tmpC.lerp(new THREE.Color(0x8a2a20), (1 - hpFrac) * 0.8);

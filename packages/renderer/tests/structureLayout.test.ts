@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { axialYaw } from "../src/structureLayout";
+import { axialYaw, cornerBlockScale } from "../src/structureLayout";
 
 describe("wall and gate orientation", () => {
   it("keeps the authored (east-west) orientation when the line runs that way", () => {
@@ -18,5 +18,14 @@ describe("wall and gate orientation", () => {
     expect(axialYaw(false, false, false, false)).toBe(0);
     // Two neighbours on the short axis of a corner still count as a corner.
     expect(axialYaw(true, false, true, false)).toBe(0);
+  });
+});
+
+describe("junction block", () => {
+  it("scales the slab so it fills a cell, not to the cell size", () => {
+    // The slab is 0.5 m thick; a 2 m cell needs 4x. Passing the cell size itself (2) left
+    // half a metre of notch on each side, which was the bug this test exists for.
+    expect(cornerBlockScale(2)).toBeCloseTo(4, 6);
+    expect(0.5 * cornerBlockScale(2)).toBeCloseTo(2, 6);
   });
 });

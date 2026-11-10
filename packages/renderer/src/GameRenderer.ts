@@ -1014,6 +1014,20 @@ export class GameRenderer {
     return this.renderer.info.render.calls;
   }
 
+  /** Triangles the last frame submitted, for probes and budget checks. */
+  get trianglesRendered(): number {
+    return this.renderer.info.render.triangles;
+  }
+
+  get geometryCount(): number {
+    return this.renderer.info.memory.geometries;
+  }
+
+  /** Draws one frame without advancing the simulation, for probes and captures. */
+  renderFrame(): void {
+    this.renderer.render(this.scene, this.rts.camera);
+  }
+
   private updateLighting(sim: Simulation): void {
     const h = sim.clock.hourFloat;
     // Sun travels east to west between 06:00 and 18:00.

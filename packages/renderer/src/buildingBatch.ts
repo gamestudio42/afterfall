@@ -149,27 +149,38 @@ export class BuildingBatch {
     }
 
     // Concatenate the groups; ranges and owners move with them.
-    const pos: number[] = [];
-    const nrm: number[] = [];
-    const uv: number[] = [];
-    const owners: number[] = [];
+    //
+    // Typed arrays and `set`, not `push(...array)`: spreading the vertex list as call
+    // arguments overflowed the stack on a ten-by-ten-block city (435 buildings), which is
+    // smaller than a real imported neighbourhood. The game could not start on a map the
+    // importer happily produced.
+    const total = GROUPS.reduce((n, g) => n + parts[g].vertices, 0);
+    const pos = new Float32Array(total * 3);
+    const nrm = new Float32Array(total * 3);
+    const uv = new Float32Array(total * 2);
+    // `owner` holds one id per triangle, not per vertex, so its offset moves in triangles.
+    const owners = new Int32Array(total / 3);
     const offset: Partial<Record<Group, number>> = {};
     const geo = new THREE.BufferGeometry();
+    let at = 0;
+    let triAt = 0;
     for (const [i, g] of GROUPS.entries()) {
       const p = parts[g];
-      offset[g] = pos.length / 3;
-      geo.addGroup(pos.length / 3, p.vertices, i);
-      pos.push(...p.pos);
-      nrm.push(...p.nrm);
-      uv.push(...p.uv);
-      owners.push(...p.owner);
+      offset[g] = at;
+      geo.addGroup(at, p.vertices, i);
+      pos.set(p.pos, at * 3);
+      nrm.set(p.nrm, at * 3);
+      uv.set(p.uv, at * 2);
+      owners.set(p.owner, triAt);
+      at += p.vertices;
+      triAt += p.owner.length;
     }
     this.ranges = local.map((mine) => mine.map((r) => ({ group: r.group, start: r.start + offset[r.group]!, count: r.count })));
-    this.triOwner = Int32Array.from(owners);
+    this.triOwner = owners;
 
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
-    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
+    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
     geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pos.length).fill(1), 3));
     geo.setAttribute("glow", new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3), 1));
     geo.computeBoundingSphere();
@@ -230,6 +241,11 @@ export class BuildingBatch {
     this.night = amount;
     // Below 1, so a lit window stays amber instead of clipping to cream.
     for (const g of GROUPS) this.materials[g].emissiveIntensity = this.lit[g] ? amount * 0.9 : 0;
+  }
+
+  /** Building that owns a triangle, or -1. Exposed so tests can audit the whole batch. */
+  ownerOfTriangle(t: number): number {
+    return this.triOwner[t] ?? -1;
   }
 
   /** Building under the ray, or -1. */

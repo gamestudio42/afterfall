@@ -1,6 +1,6 @@
 import { TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
-import { BALANCE, STRUCTURES, TECHS } from "@afterfall/content";
+import { BALANCE, BUILDING_FUNCTIONS, RESOURCE_IDS, STRUCTURES, TECHS, type ResourceBag } from "@afterfall/content";
 import type { Simulation } from "../src";
 
 /**
@@ -47,6 +47,15 @@ export interface AutoplayOptions {
   ammoSubsidy?: number;
 }
 
+/** True when the stock covers the bill plus the reserve. */
+function canPay(stock: ResourceBag, cost: ResourceBag, reserve = 0): boolean {
+  for (const r of RESOURCE_IDS) {
+    const need = (cost[r] ?? 0) + (r === "wood" ? reserve : 0);
+    if ((stock[r] ?? 0) < need) return false;
+  }
+  return true;
+}
+
 export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulation) => void, options: AutoplayOptions = {}): void {
   if (sim.state.hq < 0) {
     sim.enqueue({ type: "setBase", building: pickBase(sim, options.fortify ? 220 : 500) });
@@ -54,22 +63,57 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
     onTick?.(sim);
   }
   const end = sim.state.tick + Math.round(days * TICKS_PER_DAY);
-  let builtDefenses = false;
-  let converted = false;
-  let workshop = false;
-  let farm = false;
-  let well = false;
-  let secondShelter = false;
-  let fortified = !options.fortify;
-  let subsidyDay = 0;
+  let subsidisedDay = 0;
+  let decisionHour = -1;
+  let fortified = false;
+
+  const hasFunction = (fn: string) => sim.state.buildings.some((b) => b.fn === fn && b.hp > 0);
+  // A conversion that is still being built already counts as taken: without this the bot
+  // handed a second building to the same function every hour until the first finished.
+  const converting = (fn: string) =>
+    [...sim.state.tasks.values()].some((t) => t.type === "convert" && t.convertTo === fn && t.status !== "completed");
+  const builtKind = (kind: string) => [...sim.state.entities.values()].some((e) => e.structure?.kind === kind && e.structure.built);
+  const placedKind = (kind: string) => [...sim.state.entities.values()].filter((e) => e.structure?.kind === kind).length;
+
+  /** A building this bot can hand over: empty, cleared, searched and not already committed. */
+  const spareBuilding = (excludeTypes: string[] = []) => {
+    const hq = sim.hqEntrance();
+    return sim.state.buildings
+      .filter(
+        (b) =>
+          // `hp` is 0 on every building until a function gives it maxHp, so it cannot be
+          // read as "still standing" here: that filter rejected every candidate.
+          b.fn === "none" &&
+          b.task < 0 &&
+          b.hiddenInfected === 0 &&
+          b.searchProgress >= b.searchTotal &&
+          !excludeTypes.includes(sim.city.buildings[b.index].type),
+      )
+      .sort(
+        (a, b) =>
+          Math.hypot(sim.city.buildings[a.index].entrance.x - hq.x, sim.city.buildings[a.index].entrance.y - hq.y) -
+          Math.hypot(sim.city.buildings[b.index].entrance.x - hq.x, sim.city.buildings[b.index].entrance.y - hq.y),
+      )[0];
+  };
+
+  const convert = (fn: "shelter" | "workshop" | "lab", excludeTypes: string[] = []) => {
+    const target = spareBuilding(excludeTypes);
+    if (!target) return false;
+    sim.enqueue({ type: "convert", building: target.index, fn });
+    return true;
+  };
+
   while (sim.state.tick < end && !(sim.state.outcome && sim.state.outcome.type === "defeat")) {
     const clock = clockFromTick(sim.state.tick);
-    if (options.ammoSubsidy && clock.hour === 6 && clock.day !== subsidyDay) {
-      subsidyDay = clock.day;
+    const stock = sim.totals();
+    if (options.ammoSubsidy && clock.hour === 6 && clock.day !== subsidisedDay) {
+      subsidisedDay = clock.day;
       const hqS = sim.hqEntrance();
       sim.deposit({ ammo: options.ammoSubsidy }, hqS.x, hqS.y);
     }
     if (sim.state.pendingEvent) sim.enqueue({ type: "resolveEvent", choice: 0 });
+
+    // Scavenging, every half hour of daylight.
     if (sim.state.tick % (TICKS_PER_GAME_MINUTE * 30) === 0 && clock.hour >= 7 && clock.hour < 15) {
       const hq = sim.hqEntrance();
       const idle = [...sim.survivors()].filter((e) => e.survivor.activity.type === "idle" && e.health!.hp > 50);
@@ -90,93 +134,86 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
         if (target) sim.enqueue({ type: "scavenge", units: scouts.slice(0, 3).map((e) => e.id), building: target.b.index });
       }
     }
-    if (!converted && clock.day >= 1 && clock.hour === 10) {
-      const hq = sim.hqEntrance();
-      const near = sim.state.buildings
-        .filter((b) => b.fn === "none" && b.hiddenInfected === 0 && b.searchProgress >= b.searchTotal)
-        .sort(
-          (a, b) =>
-            Math.hypot(sim.city.buildings[a.index].entrance.x - hq.x, sim.city.buildings[a.index].entrance.y - hq.y) -
-            Math.hypot(sim.city.buildings[b.index].entrance.x - hq.x, sim.city.buildings[b.index].entrance.y - hq.y),
-        )[0];
-      if (near) {
-        sim.enqueue({ type: "convert", building: near.index, fn: "shelter" });
-        converted = true;
+
+    /**
+     * One structural decision per game hour, and only if the stock covers it. The bot used
+     * to queue the shelter, the workshop, two towers, a farm and a well inside two game
+     * hours with thirty-four wood: every blueprint after the first sat `blocked`, the wood
+     * went into tasks that could not finish, and the workshop was never built. A blueprint
+     * is created without checking the bill, so the check has to live here.
+     */
+    if (clock.minute === 0 && clock.hour >= 7 && clock.hour <= 16 && clock.hour !== decisionHour) {
+      decisionHour = clock.hour;
+      const shelter = hasFunction("shelter") || converting("shelter");
+      const workshop = hasFunction("workshop") || converting("workshop");
+      // What the plan still owes, held back from walls and towers.
+      const reserve = !shelter ? 8 : options.craft && !workshop ? 6 : options.economy && !builtKind("farm") ? 10 : 2;
+      // One command per hour, but a step that cannot run must not starve the steps after
+      // it: with a strict if/else chain, "no searched building for a shelter yet" also
+      // meant no tower, and the settlement entered night two naked.
+      // Metal is contested: the workshop turns it into ammo until `keepAmmo`, and every
+      // shot spends that ammo. While a metal-hungry structure is still owed, the bot
+      // lowers the ceiling the way a player would, or construction never gets its share.
+      const owesMetal = !workshop || placedKind("well") === 0 || placedKind("tower") < 2;
+      const keep = owesMetal && (stock.metal ?? 0) < 12 ? 20 : BALANCE.policies.keepAmmo;
+      if (sim.state.policies.keepAmmo !== keep) sim.enqueue({ type: "setPolicy", policy: { keepAmmo: keep } });
+      let acted = false;
+
+      if (!acted && !shelter && canPay(stock, BUILDING_FUNCTIONS.shelter.cost, 0)) {
+        acted = convert("shelter");
       }
-    }
-    if (!builtDefenses && sim.state.tick > 20) {
-      const hqDef = sim.city.buildings[sim.state.hq];
-      const g = sim.grid;
-      const cx = Math.floor(hqDef.entrance.x / g.cell);
-      const cy = Math.floor(hqDef.entrance.y / g.cell);
-      const dy = hqDef.facing.y > 0 ? 3 : -5;
-      sim.enqueue({
-        type: "placeStructures",
-        kind: "tower",
-        cells: [
-          [cx - 4, cy + dy],
-          [cx + 3, cy + dy],
-        ],
-      });
-      builtDefenses = true;
-    }
-    // A second building becomes a workshop: the game itself creates the craft
-    // task (metal -> ammo) and keeps it while ammo is below `keepAmmo`, so the
-    // bot only has to hand over the building.
-    if (options.craft && !workshop && converted && clock.hour >= 11 && clock.hour < 18) {
-      const hqW = sim.hqEntrance();
-      const nearW = sim.state.buildings
-        .filter((b) => b.fn === "none" && b.hiddenInfected === 0 && b.searchProgress >= b.searchTotal)
-        .sort(
-          (a, b) =>
-            Math.hypot(sim.city.buildings[a.index].entrance.x - hqW.x, sim.city.buildings[a.index].entrance.y - hqW.y) -
-            Math.hypot(sim.city.buildings[b.index].entrance.x - hqW.x, sim.city.buildings[b.index].entrance.y - hqW.y),
-        )[0];
-      if (nearW) {
-        sim.enqueue({ type: "convert", building: nearW.index, fn: "workshop" });
-        workshop = true;
+      if (!acted && shelter && options.craft && !workshop && canPay(stock, BUILDING_FUNCTIONS.workshop.cost, 0)) {
+        // Never the building the shelter just took: a conversion on a building with a task
+        // is refused silently, and the bot believed the workshop existed for twelve days.
+        acted = convert("workshop", ["house"]);
       }
-    }
-    // Farm and well: the game creates the build task and then the production
-    // one; the bot only picks the spot. Without them, any tuning of hunger or
-    // water measures the bot. It only plants when there is spare material:
-    // queueing without wood leaves the task "blocked" and the base stops
-    // building everything else.
-    const stock = sim.totals();
-    const builtKind = (kind: string) => [...sim.state.entities.values()].some((e) => e.structure?.kind === kind && e.structure.built);
-    if (options.economy && !farm && sim.state.tick > 50 && (stock.wood ?? 0) >= 18 && (stock.water ?? 0) >= 8) {
-      const cells = freeSpot(sim, "farm");
-      if (cells) {
-        sim.enqueue({ type: "placeStructures", kind: "farm", cells });
-        farm = true;
-      }
-    }
-    if (options.economy && farm && !well && builtKind("farm") && (stock.wood ?? 0) >= 10 && (stock.metal ?? 0) >= 10) {
-      const cells = freeSpot(sim, "well");
-      if (cells) {
-        sim.enqueue({ type: "placeStructures", kind: "well", cells });
-        well = true;
-      }
-    }
-    if (options.economy && !secondShelter && clock.day >= 2 && clock.hour === 10 && (stock.wood ?? 0) >= 16) {
-      const beds = sim.state.buildings.reduce((n, b) => n + (b.hp > 0 ? b.beds : 0), 0);
-      if (beds < sim.survivorCount()) {
-        const hqS = sim.hqEntrance();
-        const next = sim.state.buildings
-          .filter((b) => b.fn === "none" && b.hiddenInfected === 0 && b.searchProgress >= b.searchTotal)
-          .sort(
-            (a, b) =>
-              Math.hypot(sim.city.buildings[a.index].entrance.x - hqS.x, sim.city.buildings[a.index].entrance.y - hqS.y) -
-              Math.hypot(sim.city.buildings[b.index].entrance.x - hqS.x, sim.city.buildings[b.index].entrance.y - hqS.y),
-          )[0];
-        if (next) {
-          sim.enqueue({ type: "convert", building: next.index, fn: "shelter" });
-          secondShelter = true;
+      if (!acted && shelter && options.economy && placedKind("farm") === 0 && canPay(stock, STRUCTURES.farm.cost, 0)) {
+        const cells = freeSpot(sim, "farm");
+        if (cells) {
+          sim.enqueue({ type: "placeStructures", kind: "farm", cells });
+          acted = true;
         }
       }
+      if (!acted && options.economy && builtKind("farm") && !builtKind("well") && canPay(stock, STRUCTURES.well.cost, 0)) {
+        const cells = freeSpot(sim, "well");
+        if (cells) {
+          sim.enqueue({ type: "placeStructures", kind: "well", cells });
+          acted = true;
+        }
+      }
+      // One tower is defence; the second is a luxury that costs the farm its wood.
+      const towerCap = options.economy && !builtKind("farm") ? 1 : 2;
+      if (!acted && placedKind("tower") < towerCap && canPay(stock, STRUCTURES.tower.cost, reserve)) {
+        const hqDef = sim.city.buildings[sim.state.hq];
+        const g = sim.grid;
+        const cx = Math.floor(hqDef.entrance.x / g.cell);
+        const cy = Math.floor(hqDef.entrance.y / g.cell);
+        const dy = hqDef.facing.y > 0 ? 3 : -5;
+        const first = placedKind("tower") === 0;
+        sim.enqueue({ type: "placeStructures", kind: "tower", cells: [first ? [cx - 4, cy + dy] : [cx + 3, cy + dy]] });
+        acted = true;
+      }
+      // Beds before a second body, but only once the farm is standing: a settlement above
+      // its bed count sleeps badly, and a settlement without food does not sleep at all.
+      if (!acted && options.economy && placedKind("farm") > 0) {
+        const beds = sim.state.buildings.reduce((n, b) => n + (b.hp > 0 ? b.beds : 0), 0);
+        if (beds < sim.survivorCount() && canPay(stock, BUILDING_FUNCTIONS.shelter.cost, 0)) convert("shelter");
+      }
     }
-    // Research: buy in a fixed order that reflects what a player needs first —
-    // medicine, then the lab and the cure, then the economy and the walls.
+
+    // The ring, as one blueprint, two minutes in: it is a queue that fills as wood
+    // arrives, and every hour it waits is an hour of wall the first night does not get.
+    if (!fortified && options.fortify && sim.state.tick > 40) {
+      const ring = fortRing(sim);
+      if (ring) {
+        sim.enqueue({ type: "placeStructures", kind: "gate", cells: [ring.gate] });
+        sim.enqueue({ type: "placeStructures", kind: "wall", cells: ring.walls });
+        fortified = true;
+      }
+    }
+
+    // Research: buy in a fixed order that reflects what a player needs first — medicine,
+    // then the lab and the cure, then the economy and the walls.
     if (options.research) {
       const order = [
         "serum",
@@ -199,31 +236,10 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
         if (sim.state.research.points >= def.cost) sim.enqueue({ type: "unlockTech", tech: id });
         break;
       }
-      // One lab, as close to the base as a cleared building allows.
-      // Not on day one: the lab costs metal and medicine the first nights need.
-      if (
-        !sim.standingLab() &&
-        clock.day >= 3 &&
-        clock.hour >= 9 &&
-        clock.hour < 16 &&
-        (sim.totals().wood ?? 0) >= 20 &&
-        (sim.totals().metal ?? 0) >= 14
-      ) {
-        const hqR = sim.hqEntrance();
-        const near = sim.state.buildings
-          .filter(
-            (b) =>
-              b.fn === "none" &&
-              b.hiddenInfected === 0 &&
-              b.searchProgress >= b.searchTotal &&
-              sim.city.buildings[b.index].type !== "house",
-          )
-          .sort(
-            (a, b) =>
-              Math.hypot(sim.city.buildings[a.index].entrance.x - hqR.x, sim.city.buildings[a.index].entrance.y - hqR.y) -
-              Math.hypot(sim.city.buildings[b.index].entrance.x - hqR.x, sim.city.buildings[b.index].entrance.y - hqR.y),
-          )[0];
-        if (near) sim.enqueue({ type: "convert", building: near.index, fn: "lab" });
+      // One lab, as close to the base as a cleared building allows. Not on day one: the
+      // lab costs metal and medicine the first nights need.
+      if (!sim.standingLab() && clock.day >= 3 && clock.hour >= 9 && clock.hour < 16 && canPay(stock, BUILDING_FUNCTIONS.lab.cost, 0)) {
+        convert("lab", ["house"]);
       }
       // The cure, as soon as it is affordable.
       if (
@@ -236,19 +252,11 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
         sim.enqueue({ type: "startCure" });
       }
     }
-    if (!fortified && sim.state.tick > 40) {
-      const ring = fortRing(sim);
-      if (ring) {
-        sim.enqueue({ type: "placeStructures", kind: "gate", cells: [ring.gate] });
-        sim.enqueue({ type: "placeStructures", kind: "wall", cells: ring.walls });
-      }
-      fortified = true;
-    }
+
     sim.tick();
     onTick?.(sim);
   }
 }
-
 /**
  * Finds a free corner near the base for a structure, without covering a
  * building door. Returns the anchor cells (top-left corner) or null.

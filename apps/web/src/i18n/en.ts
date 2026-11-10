@@ -29,7 +29,7 @@ export const en: Record<string, string> = {
   "menu.language": "Language",
   "menu.noSaves": "No saved games.",
   "menu.delete": "Delete",
-  "menu.tagline": "An outbreak emptied the city. Pick a building, gather the survivors and hold out for five nights.",
+  "menu.tagline": "An outbreak emptied the city. Pick a building, gather the survivors and hold out for twelve nights — or find the cure.",
   "menu.saveInfo": "Day {day} · {survivors} survivors",
 
   "hud.day": "Day {day}",
@@ -186,7 +186,8 @@ export const en: Record<string, string> = {
   "banner.build": "Click to place · drag to draw · right-click or Esc to exit",
 
   "outcome.victory": "You survived",
-  "outcome.victoryText": "Five nights have passed and the community still stands. Rebuilding can begin.",
+  "outcome.victoryText": "Twelve nights have passed and the community still stands. Rebuilding can begin.",
+  "outcome.curedText": "The cure is ready. The city has a future again.",
   "outcome.defeat": "The community has fallen",
   "outcome.allDead": "No one is left.",
   "outcome.hqDestroyed": "The headquarters was overrun.",

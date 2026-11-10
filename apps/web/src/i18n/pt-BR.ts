@@ -29,7 +29,7 @@ export const ptBR: Record<string, string> = {
   "menu.language": "Idioma",
   "menu.noSaves": "Nenhum jogo salvo.",
   "menu.delete": "Apagar",
-  "menu.tagline": "Uma epidemia apagou a cidade. Escolha um prédio, reúna os sobreviventes e aguente cinco noites.",
+  "menu.tagline": "Uma epidemia apagou a cidade. Escolha um prédio, reúna os sobreviventes e aguente doze noites — ou descubra a cura.",
   "menu.saveInfo": "Dia {day} · {survivors} sobreviventes",
 
   "hud.day": "Dia {day}",
@@ -186,7 +186,8 @@ export const ptBR: Record<string, string> = {
   "banner.build": "Clique para posicionar · arraste para traçar · botão direito ou Esc para sair",
 
   "outcome.victory": "Vocês sobreviveram",
-  "outcome.victoryText": "Cinco noites se passaram e a comunidade continua de pé. A reconstrução pode começar.",
+  "outcome.victoryText": "Doze noites se passaram e a comunidade continua de pé. A reconstrução pode começar.",
+  "outcome.curedText": "A cura ficou pronta. A cidade tem futuro de novo.",
   "outcome.defeat": "A comunidade caiu",
   "outcome.allDead": "Não restou ninguém.",
   "outcome.hqDestroyed": "A sede foi invadida.",

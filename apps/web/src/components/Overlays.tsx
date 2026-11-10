@@ -84,7 +84,7 @@ export function OutcomeModal() {
     <div className="modal-backdrop">
       <div className={`modal outcome ${o.type}`} data-testid="outcome">
         <h2>{victory ? t("outcome.victory") : t("outcome.defeat")}</h2>
-        <p>{victory ? t("outcome.victoryText") : t(`outcome.${o.reason}`)}</p>
+        <p>{victory ? t(o.reason === "cured" ? "outcome.curedText" : "outcome.victoryText") : t(`outcome.${o.reason}`)}</p>
         <p className="muted">
           {t("outcome.stats", { day: r.day, killed: r.infectedKilled, lost: r.survivorsLost, built: r.structuresBuilt })}
         </p>

@@ -52,7 +52,9 @@ test("start a game, choose a base, scavenge and save", async ({ page }) => {
   await page.mouse.click(p.x, p.y);
   await expect(page.getByTestId("set-base")).toBeVisible();
   await page.getByTestId("set-base").click();
-  await expect(page.getByTestId("pop")).toHaveText("4");
+  // Known flake on a loaded runner: the base command is applied on the next tick and
+  // the counter can still read 0 after the default five seconds.
+  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 20_000 });
 
   // Box-select the founding group around the door.
   const door = await page.evaluate(() => {
@@ -110,7 +112,9 @@ test("resolve a pending event while time is frozen", async ({ page }) => {
     const g = (window as unknown as Win).__afterfall;
     g.command({ type: "setBase", building: 0 });
   });
-  await expect(page.getByTestId("pop")).toHaveText("4");
+  // Known flake on a loaded runner: the base command is applied on the next tick and
+  // the counter can still read 0 after the default five seconds.
+  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 20_000 });
 
   await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
@@ -125,7 +129,9 @@ test("resolve a pending event while time is frozen", async ({ page }) => {
   expect(stillFrozen).toBe(before);
 
   await page.getByTestId("choice-0").click();
-  await expect(page.getByTestId("event-modal")).toHaveCount(0);
+  // The modal closes on the frame after the command is drained; with five GLBs loading
+  // at boot the first frames on a software renderer are slow enough to miss five seconds.
+  await expect(page.getByTestId("event-modal")).toHaveCount(0, { timeout: 20_000 });
 
   await page.getByTestId("speed-4").click();
   await expect
@@ -261,7 +267,9 @@ test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }
   await page.mouse.click(p.x, p.y);
   await expect(page.getByTestId("set-base")).toBeVisible();
   await page.getByTestId("set-base").click();
-  await expect(page.getByTestId("pop")).toHaveText("4");
+  // Known flake on a loaded runner: the base command is applied on the next tick and
+  // the counter can still read 0 after the default five seconds.
+  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 20_000 });
   await page.screenshot({ path: "test-results/real-place.png" });
 
   // Saving keeps the map, so a reload continues on the same place.

@@ -120,7 +120,9 @@ test("resolve a pending event while time is frozen", async ({ page }) => {
     const g = (window as unknown as Win).__afterfall;
     g.sim.state.pendingEvent = { eventId: "radio", tick: g.sim.state.tick };
   });
-  await expect(page.getByTestId("event-modal")).toBeVisible();
+  // Same loaded-runner problem as the two waits below: the UI observes the event on its
+  // own 0.2 s beat, and five seconds is what a quiet machine needs, not a busy CI one.
+  await expect(page.getByTestId("event-modal")).toBeVisible({ timeout: 20_000 });
   // Give the loop a moment to observe the event, then prove the clock is frozen.
   await page.waitForTimeout(300);
   const before = await page.evaluate(() => (window as unknown as Win).__afterfall.sim.state.tick);

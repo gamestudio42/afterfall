@@ -38,7 +38,15 @@ const TILE_INDEX = new Map<DecalTile, number>(DECAL_TILES.map((t, i) => [t, i]))
  * everything against the kerb, and the buildings that have been picked over carry rubble
  * at their door.
  */
-export function placeDecals(city: CityMap, seed = 1, max = 3600): DecalPlacement[] {
+export function placeDecals(
+  city: CityMap,
+  seed = 1,
+  max = 3600,
+  /** Buildings the survivors have picked clean: their doorsteps stay littered. */
+  looted: ReadonlySet<number> = new Set(),
+  /** Buildings turned into a home, a workshop or a lab: their doorsteps are swept. */
+  kept: ReadonlySet<number> = new Set(),
+): DecalPlacement[] {
   const out: DecalPlacement[] = [];
   const push = (tile: DecalTile, x: number, z: number, size: number, s: number, shade: number) => {
     if (out.length >= max) return;
@@ -72,14 +80,19 @@ export function placeDecals(city: CityMap, seed = 1, max = 3600): DecalPlacement
     }
   }
 
-  // Doorsteps: rubble where a building has been searched out, soot where it burned.
+  // Doorsteps: a building the survivors picked clean keeps its debris, a building they
+  // moved into gets swept, and the rest are left to the weather.
   for (const b of city.buildings) {
     const r = hash(b.index, seed, seed + 3);
-    if (r > 0.34) continue;
+    const isLooted = looted.has(b.index);
+    const isKept = kept.has(b.index);
+    if (isKept) continue;
+    if (!isLooted && r > 0.34) continue;
     const e = b.entrance;
     const fx = Math.cos(r * 9) * 1.3;
     const fz = Math.sin(r * 9) * 1.3;
-    push(r < 0.1 ? "soot" : "rubble", e.x + fx, e.y + fz, 1.0 + r * 2.4, seed, 0.8 + r * 0.4);
+    const scale = isLooted ? 1.35 : 1;
+    push(r < 0.1 ? "soot" : "rubble", e.x + fx, e.y + fz, (1.0 + r * 2.4) * scale, seed, 0.8 + r * 0.4);
   }
 
   return out;

@@ -126,6 +126,10 @@ export class GameRenderer {
   private blueprintIds: EntityId[] = [];
   /** One instanced mesh per material per kind, once `art/structures` lands. */
   private decals: THREE.Mesh | null = null;
+  private decalState = "";
+  private markPoles: THREE.InstancedMesh | null = null;
+  private markFlags: THREE.InstancedMesh | null = null;
+  private markState = "";
   private decalMat: THREE.MeshStandardMaterial | null = null;
   private structureModels = new Map<StructureKind, { parts: THREE.InstancedMesh[]; ids: EntityId[] }>();
   private structuresReady = false;
@@ -407,7 +411,13 @@ export class GameRenderer {
       this.decals.geometry.dispose();
       this.decals = null;
     }
-    const placements = placeDecals(sim.city, sim.city.seed ?? 1);
+    const looted = new Set<number>();
+    const kept = new Set<number>();
+    sim.state.buildings.forEach((st, i) => {
+      if (st.fn !== "none") kept.add(i);
+      else if (st.searchProgress >= st.searchTotal) looted.add(i);
+    });
+    const placements = placeDecals(sim.city, sim.city.seed ?? 1, 3600, looted, kept);
     if (placements.length === 0) return;
     if (!this.decalMat) {
       const mat = new THREE.MeshStandardMaterial({
@@ -444,6 +454,88 @@ export class GameRenderer {
     mesh.frustumCulled = false;
     this.scene.add(mesh);
     this.decals = mesh;
+  }
+
+  /**
+   * A flag on every building the survivors have taken over, in the colour of what it is
+   * for. A awning on the wall is invisible from an RTS camera; a flag reads from any
+   * angle and from the whole zoom range, and it is the one thing on the street that gets
+   * brighter as the settlement grows.
+   */
+  private buildMarks(sim: Simulation): void {
+    for (const m of [this.markPoles, this.markFlags]) {
+      if (!m) continue;
+      this.scene.remove(m);
+      m.geometry.dispose();
+    }
+    this.markPoles = null;
+    this.markFlags = null;
+    const taken: { def: (typeof sim.city.buildings)[number]; fn: string }[] = [];
+    sim.city.buildings.forEach((def, i) => {
+      const st = sim.state.buildings[i];
+      if (st && st.fn !== "none") taken.push({ def, fn: st.fn });
+    });
+    if (taken.length === 0) return;
+
+    const poles = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.06, 0.09, 4.4, 6),
+      new THREE.MeshStandardMaterial({ color: 0x3b3a36, roughness: 0.9, metalness: 0 }),
+      taken.length,
+    );
+    const flags = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1.5, 0.9),
+      new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
+      taken.length,
+    );
+    const color = new THREE.Color();
+    const up = new THREE.Vector3(0, 1, 0);
+    taken.forEach(({ def, fn }, i) => {
+      // On the roof edge facing the street. At the foot of the wall a flag is swallowed
+      // by the building it belongs to, which is exactly how the first cut failed.
+      const x = def.entrance.x + def.facing.x * 0.6;
+      const z = def.entrance.y + def.facing.y * 0.6;
+      const base = def.height + 0.05;
+      tmpM.compose(new THREE.Vector3(x, base + 2.1, z), tmpQ.setFromAxisAngle(up, 0), tmpS.set(1, 1, 1));
+      poles.setMatrixAt(i, tmpM);
+      // The face turned to the street, not the edge: a flag seen edge-on is four pixels
+      // of nothing. Hung off one side of the pole, like a real one.
+      const yaw = Math.atan2(def.facing.x, def.facing.y);
+      const off = 0.78;
+      tmpM.compose(
+        new THREE.Vector3(x + Math.cos(yaw) * off, base + 3.7, z - Math.sin(yaw) * off),
+        tmpQ.setFromAxisAngle(up, yaw),
+        tmpS.set(1, 1, 1),
+      );
+      flags.setMatrixAt(i, tmpM);
+      flags.setColorAt(i, color.setHex(FUNCTION_TINT[fn] ?? 0xffffff));
+    });
+    for (const m of [poles, flags]) {
+      m.instanceMatrix.needsUpdate = true;
+      m.frustumCulled = false;
+      this.scene.add(m);
+    }
+    if (flags.instanceColor) flags.instanceColor.needsUpdate = true;
+    this.markPoles = poles;
+    this.markFlags = flags;
+  }
+
+  /** Rebuilds the wear and the door signs only when the settlement actually changed. */
+  private refreshBuildingArt(sim: Simulation): void {
+    let loot = "";
+    let owned = "";
+    sim.state.buildings.forEach((st, i) => {
+      if (st.fn !== "none") owned += `${i}:${st.fn},`;
+      else if (st.searchProgress >= st.searchTotal) loot += `${i},`;
+    });
+    const decalSig = `${loot}|${owned}`;
+    if (decalSig !== this.decalState) {
+      this.decalState = decalSig;
+      this.buildDecals(sim);
+    }
+    if (owned !== this.markState) {
+      this.markState = owned;
+      this.buildMarks(sim);
+    }
   }
 
   private dressStreets(sim: Simulation): void {
@@ -765,9 +857,11 @@ export class GameRenderer {
         const d = Math.min(1, st.hiddenInfected / 8);
         tmpC.setRGB(0.3 + 0.6 * d, 0.3 * (1 - d) + 0.15, 0.3 * (1 - d) + 0.15);
       } else {
-        if (st.fn !== "none") tmpC.lerp(new THREE.Color(FUNCTION_TINT[st.fn] ?? 0xffffff), 0.55);
-        else if (st.searchProgress >= st.searchTotal) tmpC.multiplyScalar(0.55);
-        else if (!st.explored) tmpC.multiplyScalar(0.82);
+        if (st.fn !== "none") tmpC.lerp(new THREE.Color(FUNCTION_TINT[st.fn] ?? 0xffffff), 0.22);
+        else if (st.searchProgress >= st.searchTotal) {
+          const grey = 0.299 * tmpC.r + 0.587 * tmpC.g + 0.114 * tmpC.b;
+          tmpC.lerp(new THREE.Color(grey, grey, grey), 0.45).multiplyScalar(0.78);
+        } else if (!st.explored) tmpC.multiplyScalar(0.82);
         if (st.cache) tmpC.lerp(new THREE.Color(0x4ee0c0), 0.5);
       }
       if (i === this.hoverBuilding) tmpC.lerp(new THREE.Color(0xffffff), 0.18);
@@ -777,6 +871,7 @@ export class GameRenderer {
       this.buildings!.setColors(i, tmpC, roofC, st.fn !== "none" ? 1 : 0);
     });
     this.buildings.commitColors();
+    this.refreshBuildingArt(sim);
   }
 
   resize(width: number, height: number): void {

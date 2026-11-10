@@ -68,6 +68,20 @@ describe("placeDecals", () => {
     expect(placeDecals(empty, 11)).toHaveLength(0);
   });
 
+  it("leaves debris at the door of a building that was picked clean", () => {
+    const map = city([building(7, 80, 60)]);
+    const without = placeDecals(map, 11, 3600, new Set(), new Set());
+    const looted = placeDecals(map, 11, 3600, new Set([7]), new Set());
+    const atDoor = (list: typeof without) => list.filter((d) => Math.hypot(d.x - 80, d.z - 60) < 2.5).length;
+    expect(atDoor(looted)).toBeGreaterThan(atDoor(without));
+  });
+
+  it("sweeps the doorstep of a building the survivors moved into", () => {
+    const map = city([building(7, 80, 60)]);
+    const kept = placeDecals(map, 11, 3600, new Set(), new Set([7]));
+    expect(kept.filter((d) => (d.tile === 4 || d.tile === 7) && Math.hypot(d.x - 80, d.z - 60) < 2.5)).toHaveLength(0);
+  });
+
   it("never exceeds its cap", () => {
     expect(placeDecals(city(), 11, 25).length).toBeLessThanOrEqual(25);
   });

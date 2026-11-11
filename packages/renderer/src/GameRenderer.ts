@@ -1007,6 +1007,9 @@ export class GameRenderer {
         this.heads.setMatrixAt(su, tmpM);
         const color = s.infected ? 0x9fbf6a : s.manual ? 0x3f7fe0 : 0x4a90b8;
         const tint = tmpC.setHex(selected.has(e.id) ? 0x67c4ff : color);
+        // A small shift per person, so a crowd is a crowd: identical figures standing
+        // shoulder to shoulder merge into one silhouette from the camera's height.
+        if (!selected.has(e.id)) tint.offsetHSL((((e.id * 7) % 9) - 4) * 0.006, 0, (((e.id * 37) % 11) - 5) * 0.014);
         this.survivors.setColorAt(su, tint);
         this.unitBatch?.place(e, tmpM, motion, selected.has(e.id), false);
         su++;

@@ -517,3 +517,51 @@ describe("logistics", () => {
     expect(src.storage.food ?? 0).toBeLessThan(before);
   });
 });
+
+describe("a crowd", () => {
+  const people = (sim: Simulation) => [...sim.state.entities.values()].filter((e) => e.survivor && e.survivor.inside < 0 && e.transform);
+  const gap = (a: { transform?: { x: number; y: number } }, b: { transform?: { x: number; y: number } }) =>
+    Math.hypot(a.transform!.x - b.transform!.x, a.transform!.y - b.transform!.y);
+
+  it("does not let two survivors stand on the same spot", () => {
+    // Four people at one door looked like one person: nothing pushed them apart, because
+    // separation existed for the infected only.
+    const sim = started(42);
+    const [a, b] = people(sim);
+    a.mover!.path.length = 0;
+    b.mover!.path.length = 0;
+    b.transform!.x = a.transform!.x;
+    b.transform!.y = a.transform!.y;
+    for (let i = 0; i < 25; i++) sim.tick();
+    expect(gap(a, b)).toBeGreaterThan(1);
+  });
+
+  it("separates a guard that has no path and no mover", () => {
+    // A guard at its post has no mover, and the first version of the fix skipped anything
+    // without one — which is exactly the pair that stayed stacked for a whole game day.
+    const sim = started(42);
+    const [a, b] = people(sim);
+    a.mover!.path.length = 0;
+    a.mover = undefined;
+    b.mover!.path.length = 0;
+    b.mover = undefined;
+    b.transform!.x = a.transform!.x;
+    b.transform!.y = a.transform!.y;
+    for (let i = 0; i < 25; i++) sim.tick();
+    expect(gap(a, b)).toBeGreaterThan(1);
+  });
+
+  it("leaves a survivor standing alone where it is", () => {
+    const sim = started(42);
+    const [a] = people(sim);
+    const alone = people(sim).filter((e) => gap(e, a) > 6);
+    for (const e of alone) {
+      e.mover!.path.length = 0;
+      const x = e.transform!.x;
+      const y = e.transform!.y;
+      for (let i = 0; i < 5; i++) sim.tick();
+      expect(Math.hypot(e.transform!.x - x, e.transform!.y - y)).toBeLessThan(0.6);
+      break;
+    }
+  });
+});

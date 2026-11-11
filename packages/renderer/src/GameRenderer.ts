@@ -1082,6 +1082,19 @@ export class GameRenderer {
     const tgt = this.rts.target;
     this.sun.position.set(tgt.x + Math.cos(az) * 160, 30 + elev * 200, tgt.z + 70);
     this.sun.target.position.copy(tgt);
+    // The shadow camera has to cover what the camera can see, and an RTS camera sees more
+    // as it pulls back. A fixed box left the far half of the screen unlit — buildings with
+    // a shadow on one side and none on the other, the sixth playtest report.
+    const half = Math.max(90, Math.min(340, this.rts.distance * 1.15));
+    const sc = this.sun.shadow.camera;
+    if (Math.abs(sc.right - half) > 1) {
+      sc.left = -half;
+      sc.right = half;
+      sc.top = half;
+      sc.bottom = -half;
+      sc.far = 600 + half;
+      sc.updateProjectionMatrix();
+    }
     const dusk = 1 - Math.abs(elev * 2 - 0.4) * 1.2;
     const sunColor = new THREE.Color(0xfff2dd).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
     this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x7d93c9));

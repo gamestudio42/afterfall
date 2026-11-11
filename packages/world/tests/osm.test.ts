@@ -100,3 +100,53 @@ describe("OpenStreetMap import", () => {
     expect(q).toContain("out geom");
   });
 });
+
+describe("a building drawn twice in OSM", () => {
+  it("keeps one of a nested pair, so no volume cuts through another", () => {
+    // A tower over its annex, or a building re-mapped as a part: both are stamped and both
+    // are drawn, so the smaller one's walls cut through the larger one's roof and out over
+    // the street. The fourth playtest report is those slabs.
+    const data = syntheticOverpass();
+    const kLon = 111_320 * Math.cos((FIXTURE_CENTER.lat * Math.PI) / 180);
+    const at = (dx: number, dy: number) => ({
+      lat: FIXTURE_CENTER.lat - dy / 111_132,
+      lon: FIXTURE_CENTER.lon + dx / kLon,
+    });
+    const ring = (x0: number, x1: number, y0: number, y1: number) => [at(x0, y0), at(x1, y0), at(x1, y1), at(x0, y1), at(x0, y0)];
+    const withTwin = {
+      elements: [
+        ...data.elements,
+        { type: "way" as const, id: 9001, tags: { building: "yes" }, geometry: ring(-70, -25, -70, -25) },
+        { type: "way" as const, id: 9002, tags: { building: "yes" }, geometry: ring(-60, -35, -60, -35) },
+      ],
+    };
+    const city = cityFromOverpass(withTwin, opts);
+    expect(city.buildings.length).toBeGreaterThan(12);
+    const inside = (p: { x: number; y: number }, poly: { x: number; y: number }[]) => {
+      let hit = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i];
+        const b = poly[j];
+        if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    for (const a of city.buildings) {
+      if (!a.footprint) continue;
+      for (const b of city.buildings) {
+        if (a === b || !b.footprint || b.footprint.length < 3) continue;
+        const swallowed = a.footprint.every((p) => inside(p, b.footprint!));
+        expect(swallowed && area(b.footprint) > area(a.footprint)).toBe(false);
+      }
+    }
+  });
+});
+
+function area(poly: { x: number; y: number }[]): number {
+  return Math.abs(
+    poly.reduce((s, p, i) => {
+      const q = poly[(i + 1) % poly.length];
+      return s + (p.x * q.y - q.x * p.y);
+    }, 0) / 2,
+  );
+}

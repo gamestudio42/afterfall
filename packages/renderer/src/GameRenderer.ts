@@ -894,9 +894,42 @@ export class GameRenderer {
     this.refreshBuildingColors();
     this.dressStreets(sim);
     this.buildDecals(sim);
+    this.buildFootprintOverlay(sim);
     this.rts.setBounds(0, city.width, 0, city.height);
     this.rts.jumpTo(city.width / 2, city.height / 2);
     this.lastFxSeq = sim.fxSeq;
+  }
+
+  /**
+   * Outlines every building footprint on the ground, behind `?feet=1`.
+   *
+   * A playtest report is a screenshot, and a screenshot cannot say whether a wall that
+   * covers the street belongs to a footprint that covers the street — from a low camera a
+   * tall facade hides the road behind it. This draws the answer on the ground.
+   */
+  private buildFootprintOverlay(sim: Simulation): void {
+    if (!globalThis.location?.search.includes("feet=1")) return;
+    const pts: number[] = [];
+    for (const b of sim.city.buildings) {
+      const poly = b.footprint ?? [
+        { x: b.rect.x, y: b.rect.y },
+        { x: b.rect.x + b.rect.w, y: b.rect.y },
+        { x: b.rect.x + b.rect.w, y: b.rect.y + b.rect.h },
+        { x: b.rect.x, y: b.rect.y + b.rect.h },
+      ];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i];
+        const c = poly[(i + 1) % poly.length];
+        pts.push(a.x, 0.16, a.y, c.x, 0.16, c.y);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    const mat = new THREE.LineBasicMaterial({ color: 0xffd23f, depthWrite: false, transparent: true, opacity: 0.95 });
+    const lines = new THREE.LineSegments(geo, mat);
+    lines.renderOrder = 3;
+    lines.name = "feet";
+    this.scene.add(lines);
   }
 
   /** Recolors buildings for exploration, functions and overlays. */

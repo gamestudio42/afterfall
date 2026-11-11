@@ -492,40 +492,56 @@
       "name": "structures_farm",
       "file": "structures/farm.glb",
       "kind": "glb",
-      "bytes": 310672,
-      "sha256": "cd068b94d2faef7f6deb7b4bc647e08c9de9a838d968605037ae24971208e04b",
+      "bytes": 312384,
+      "sha256": "34fbf6f99c567a2cee7fe279a5f59bc2b2abfec7ae82fe3b50d1578e43711a45",
       "generator": "tools/blender/structures.py"
     },
     {
       "name": "structures_gate",
       "file": "structures/gate.glb",
       "kind": "glb",
-      "bytes": 86748,
-      "sha256": "c9d1a342135eb2030521c5e94e4ff054d26d05e3e07721ad057d7c9fced7e0cc",
+      "bytes": 88544,
+      "sha256": "913ebcd3315b44cfcc71a3bf4e7ae7913d0302ff574c4e1af72d21ad775a6f4f",
       "generator": "tools/blender/structures.py"
     },
     {
       "name": "structures_tower",
       "file": "structures/tower.glb",
       "kind": "glb",
-      "bytes": 227300,
-      "sha256": "d53bc27858761f7e4d3e5b46224bf92a6b1f1928162e062616323fab05335338",
+      "bytes": 229060,
+      "sha256": "963e67a7cc8b2a75e3b947586f3f51a5b6baad48dddd3e8ff46903391fa5deab",
       "generator": "tools/blender/structures.py"
     },
     {
       "name": "structures_wall",
       "file": "structures/wall.glb",
       "kind": "glb",
-      "bytes": 62744,
-      "sha256": "e0a25c1b200fdda2cda31a546c6990ef2f2e3ea6e83a07da5023cf38896e9b56",
+      "bytes": 68224,
+      "sha256": "81ae8b960ae7e1cac62cbfa81717116be16f8e7eff63223dda9ae6937d3a16cd",
+      "generator": "tools/blender/structures.py"
+    },
+    {
+      "name": "structures_wall_junction",
+      "file": "structures/wall_junction.glb",
+      "kind": "glb",
+      "bytes": 89632,
+      "sha256": "3927b94c1b7626a37e7d37960cb334f37ae6412378afd9f71095ec7b9e32a78e",
+      "generator": "tools/blender/structures.py"
+    },
+    {
+      "name": "structures_wall_patch",
+      "file": "structures/wall_patch.glb",
+      "kind": "glb",
+      "bytes": 112876,
+      "sha256": "2de28fe0402011cebabc6c395807895b836cd7f348cf58034026198dd4c433e5",
       "generator": "tools/blender/structures.py"
     },
     {
       "name": "structures_well",
       "file": "structures/well.glb",
       "kind": "glb",
-      "bytes": 64440,
-      "sha256": "06f9d717e8c0c06ead0bde2fd3a458c5a4849a45dc26a1b16c250555572e5440",
+      "bytes": 66232,
+      "sha256": "cd7bd2273530acfb2248ba64abbeb31e3fc60bdb08738c4b0cf98925fbb8849e",
       "generator": "tools/blender/structures.py"
     }
   ]

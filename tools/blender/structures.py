@@ -35,31 +35,32 @@ WATER = None
 
 def materials():
     global CONCRETE, WOOD, METAL, SOIL, PLANT, STONE, WATER
-    CONCRETE = mat("concrete", (0.48, 0.45, 0.41), 0.95)
-    WOOD = mat("wood", (0.42, 0.30, 0.18), 0.9)
+    CONCRETE = mat("concrete", (0.48, 0.45, 0.41), 0.95, category="masonry")
+    WOOD = mat("wood", (0.42, 0.30, 0.18), 0.9, category="timber")
     # Metalness stays low: three.js has no environment map here, and a metallic
 # surface without one renders black.
-    METAL = mat("metal", (0.46, 0.48, 0.51), 0.65, 0.15)
-    SOIL = mat("soil", (0.23, 0.16, 0.11), 1.0)
-    PLANT = mat("plant", (0.27, 0.44, 0.16), 0.95)
-    STONE = mat("stone", (0.55, 0.53, 0.49), 0.95)
-    WATER = mat("water", (0.20, 0.32, 0.36), 0.3)
+    METAL = mat("metal", (0.46, 0.48, 0.51), 0.65, 0.15, category="hardware")
+    SOIL = mat("soil", (0.23, 0.16, 0.11), 1.0, category="masonry")
+    PLANT = mat("plant", (0.27, 0.44, 0.16), 0.95, category="timber")
+    STONE = mat("stone", (0.55, 0.53, 0.49), 0.95, category="masonry")
+    WATER = mat("water", (0.20, 0.32, 0.36), 0.3, category="hardware")
 
 
 def export(name, ob):
     export_packed(name, ob, OUT)
 
 
-def wall():
+def wall(repaired=False):
     """2 m of wall, 2.6 m tall: a concrete slab, timber bracing on both faces, a ruined top."""
     reset()
     materials()
     parts = []
     parts.append(box((2.0, 0.50, 1.9), (0, 0, 0.95), material=CONCRETE))
     parts.append(box((2.0, 0.44, 0.7), (0, 0, 2.25), material=CONCRETE))
+    parts.append(box((1.98, .70, .12), (0, 0, .06), material=STONE))
     # A broken top: two blocks of different heights, so the silhouette is not a slab.
-    parts.append(box((0.9, 0.38, 0.26), (-0.5, 0, 2.73), material=CONCRETE))
-    parts.append(box((0.5, 0.36, 0.16), (0.66, 0, 2.68), material=CONCRETE))
+    parts.append(box((0.9, 0.38, 0.26), (.4 if repaired else -.5, 0, 2.73), material=CONCRETE))
+    parts.append(box((0.5, 0.36, 0.16), (-.66 if repaired else .66, 0, 2.68), material=CONCRETE))
     # A timber band across both faces and a diagonal brace, what makes it read as
     # something people built rather than a poured block.
     for y in (-0.24, 0.24):
@@ -74,7 +75,7 @@ def wall():
     parts.append(box((0.5, 0.35, 0.18), (-0.6, 0.28, 0.09), material=CONCRETE))
     parts.append(box((0.35, 0.3, 0.14), (0.5, -0.3, 0.07), material=CONCRETE))
     # Mortar seams and bolt plates break up the broad concrete face.
-    dark = mat("Mortar", (.16,.15,.12))
+    dark = mat("Mortar", (.16,.15,.12), category="masonry")
     for side in (-1,1):
         for z in (.58,1.18,1.88):
             parts.append(box((1.94,.012,.025),(0,side*.258,z),material=dark,bevel=0))
@@ -82,7 +83,30 @@ def wall():
             parts.append(box((.025,.012,.5),(x,side*.258,z),material=dark,bevel=0))
         for x in (-.8,.8):
             parts.append(cyl(.038,.035,(x,side*.31,1.35),rot=(math.pi/2,0,0),verts=6,material=METAL))
-    return join("wall", parts)
+    if repaired:
+        # Salvaged corrugated patch covers a damaged course on both faces.
+        for side in (-1,1):
+            parts.append(box((.68,.035,.78),(.35,side*.29,.76),material=METAL))
+            for i in range(5):
+                parts.append(box((.025,.055,.76),(.08+i*.13,side*.31,.76),material=METAL))
+    return join("wall_patch" if repaired else "wall", parts)
+
+
+def junction():
+    """Full-cell masonry pier: authored courses and caps, never a stretched wall."""
+    reset()
+    materials()
+    parts = []
+    parts.append(box((2, 2, .18), (0, 0, .09), material=CONCRETE))
+    for row in range(5):
+        for ix in range(2):
+            for iy in range(2):
+                parts.append(box((.985, .985, .47), ((ix-.5), (iy-.5), .18+row*.48+.235), material=STONE if (row+ix+iy)%3 == 0 else CONCRETE))
+    parts.append(box((2.04, 2.04, .14), (0, 0, 2.65), material=STONE))
+    for x in (-.72,.72):
+        for y in (-.72,.72):
+            parts.append(cyl(.045,.14,(x,y,2.78),verts=6,material=METAL))
+    return join("wall_junction", parts)
 
 
 def gate():
@@ -251,7 +275,7 @@ def well():
 
 
 def main():
-    models = {"wall": wall, "gate": gate, "tower": tower, "farm": garden, "well": well}
+    models = {"wall": wall, "wall_patch": lambda: wall(True), "wall_junction": junction, "gate": gate, "tower": tower, "farm": garden, "well": well}
     for name, build in models.items():
         ob = build()
         export(name, ob)

@@ -122,8 +122,9 @@ def export(name, ob, out):
             colors.data[loop].color = (*(c*tone for c in rgb), 1)
     data.materials.clear()
     for category in categories:
-        material = mat("surface_" + category, (1, 1, 1), .3 if category == "glass" else .82,
-                       .12 if category in ("paint", "glass") else 0)
+        roughness = {"masonry": .96, "timber": .88, "hardware": .57}.get(category, .3 if category == "glass" else .82)
+        metalness = .28 if category == "hardware" else .12 if category in ("paint", "glass") else 0
+        material = mat("surface_" + category, (1, 1, 1), roughness, metalness)
         node = material.node_tree.nodes.new("ShaderNodeVertexColor")
         node.layer_name = "Color"
         material.node_tree.links.new(node.outputs["Color"], material.node_tree.nodes["Principled BSDF"].inputs["Base Color"])

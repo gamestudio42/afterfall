@@ -6,6 +6,7 @@ import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
 import { axialYaw, cornerBlockScale } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
+import { selectionGeometry } from "./outline";
 import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
 import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
@@ -1352,22 +1353,11 @@ export class GameRenderer {
     const i = this.selection.building;
     if (i >= 0) {
       if (i !== this.selectionOutlineOf) {
-        // Outline the building's own shape: bottom and top rings plus the corners.
+        // Outline the building's own shape: bottom and top rings plus uprights at the
+        // corners. Uprights on every vertex read as a forest of lines on a curved footprint.
         const b = sim.city.buildings[i];
-        const poly = outlineOf(b);
-        const c = { x: b.rect.x + b.rect.w / 2, y: b.rect.y + b.rect.h / 2 };
-        const pts = poly.map((p) => {
-          const d = Math.hypot(p.x - c.x, p.y - c.y) || 1;
-          return { x: p.x + ((p.x - c.x) / d) * 0.3, y: p.y + ((p.y - c.y) / d) * 0.3 };
-        });
-        const top = b.height + 0.4;
-        const v: number[] = [];
-        pts.forEach((p, k) => {
-          const q = pts[(k + 1) % pts.length];
-          v.push(p.x, 0.05, p.y, q.x, 0.05, q.y, p.x, top, p.y, q.x, top, q.y, p.x, 0.05, p.y, p.x, top, p.y);
-        });
         this.selectionBox.geometry.dispose();
-        this.selectionBox.geometry = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
+        this.selectionBox.geometry = selectionGeometry(outlineOf(b), b.height);
         this.selectionOutlineOf = i;
       }
       this.selectionBox.visible = true;

@@ -4,7 +4,7 @@ import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } fr
 import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp, TICK_SECONDS } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
-import { cornerBlockScale, wallFrame } from "./structureLayout";
+import { wallFrame } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
 import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
@@ -14,6 +14,7 @@ import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacemen
 import { Vegetation } from "./vegetation";
 import { Doors } from "./doors";
 import { CharacterBatch, CharacterMotion } from "./characters";
+import { structureMaterial } from "./structureMaterial";
 import { VfxSystem, type FxEvent } from "./vfx";
 
 export type OverlayMode = "none" | "resources" | "danger";
@@ -112,7 +113,7 @@ export class GameRenderer {
   private doorGlow: THREE.InstancedMesh | null = null;
   private markState = "";
   private decalMat: THREE.MeshStandardMaterial | null = null;
-  private structureModels = new Map<StructureKind, { parts: THREE.InstancedMesh[]; ids: EntityId[] }>();
+  private structureModels = new Map<StructureKind | "wall_junction" | "wall_patch", { parts: THREE.InstancedMesh[]; ids: EntityId[] }>();
   private structuresReady = false;
   private markers: THREE.Group = new THREE.Group();
   selection: Selection = { units: [], building: -1, structure: -1 };
@@ -216,13 +217,21 @@ export class GameRenderer {
   }
 
   /**
-   * Loads the five structure models and keeps one instanced mesh per material per kind.
+   * Loads the structure kit and its wall variants and keeps one instanced mesh per material per kind.
    * Until they arrive (or if a file is missing) the single box mesh keeps drawing, so a
    * broken download costs a silhouette and nothing else.
    */
   private async loadStructureModels(): Promise<void> {
-    const kinds: StructureKind[] = ["wall", "gate", "tower", "farm", "well"];
-    const loaded = new Map<StructureKind, THREE.InstancedMesh[]>();
+    const kinds: (StructureKind | "wall_junction" | "wall_patch")[] = [
+      "wall",
+      "wall_junction",
+      "wall_patch",
+      "gate",
+      "tower",
+      "farm",
+      "well",
+    ];
+    const loaded = new Map<StructureKind | "wall_junction" | "wall_patch", THREE.InstancedMesh[]>();
     await Promise.all(
       kinds.map(async (kind) => {
         let gltf;
@@ -238,14 +247,8 @@ export class GameRenderer {
           const geo = child.geometry.clone();
           geo.applyMatrix4(child.matrixWorld);
           const src = child.material as THREE.MeshStandardMaterial;
-          const mat = new THREE.MeshStandardMaterial({
-            name: src.name,
-            color: src.color.clone(),
-            vertexColors: !!geo.getAttribute("color"),
-            roughness: src.roughness ?? 0.85,
-            metalness: src.metalness ?? 0,
-            flatShading: true,
-          });
+          geo.setAttribute("structureDamage", new THREE.InstancedBufferAttribute(new Float32Array(MAX_STRUCTURES), 1));
+          const mat = structureMaterial(src, !!geo.getAttribute("color"));
           const inst = new THREE.InstancedMesh(geo, mat, MAX_STRUCTURES);
           inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
           // White keeps the material's own colour; damage and selection lerp from here.
@@ -1092,7 +1095,11 @@ export class GameRenderer {
     // lone piece default to the east-west orientation the model is authored in.
     const wallMeasure = (s: { cx: number; cy: number }): { yaw: number; stretch: number } => {
       const g = sim.grid;
-      const at = (x: number, y: number) => g.inBounds(x, y) && g.structureAt[g.index(x, y)] >= 0;
+      const at = (x: number, y: number) => {
+        if (!g.inBounds(x, y)) return false;
+        const kind = sim.state.entities.get(g.structureAt[g.index(x, y)])?.structure?.kind;
+        return kind === "wall" || kind === "gate";
+      };
       return wallFrame(
         at(s.cx, s.cy - 1),
         at(s.cx, s.cy + 1),
@@ -1108,7 +1115,11 @@ export class GameRenderer {
     // cell left as one slab shows a shoulder-width notch where the other run stops.
     const isCorner = (s: { cx: number; cy: number }): boolean => {
       const g = sim.grid;
-      const at = (x: number, y: number) => g.inBounds(x, y) && g.structureAt[g.index(x, y)] >= 0;
+      const at = (x: number, y: number) => {
+        if (!g.inBounds(x, y)) return false;
+        const kind = sim.state.entities.get(g.structureAt[g.index(x, y)])?.structure?.kind;
+        return kind === "wall" || kind === "gate";
+      };
       const nz = at(s.cx, s.cy - 1) || at(s.cx, s.cy + 1);
       const nx = at(s.cx + 1, s.cy) || at(s.cx - 1, s.cy);
       return nz && nx;
@@ -1143,7 +1154,9 @@ export class GameRenderer {
         this.blueprintIds[b++] = e.id;
         continue;
       }
-      const model = this.structureModels.get(s.kind);
+      const corner = s.kind === "wall" && isCorner(s);
+      const variation = ((s.cx * 73856093) ^ (s.cy * 19349663)) >>> 0;
+      const model = this.structureModels.get(corner ? "wall_junction" : s.kind === "wall" && variation % 3 === 0 ? "wall_patch" : s.kind);
       if (!model) {
         // Fallback box, until the models land.
         if (this.structureIds.length >= MAX_STRUCTURES) continue;
@@ -1158,26 +1171,22 @@ export class GameRenderer {
       const axial = s.kind === "wall" || s.kind === "gate";
       const frame = axial ? wallMeasure(s) : { yaw: 0, stretch: 1 };
       const yaw = frame.yaw;
-      // A junction is a solid block for the whole cell. Drawing both slabs crossed left
-      // two dead arms poking a metre out of every corner, which read as battlements; the
-      // cell block fills the four quadrants the slabs cannot reach.
-      // Only walls become a pier: scaling a gate four times on its thickness would
-      // stretch its bars into slabs.
-      const corner = s.kind === "wall" && isCorner(s);
-      const placements: { yaw: number; thick: number }[] = [{ yaw, thick: corner ? cornerBlockScale(size) : 1 }];
+      // A dedicated masonry pier joins runs without stretching timber or rubble.
+      const placements = [{ yaw: yaw + (s.kind === "wall" && variation % 2 ? Math.PI : 0) }];
       const hpFrac = e.health ? e.health.hp / e.health.max : 1;
-      tmpC.setHex(0xffffff);
-      if (hpFrac < 0.99) tmpC.lerp(new THREE.Color(0x8a2a20), (1 - hpFrac) * 0.8);
+      tmpC.setScalar(0.88 + (variation % 13) / 100);
+      if (hpFrac < 0.99) tmpC.multiplyScalar(0.8 + hpFrac * 0.2);
       if (e.id === this.selection.structure) tmpC.lerp(new THREE.Color(0xffd34d), 0.4);
       for (const placement of placements) {
         if (model.ids.length >= MAX_STRUCTURES) break;
         const n = model.ids.length;
         tmpQ2.setFromAxisAngle(up, placement.yaw);
-        // The wall model's slab is 0.5 m thick, so a full cell needs a 4x on that axis.
-        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(frame.stretch, 1, placement.thick));
+        // Junction geometry is authored at its final dimensions.
+        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(corner ? 1 : frame.stretch, 1, 1));
         for (const part of model.parts) {
           part.setMatrixAt(n, tmpM);
           part.setColorAt(n, tmpC);
+          part.geometry.getAttribute("structureDamage").setX(n, 1 - hpFrac);
           part.count = n + 1;
         }
         model.ids[n] = e.id;
@@ -1189,6 +1198,7 @@ export class GameRenderer {
     for (const model of this.structureModels.values()) {
       for (const part of model.parts) {
         part.instanceMatrix.needsUpdate = true;
+        part.geometry.getAttribute("structureDamage").needsUpdate = true;
         if (part.instanceColor) part.instanceColor.needsUpdate = true;
       }
     }

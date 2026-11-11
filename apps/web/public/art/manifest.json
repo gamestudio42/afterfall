@@ -14,20 +14,20 @@
     {
       "name": "asphalt",
       "file": "asphalt.png",
-      "width": 256,
-      "height": 256,
-      "bytes": 69505,
-      "sha256": "f8d9503b1deb1a8cbdb53964cc4de08273832dd6f3fcfb7b66587678ae3efd29",
-      "generator": "tools/make-textures.ts"
+      "width": 512,
+      "height": 512,
+      "bytes": 206381,
+      "sha256": "e13fa7d2bd9612ff578f05abb012a5b874c4a4e7b2b4f8111bc594b3f1dae84e",
+      "generator": "tools/make-surfaces.ts"
     },
     {
       "name": "grass",
       "file": "grass.png",
-      "width": 256,
-      "height": 256,
-      "bytes": 100383,
-      "sha256": "b36dae44099746fe003114567a06bbeecc3d31d97e6af6be58b0263b94e9c544",
-      "generator": "tools/make-textures.ts"
+      "width": 512,
+      "height": 512,
+      "bytes": 298228,
+      "sha256": "24490a3fefa1ed05238fa7fcd78e390357a348e7b0488c232295805e91bb6aaf",
+      "generator": "tools/make-surfaces.ts"
     },
     {
       "name": "rust",
@@ -263,122 +263,10 @@
       "name": "decals",
       "file": "decals.png",
       "width": 512,
-      "height": 256,
-      "bytes": 78767,
-      "sha256": "2d4b393a098e5f7e81ad9f07b22434db280e7c5a90e96e6e2b181fd6aa0ccf73",
+      "height": 384,
+      "bytes": 89511,
+      "sha256": "07faa1206dffdc47bd5b91439ab569f39a150ac21f96130b3f0bc36d4da8a3ca",
       "generator": "tools/make-decals.ts"
-    },
-    {
-      "name": "props_ambulance",
-      "file": "props/ambulance.glb",
-      "kind": "glb",
-      "bytes": 17840,
-      "sha256": "4d9360b98751b1697c279420732a7ea3c65bf62d22fe6d540b2e31d5b7caabdc",
-      "generator": "tools/blender/props.py"
-    },
-    {
-      "name": "props_barrier",
-      "file": "props/barrier.glb",
-      "kind": "glb",
-      "bytes": 2000,
-      "sha256": "3da0172ef6c6ff66d0eae638360ace49f3925a3aca78cb1817f182cfbd4167cc",
-      "generator": "tools/blender/props.py"
-    },
-    {
-      "name": "props_car",
-      "file": "props/car.glb",
-      "kind": "glb",
-      "bytes": 12404,
-      "sha256": "ac314863f8060d6f54417deb20fc22624a8c96aff7ea2b258d5e8d5b934e9cda",
-      "generator": "tools/blender/props.py"
-    },
-    {
-      "name": "props_container",
-      "file": "props/container.glb",
-      "kind": "glb",
-      "bytes": 18768,
-      "sha256": "b93be3ad9f35c28367186903fb93e026355ac1701046db5e01fb4e044fd45b3e",
-      "generator": "tools/blender/props.py"
-    },
-    {
-      "name": "props_crates",
-      "file": "props/crates.glb",
-      "kind": "glb",
-      "bytes": 9748,
-      "sha256": "17f7a6fe322f8c7f7a5db313184db8a9cc3b8962f67b4252e30bbd3777d0c7bb",
-      "generator": "tools/blender/props.py"
-    },
-    {
-      "name": "props_dumpster",
-      "file": "props/dumpster.glb",
-      "kind": "glb",
-      "bytes": 7256,
-      "sha256": "fae7161680514585934ec94088d2ce9c3cb967fc6d447cebd613e38df6a029cf",
-      "generator": "tools/blender/props.py"
-    },
-    {
-      "name": "props_fence",
-      "file": "props/fence.glb",
-      "kind": "glb",
-      "bytes": 4324,
-      "sha256": "8a68c4e655ce67ee7518a36e6d3289d5c2d78249992fd19f74c47f9b2b4e7df8",
-      "generator": "tools/blender/props.py"
-    },
-    {
-      "name": "props_lamp",
-      "file": "props/lamp.glb",
-      "kind": "glb",
-      "bytes": 4836,
-      "sha256": "4da94873895ceac9a69fde830180a6501c10744a16054e6bb0bf9acd200c9dc8",
-      "generator": "tools/blender/props.py"
-    },
-    {
-      "name": "props_roof_ac",
-      "file": "props/roof_ac.glb",
-      "kind": "glb",
-      "bytes": 8824,
-      "sha256": "1fc233d7884b7e6888649f2d72ac37c9ef78ca2607bde10ae94a0392623ae3a1",
-      "generator": "tools/blender/roof_props.py"
-    },
-    {
-      "name": "props_roof_antenna",
-      "file": "props/roof_antenna.glb",
-      "kind": "glb",
-      "bytes": 6592,
-      "sha256": "be73233335235f5ad40854ce6391c3f1b9fbdcea53082c882ebb0c78293031ea",
-      "generator": "tools/blender/roof_props.py"
-    },
-    {
-      "name": "props_roof_stairs",
-      "file": "props/roof_stairs.glb",
-      "kind": "glb",
-      "bytes": 4916,
-      "sha256": "ab64a2ceacfccd5e0677d20505e49ecd1be7b45059cdd8fa23a49182aab4e2ac",
-      "generator": "tools/blender/roof_props.py"
-    },
-    {
-      "name": "props_roof_tank",
-      "file": "props/roof_tank.glb",
-      "kind": "glb",
-      "bytes": 15152,
-      "sha256": "ca02c9d15e7a1745ed248a6ba04c4d4a6df597a3ee332efec4589754b1e234d6",
-      "generator": "tools/blender/roof_props.py"
-    },
-    {
-      "name": "props_roof_vent",
-      "file": "props/roof_vent.glb",
-      "kind": "glb",
-      "bytes": 4088,
-      "sha256": "975b2b4b6cbcbdd3b2802730badc37adc894b2fc507d42779224d0d40e6bb9fe",
-      "generator": "tools/blender/roof_props.py"
-    },
-    {
-      "name": "props_sign",
-      "file": "props/sign.glb",
-      "kind": "glb",
-      "bytes": 2932,
-      "sha256": "1a9014a2932bd09942539ad18a8f5fe79b89ffac190b1947afdef5ae43cebefe",
-      "generator": "tools/blender/props.py"
     },
     {
       "name": "survivors_walker",
@@ -397,43 +285,247 @@
       "generator": "tools/blender/infected.py"
     },
     {
+      "name": "asphalt_detail",
+      "file": "asphalt_detail.png",
+      "width": 512,
+      "height": 512,
+      "bytes": 374157,
+      "sha256": "c03e3029dbe9ea6a457822686e4a9b91e76f0632e8fc5a87f984f899033f4c89",
+      "generator": "tools/make-surfaces.ts"
+    },
+    {
+      "name": "sidewalk",
+      "file": "sidewalk.png",
+      "width": 512,
+      "height": 512,
+      "bytes": 217801,
+      "sha256": "132e4ecc2abf7a1e1a867e0c45fe2d4a3a810f889514ea7302e2ab038e09d1c2",
+      "generator": "tools/make-surfaces.ts"
+    },
+    {
+      "name": "sidewalk_detail",
+      "file": "sidewalk_detail.png",
+      "width": 512,
+      "height": 512,
+      "bytes": 6500,
+      "sha256": "226dd29cc41d39ff32d1e4b52116b57ff9ceb3cd3da916314d3cb3fe6a2da025",
+      "generator": "tools/make-surfaces.ts"
+    },
+    {
+      "name": "vegetation_manaca",
+      "file": "vegetation/manaca.glb",
+      "kind": "glb",
+      "bytes": 384584,
+      "sha256": "4baa0765280d1f691ba2ce359092d7e45ac36df560fc4af2147e6acb75c73765",
+      "generator": "tools/import-vegetation.ts",
+      "source": "Refloreste/assets/vegetacao/mata_atlantica/manaca/mata_atlantica_manaca_adulta.glb"
+    },
+    {
+      "name": "vegetation_pequi",
+      "file": "vegetation/pequi.glb",
+      "kind": "glb",
+      "bytes": 155980,
+      "sha256": "99eb814a316031d97f85edde9db581d7e33189134ae5d6cd4e7f17c19a294f3b",
+      "generator": "tools/import-vegetation.ts",
+      "source": "Refloreste/assets/vegetacao/cerrado/pequi/cerrado_pequi_adulta.glb"
+    },
+    {
+      "name": "vegetation_dead",
+      "file": "vegetation/dead.glb",
+      "kind": "glb",
+      "bytes": 73256,
+      "sha256": "0f6d1502a6f9e2716623dea6a63814da32645380a0fa2deb5e71bb75946dbf43",
+      "generator": "tools/import-vegetation.ts",
+      "source": "Refloreste/assets/vegetacao/mata_atlantica/manaca/mata_atlantica_manaca_morta.glb"
+    },
+    {
+      "name": "vegetation_bush",
+      "file": "vegetation/bush.glb",
+      "kind": "glb",
+      "bytes": 32120,
+      "sha256": "c6e2cd3a687e075858b1d498fda1f9145ba4399614fc2eba52abf93877ad3d5c",
+      "generator": "tools/import-vegetation.ts",
+      "source": "Refloreste/assets/vegetacao/mata_atlantica/bush/mata_atlantica_bush_adulta.glb"
+    },
+    {
+      "name": "vegetation_leaf_alpha",
+      "file": "vegetation/leaf_alpha.png",
+      "kind": "png",
+      "width": 64,
+      "height": 64,
+      "bytes": 411,
+      "sha256": "39f238e51b94115fa96e6a6398057ca7e76abbc21c76587aeba96d3d0c87784d",
+      "generator": "tools/import-vegetation.ts",
+      "source": "Refloreste/textures/leaf_alpha.png"
+    },
+    {
+      "name": "roof",
+      "file": "roof.png",
+      "width": 512,
+      "height": 512,
+      "bytes": 219706,
+      "sha256": "db8d51a7688d186d4d6f4fd93f1cd3c74e9e1988c51eed1180d613fcaf5e4bec",
+      "generator": "tools/make-surfaces.ts"
+    },
+    {
+      "name": "roof_detail",
+      "file": "roof_detail.png",
+      "width": 512,
+      "height": 512,
+      "bytes": 26954,
+      "sha256": "eb4cea0b61d58e48e89b0a71b7e972f6fc259b6d1747b8ec19748736140c88ee",
+      "generator": "tools/make-surfaces.ts"
+    },
+    {
+      "name": "props_ambulance",
+      "file": "props/ambulance.glb",
+      "kind": "glb",
+      "bytes": 126452,
+      "sha256": "78b76aeb85569cd9936e928a9444e93a18ee36e98b10735574ff2c9607aa6d20",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_barrier",
+      "file": "props/barrier.glb",
+      "kind": "glb",
+      "bytes": 14268,
+      "sha256": "fa9e2892883c487e485d29b6ad415f3fe24716e201f62b8f05e62fa825082ebd",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_car",
+      "file": "props/car.glb",
+      "kind": "glb",
+      "bytes": 103624,
+      "sha256": "a1366f6efee21c71ce3492c818db31a12c537300b27ea9e9f19626c863bfd067",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_container",
+      "file": "props/container.glb",
+      "kind": "glb",
+      "bytes": 89944,
+      "sha256": "6a3e496227eb061ca79ff63e8fcd4a26393f00d0807615e5a1bad36cc1b326e5",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_crates",
+      "file": "props/crates.glb",
+      "kind": "glb",
+      "bytes": 56180,
+      "sha256": "18b210ff86b75b71eb639fcb0eeab2c0217855d3a8b7f6bf6695bb389e4d7c92",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_dumpster",
+      "file": "props/dumpster.glb",
+      "kind": "glb",
+      "bytes": 57236,
+      "sha256": "af4eaecfc635bcfa3f090766a903bed83d698ab533ee14c5b4414bba95358af4",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_fence",
+      "file": "props/fence.glb",
+      "kind": "glb",
+      "bytes": 60548,
+      "sha256": "fde329d109a28dfe3d77c492d3563b19475099b464c59c86d29ae3f0c726360e",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_lamp",
+      "file": "props/lamp.glb",
+      "kind": "glb",
+      "bytes": 20820,
+      "sha256": "a28f264e43374c736cc25cebbcad85001b7915f0d1073fc88ea3958e1f539f79",
+      "generator": "tools/blender/props.py"
+    },
+    {
+      "name": "props_roof_ac",
+      "file": "props/roof_ac.glb",
+      "kind": "glb",
+      "bytes": 36268,
+      "sha256": "b4ddcba18b7a6d20244e3487349afcaa415a26ffb211e5b0bf1f5ddc36efd05a",
+      "generator": "tools/blender/roof_props.py"
+    },
+    {
+      "name": "props_roof_antenna",
+      "file": "props/roof_antenna.glb",
+      "kind": "glb",
+      "bytes": 31484,
+      "sha256": "e07db3b582b80a5b2e4bfdee5000feaff33ae5f8e71c44dbdb9d33cb227125dd",
+      "generator": "tools/blender/roof_props.py"
+    },
+    {
+      "name": "props_roof_stairs",
+      "file": "props/roof_stairs.glb",
+      "kind": "glb",
+      "bytes": 43124,
+      "sha256": "627f124cb679502edc32079767f7abf40655ad217148a4451d4f0444135b70de",
+      "generator": "tools/blender/roof_props.py"
+    },
+    {
+      "name": "props_roof_tank",
+      "file": "props/roof_tank.glb",
+      "kind": "glb",
+      "bytes": 64200,
+      "sha256": "886967a2037e845dcda9d04253118beab2e7c579450a06c9059d4d453006dcf3",
+      "generator": "tools/blender/roof_props.py"
+    },
+    {
+      "name": "props_roof_vent",
+      "file": "props/roof_vent.glb",
+      "kind": "glb",
+      "bytes": 9256,
+      "sha256": "abb25ec03357a59570c89a1329ee323e8151a640acdfe24ec365e7a8713a5eaa",
+      "generator": "tools/blender/roof_props.py"
+    },
+    {
+      "name": "props_sign",
+      "file": "props/sign.glb",
+      "kind": "glb",
+      "bytes": 19872,
+      "sha256": "919d19c137ed1c710a2dd08733ce7eb9110a4ae15b0a928a8726f06ec85b4bc5",
+      "generator": "tools/blender/props.py"
+    },
+    {
       "name": "structures_farm",
       "file": "structures/farm.glb",
       "kind": "glb",
-      "bytes": 134636,
-      "sha256": "c80b4a90f7dcc6eedbe0b7a933f63d952dbf1ce863eb3a471ccdf7d81e7ef48d",
+      "bytes": 310672,
+      "sha256": "cd068b94d2faef7f6deb7b4bc647e08c9de9a838d968605037ae24971208e04b",
       "generator": "tools/blender/structures.py"
     },
     {
       "name": "structures_gate",
       "file": "structures/gate.glb",
       "kind": "glb",
-      "bytes": 15580,
-      "sha256": "d6a758fd4423b04edb6bc0711320b080241947db27672ab6c62ed9d961765327",
+      "bytes": 86748,
+      "sha256": "c9d1a342135eb2030521c5e94e4ff054d26d05e3e07721ad057d7c9fced7e0cc",
       "generator": "tools/blender/structures.py"
     },
     {
       "name": "structures_tower",
       "file": "structures/tower.glb",
       "kind": "glb",
-      "bytes": 39512,
-      "sha256": "59dd9dc177fc21c3f80274d5c1db072791aa52ab640fdda6a442d04d37609556",
+      "bytes": 227300,
+      "sha256": "d53bc27858761f7e4d3e5b46224bf92a6b1f1928162e062616323fab05335338",
       "generator": "tools/blender/structures.py"
     },
     {
       "name": "structures_wall",
       "file": "structures/wall.glb",
       "kind": "glb",
-      "bytes": 9564,
-      "sha256": "5db5d2ce59bccc1ca2f9793589d03ba2c668a08368d5707fcd95f9c9eea2b72c",
+      "bytes": 62744,
+      "sha256": "e0a25c1b200fdda2cda31a546c6990ef2f2e3ea6e83a07da5023cf38896e9b56",
       "generator": "tools/blender/structures.py"
     },
     {
       "name": "structures_well",
       "file": "structures/well.glb",
       "kind": "glb",
-      "bytes": 17636,
-      "sha256": "7cdd5d21a0cfe065fc2d4dfed458cd591c1d2b6bfa5c90369d59de40901e7a3a",
+      "bytes": 64440,
+      "sha256": "06f9d717e8c0c06ead0bde2fd3a458c5a4849a45dc26a1b16c250555572e5440",
       "generator": "tools/blender/structures.py"
     }
   ]

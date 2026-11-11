@@ -1,236 +1,221 @@
-"""
-Generates the low-poly prop kit as GLB files: the abandoned car, the dumpster,
-the fence, the sign, the lamp post and the jersey barrier.
-
-Blender is Z-up: every size below is (x, y, z) metres, with z the height. The
-exporter converts to Y-up for the renderer.
-
-Everything is built from primitives with flat materials, so it matches the
-game's look (no textures, colour comes from the material) and each prop stays
-under a few hundred triangles.
-
-Usage (headless):
-  blender --background --factory-startup --python tools/blender/props.py -- <out_dir>
+"""Author the abandoned street kit. Blender Z-up, metres, deterministic palettes.
+Run: blender --background --factory-startup --python tools/blender/props.py
 """
 import math
 import os
 import sys
-
 import bpy
+sys.path.insert(0, os.path.dirname(__file__))
+from propkit import reset, mat, box, cyl, cone, beam, mesh, loft, join, export
 
 OUT = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "apps/web/public/art/props"
 os.makedirs(OUT, exist_ok=True)
 
 
-def reset():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
+def wheel(x, y, z, rubber, steel, radius=.34):
+    cyl(radius, .23, (x,y,z), rot=(0,math.pi/2,0), verts=16, material=rubber)
+    side = 1 if x > 0 else -1
+    cyl(radius*.57, .025, (x+side*.124,y,z), rot=(0,math.pi/2,0), verts=12, material=steel)
+    cyl(radius*.22, .035, (x+side*.14,y,z), rot=(0,math.pi/2,0), verts=8, material=rubber)
 
 
-def mat(name, rgb, rough=0.8, metal=0.0):
-    m = bpy.data.materials.new(name)
-    m.use_nodes = True
-    bsdf = m.node_tree.nodes["Principled BSDF"]
-    bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
-    bsdf.inputs["Roughness"].default_value = rough
-    bsdf.inputs["Metallic"].default_value = metal
-    return m
+def car():
+    reset()
+    paint = mat("Car paint", (.52,.54,.55), category="paint")
+    glass = mat("Dusty glass", (.055,.085,.095), category="glass")
+    rubber = mat("Rubber", (.025,.029,.028))
+    steel = mat("Oxidised trim", (.27,.29,.28))
+    rust = mat("Flaked paint", (.19,.10,.055))
+    lamp = mat("Headlamp", (.72,.68,.49))
+    red = mat("Taillamp", (.27,.045,.025))
+    loft([(-2.1,.79,.35,.68),(-1.72,.9,.32,.84),(.95,.9,.32,.84),(1.95,.84,.38,.74),(2.12,.76,.42,.65)], paint)
+    loft([(-1.25,.78,.82,.88),(-.68,.77,.82,1.42),(.57,.75,.82,1.44),(1.18,.79,.82,.9)], glass)
+    box((1.46,1.3,.08),(0,-.05,1.46),material=paint,bevel=.035)
+    for side in (-1,1):
+        for a,b in [((side*.77,-1.25,.87),(side*.72,-.68,1.46)),((side*.72,.57,1.46),(side*.79,1.18,.87)),((side*.77,-.05,.85),(side*.72,-.05,1.46))]:
+            beam(a,b,.055,paint)
+        box((.07,2.25,.07),(side*.87,-.05,.82),material=steel)
+        for y in (-.77,.38):
+            box((.026,.26,.045),(side*.9,y,.76),material=steel,bevel=0)
+        box((.027,1.5,.055),(side*.905,-.2,.38),material=rust,bevel=0)
+        box((.12,.27,.11),(side*.92,.7,1.03),material=paint)
+        for y in (-1.36,1.32):
+            wheel(side*.87,y,.34,rubber,steel)
+        box((.43,.08,.19),(side*.52,2.08,.61),material=lamp)
+        box((.37,.06,.14),(side*.52,-2.10,.61),material=red)
+    for y in (-2.13,2.15):
+        box((1.54,.1,.13),(0,y,.43),material=steel)
+        box((.38,.012,.14),(0,y*1.025,.58),material=lamp,bevel=0)
+    for x in (-.3,-.15,0,.15,.3):
+        box((.07,.04,.14),(x,2.14,.68),material=rubber,bevel=0)
+    # Hood seam, wipers and a small rust scar remain readable at close zoom.
+    beam((-.61,1.13,.9),(.1,1.15,.94),.022,steel)
+    beam((.12,1.12,.91),(.64,1.15,.94),.022,steel)
+    box((.36,.48,.008),(-.47,1.61,.795),rot=(0,.06,.12),material=rust,bevel=0)
 
 
-def box(size, loc, rot=(0, 0, 0), material=None):
-    """Box of `size` (x, y, z) metres centred at `loc`."""
-    bpy.ops.mesh.primitive_cube_add(size=1, location=loc, rotation=rot)
-    ob = bpy.context.object
-    ob.scale = size
-    bpy.ops.object.transform_apply(scale=True)
-    if material:
-        ob.data.materials.append(material)
-    return ob
+def ambulance():
+    reset()
+    paint = mat("Ivory ambulance", (.62,.61,.52), category="paint")
+    glass = mat("Cab glass", (.045,.08,.095), category="glass")
+    dark = mat("Tyres and seals", (.025,.03,.03))
+    metal = mat("Trim", (.27,.29,.28))
+    stripe = mat("Emergency stripe", (.49,.12,.055))
+    blue = mat("Emergency blue", (.04,.17,.3))
+    box((2.05,3.45,1.8),(0,-.65,1.38),material=paint,bevel=.07)
+    loft([(.83,.99,.35,1.83),(1.65,.88,.35,1.82),(2.53,.83,.35,.89)],paint)
+    mesh("Windscreen",[(-.78,1.72,1.78),(.78,1.72,1.78),(.76,2.29,1.13),(-.76,2.29,1.13)],[(0,1,2,3)],glass)
+    for side in (-1,1):
+        box((.025,3.35,.2),(side*1.035,-.65,1.12),material=stripe,bevel=0)
+        box((.025,.68,.55),(side*.965,1.14,1.45),material=glass)
+        box((.04,.8,.08),(side*1.045,-.4,1.78),material=blue)
+        box((.04,.08,.8),(side*1.045,-.4,1.78),material=blue)
+        for y in (-1.66,1.73):
+            wheel(side*1.0,y,.36,dark,metal,.36)
+        box((.45,.09,.18),(side*.53,2.5,.73),material=paint)
+        box((.12,.04,.4),(side*.88,-2.41,1.05),material=stripe)
+        box((.14,.35,.14),(side*1.03,1.65,1.43),material=metal)
+    box((1.8,.14,.17),(0,2.54,.44),material=metal)
+    box((1.12,.3,.13),(0,1.05,1.96),material=metal)
+    for x in (-.36,.36):
+        box((.46,.24,.16),(x,1.05,2.07),material=blue if x > 0 else stripe)
+    for x in (-.49,.49):
+        box((.93,.025,1.55),(x,-2.39,1.41),material=paint)
+        box((.65,.028,.45),(x,-2.41,1.86),material=glass)
+        box((.05,.05,.19),(x*.3,-2.44,1.23),material=metal)
 
 
-def cyl(radius, depth, loc, rot=(0, 0, 0), verts=10, material=None):
-    bpy.ops.mesh.primitive_cylinder_add(radius=radius, depth=depth, vertices=verts, location=loc, rotation=rot)
-    ob = bpy.context.object
-    if material:
-        ob.data.materials.append(material)
-    return ob
+def dumpster():
+    reset()
+    green = mat("Paint", (.11,.22,.16))
+    rim = mat("Worn rims", (.22,.25,.19))
+    rust = mat("Rust", (.22,.11,.055))
+    black = mat("Interior", (.025,.035,.03))
+    box((2.2,1.3,.14),(0,0,.22),material=black)
+    for y in (-.63,.63):
+        box((2.2,.09,1.0),(0,y,.74),material=green)
+        box((2.23,.12,.08),(0,y,1.23),material=rim)
+        for x in (-.7,0,.7):
+            box((.07,.03,.78),(x,y*1.085,.72),material=rim,bevel=0)
+    for x in (-1.06,1.06):
+        box((.1,1.3,1.0),(x,0,.74),material=green)
+        box((.17,.42,.07),(x,0,.94),material=rust)
+    box((2.24,1.36,.09),(0,-.12,1.37),rot=(.2,0,0),material=green)
+    for x in (-.8,-.4,0,.4,.8):
+        box((.06,1.21,.04),(x,-.12,1.44),rot=(.2,0,0),material=rim,bevel=0)
+    for x in (-.82,.82):
+        for y in (-.44,.44):
+            cyl(.13,.12,(x,y,.13),rot=(0,math.pi/2,0),verts=8,material=black)
+    box((.42,.012,.19),(-.52,-.689,.91),material=rust,bevel=0)
 
 
-def join(name):
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.context.view_layer.objects.active = bpy.context.selected_objects[0] if bpy.context.selected_objects else None
-    if len(bpy.context.selected_objects) > 1:
-        bpy.ops.object.join()
-    ob = bpy.context.object
-    ob.name = name
-    return ob
+def fence():
+    reset()
+    timber = mat("Weathered timber", (.26,.21,.14))
+    pale = mat("Exposed grain", (.39,.33,.22))
+    metal = mat("Nails", (.1,.11,.1))
+    for x in (-1,1):
+        box((.15,.16,1.4),(x,0,.7),material=timber)
+    for z in (.35,.97):
+        box((2.12,.09,.12),(0,0,z),material=timber)
+    for i in range(7):
+        x=-.9+i*.3
+        height=1.15 if i != 4 else .77
+        box((.19,.075,height),(x,-.09,height/2+.07),rot=(0,.035*(i%3-1),0),material=pale if i%3 else timber)
+        for z in (.35,.97):
+            if z < height:
+                cyl(.019,.012,(x,-.134,z),rot=(math.pi/2,0,0),verts=6,material=metal)
 
 
-def export(name, ob):
-    bpy.ops.object.select_all(action="DESELECT")
-    ob.select_set(True)
-    bpy.context.view_layer.objects.active = ob
-    path = os.path.join(OUT, f"{name}.glb")
-    bpy.ops.export_scene.gltf(
-        filepath=path,
-        export_format="GLB",
-        use_selection=True,
-        export_apply=True,
-        export_yup=True,
-        export_normals=True,
-        export_texcoords=False,
-        export_cameras=False,
-        export_lights=False,
-    )
-    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
-    print(f"PROP {name} verts={len(ob.data.vertices)} tris={tris} bytes={os.path.getsize(path)}")
+def sign():
+    reset()
+    metal=mat("Steel",(.24,.27,.26))
+    green=mat("Faded sign",(.10,.23,.19))
+    cream=mat("Paint",(.59,.60,.47))
+    cyl(.055,2.5,(0,0,1.25),verts=8,material=metal)
+    box((1.22,.07,.5),(0,0,2.13),material=green)
+    box((1.3,.04,.06),(0,-.045,2.39),material=cream)
+    # Directional chevron instead of unreadable decorative text.
+    for side in (-1,1):
+        beam((-.15,side*.049,2.13),(.34,side*.049,2.13),.055,cream)
+        beam((.17,side*.049,2.29),(.35,side*.049,2.13),.055,cream)
+        beam((.17,side*.049,1.97),(.35,side*.049,2.13),.055,cream)
+    box((.35,.35,.13),(0,0,.065),material=metal)
 
 
-# --- abandoned car: body, cabin, four wheels, headlights --------------------
-reset()
-body_mat = mat("car_body", (0.30, 0.33, 0.36), rough=0.55, metal=0.3)
-glass_mat = mat("car_glass", (0.09, 0.11, 0.12), rough=0.25)
-tyre_mat = mat("tyre", (0.05, 0.05, 0.05), rough=0.95)
-lamp_mat = mat("lamp", (0.90, 0.86, 0.70), rough=0.3)
-box((1.80, 4.30, 0.62), (0, 0, 0.62), material=body_mat)
-box((1.66, 2.10, 0.58), (0, -0.15, 1.14), material=glass_mat)
-for sx in (-0.86, 0.86):
-    for sy in (-1.35, 1.35):
-        cyl(0.33, 0.22, (sx, sy, 0.33), rot=(0, math.pi / 2, 0), material=tyre_mat)
-for sx in (-0.58, 0.58):
-    box((0.34, 0.08, 0.16), (sx, 2.16, 0.70), material=lamp_mat)
-export("car", join("car"))
-
-# --- dumpster: body, sloped lid, two wheels ---------------------------------
-reset()
-steel = mat("steel", (0.18, 0.31, 0.24), rough=0.7, metal=0.2)
-rust = mat("rust", (0.28, 0.16, 0.10), rough=0.95)
-# `reset()` frees the previous scene's data, so materials are made per prop.
-tyre_mat = mat("tyre", (0.05, 0.05, 0.05), rough=0.95)
-box((2.20, 1.30, 1.10), (0, 0, 0.66), material=steel)
-box((2.26, 1.36, 0.08), (0, -0.03, 1.26), rot=(0.07, 0, 0), material=rust)
-for sx in (-0.85, 0.85):
-    cyl(0.14, 0.10, (sx, 0.52, 0.14), rot=(0, math.pi / 2, 0), material=tyre_mat)
-export("dumpster", join("dumpster"))
-
-# --- fence: two posts and three rails ---------------------------------------
-reset()
-wood = mat("wood", (0.32, 0.26, 0.19), rough=0.95)
-for sx in (-1.0, 1.0):
-    box((0.12, 0.12, 1.35), (sx, 0, 0.67), material=wood)
-for z in (0.35, 0.78, 1.18):
-    box((2.12, 0.07, 0.14), (0, 0, z), material=wood)
-export("fence", join("fence"))
-
-# --- sign: post and panel ---------------------------------------------------
-reset()
-post = mat("post", (0.35, 0.36, 0.38), rough=0.7, metal=0.4)
-panel = mat("panel", (0.75, 0.72, 0.62), rough=0.85)
-box((0.09, 0.09, 2.20), (0, 0, 1.10), material=post)
-box((1.10, 0.06, 0.72), (0, 0, 1.95), material=panel)
-export("sign", join("sign"))
-
-# --- lamp post: pole, arm, head --------------------------------------------
-reset()
-metal = mat("metal", (0.30, 0.31, 0.33), rough=0.5, metal=0.6)
-glow = mat("glow", (1.00, 0.92, 0.72), rough=0.2)
-cyl(0.09, 5.40, (0, 0, 2.70), verts=10, material=metal)
-box((0.90, 0.09, 0.09), (0.45, 0, 5.32), material=metal)
-box((0.50, 0.28, 0.14), (0.85, 0, 5.20), material=glow)
-export("lamp", join("lamp"))
-
-# --- jersey barrier: tapered profile, wider at the base --------------------
-reset()
-concrete = mat("concrete", (0.55, 0.54, 0.50), rough=0.95)
-half_w, half_d, h = 1.00, 0.30, 0.84
-
-# Six-vertex profile in the XZ plane, extruded along Y.
-profile = [
-    (-half_w, 0.0),
-    (half_w, 0.0),
-    (half_w, 0.16),
-    (half_w * 0.42, h),
-    (-half_w * 0.42, h),
-    (-half_w, 0.16),
-]
-verts = []
-for y in (-half_d, half_d):
-    for x, z in profile:
-        verts.append((x, y, z))
-faces = []
-n = len(profile)
-for i in range(n):
-    j = (i + 1) % n
-    faces.append((i, j, n + j, n + i))
-faces.append(tuple(range(n - 1, -1, -1)))
-faces.append(tuple(range(n, 2 * n)))
-
-mesh = bpy.data.meshes.new("barrier")
-mesh.from_pydata(verts, [], faces)
-mesh.validate()
-mesh.update()
-ob = bpy.data.objects.new("barrier", mesh)
-bpy.context.scene.collection.objects.link(ob)
-ob.data.materials.append(concrete)
-bpy.context.view_layer.objects.active = ob
-ob.select_set(True)
-bpy.ops.object.shade_flat()
-export("barrier", ob)
+def lamp():
+    reset()
+    steel=mat("Galvanised pole",(.23,.26,.25))
+    dark=mat("Housing",(.11,.14,.14))
+    glow=mat("Lens",(.82,.72,.46))
+    base=mat("Concrete foot",(.31,.3,.25))
+    box((.42,.42,.22),(0,0,.11),material=base)
+    cone(.11,.065,5.25,(0,0,2.77),material=steel)
+    beam((0,0,5.35),(.45,0,5.53),.09,steel)
+    beam((.45,0,5.53),(1.05,0,5.53),.09,steel)
+    box((.64,.29,.14),(.99,0,5.42),material=dark,bevel=.035)
+    box((.49,.23,.026),(1.01,0,5.34),material=glow)
+    box((.14,.035,.45),(0,-.095,.78),material=dark)
 
 
-# --- ambulance: box body, cab, red stripe, light bar, four wheels -----------
-reset()
-body = mat("ambulance_body", (0.86, 0.87, 0.85), rough=0.5)
-stripe = mat("ambulance_stripe", (0.62, 0.09, 0.09), rough=0.6)
-glass = mat("ambulance_glass", (0.10, 0.12, 0.14), rough=0.25)
-tyre = mat("tyre", (0.05, 0.05, 0.05), rough=0.95)
-beacon_r = mat("beacon_red", (0.75, 0.10, 0.10), rough=0.25)
-beacon_b = mat("beacon_blue", (0.12, 0.22, 0.70), rough=0.25)
-# Body and cab, 2.2 m wide and 5.4 m long, like the van it is.
-box((2.20, 3.40, 1.95), (0, -0.85, 1.55), material=body)
-box((2.16, 1.70, 1.45), (0, 1.55, 1.30), material=body)
-box((2.10, 0.10, 0.78), (0, 2.38, 1.62), rot=(0.18, 0, 0), material=glass)
-for sx in (-1.11, 1.11):
-    box((0.04, 3.30, 0.22), (sx, -0.85, 1.35), material=stripe)
-    box((0.04, 1.30, 0.80), (sx, 1.35, 1.75), material=glass)
-box((1.90, 0.08, 0.30), (0, 0.88, 1.05), material=stripe)
-# Light bar on the cab roof.
-box((0.55, 0.22, 0.16), (-0.32, 1.45, 2.10), material=beacon_r)
-box((0.55, 0.22, 0.16), (0.32, 1.45, 2.10), material=beacon_b)
-for sx in (-0.95, 0.95):
-    for sy in (-1.95, 1.45):
-        cyl(0.36, 0.24, (sx, sy, 0.36), rot=(0, math.pi / 2, 0), material=tyre)
-export("ambulance", join("ambulance"))
+def barrier():
+    reset()
+    concrete=mat("Concrete",(.39,.38,.32))
+    ochre=mat("Warning paint",(.55,.39,.12))
+    dark=mat("Dark warning",(.055,.06,.055))
+    profile=[(-.32,0),(.32,0),(.32,.14),(.12,.57),(.12,.85),(-.12,.85),(-.12,.57),(-.32,.14)]
+    vertices=[(x,y,z) for x in (-1,1) for y,z in profile]
+    faces=[tuple(range(7,-1,-1)),tuple(range(8,16))]+[(i,(i+1)%8,(i+1)%8+8,i+8) for i in range(8)]
+    mesh("Jersey profile",vertices,faces,concrete)
+    for side in (-1,1):
+        box((1.9,.012,.23),(0,side*.127,.71),material=ochre,bevel=0)
+        for i in range(6):
+            x=-.84+i*.29
+            mesh("Hazard slash",[(x,side*.136,.6),(x+.13,side*.136,.6),(x+.26,side*.136,.82),(x+.13,side*.136,.82)],[(0,1,2,3) if side < 0 else (3,2,1,0)],dark)
+    for x in (-.6,.6):
+        box((.24,.08,.055),(x,0,.87),material=dark)
 
-# --- shipping container: steel box with corrugated sides and a door bar ----
-reset()
-paint = mat("container_paint", (0.42, 0.20, 0.16), rough=0.85, metal=0.15)
-rust = mat("container_rust", (0.34, 0.19, 0.12), rough=0.95, metal=0.1)
-box((2.44, 6.06, 2.59), (0, 0, 1.30), material=paint)
-# Corrugation: thin ribs down both long sides, and a rust band along the base.
-for i in range(11):
-    y = -2.6 + i * 0.52
-    for sx in (-1.23, 1.23):
-        box((0.06, 0.10, 2.30), (sx, y, 1.30), material=rust)
-box((2.48, 6.10, 0.16), (0, 0, 0.20), material=rust)
-# Door bars on one end.
-for sx in (-0.55, 0.55):
-    box((0.08, 0.08, 2.10), (sx, 3.06, 1.30), material=rust)
-export("container", join("container"))
 
-# --- crates: a stack of four boxes and a pallet -----------------------------
-reset()
-crate = mat("crate", (0.44, 0.33, 0.20), rough=0.95)
-crate2 = mat("crate_pale", (0.52, 0.42, 0.28), rough=0.95)
-pallet = mat("pallet", (0.38, 0.29, 0.19), rough=0.95)
-# Pallet: three bearers and five boards.
-for sy in (-0.42, 0, 0.42):
-    box((1.20, 0.12, 0.12), (0, sy, 0.06), material=pallet)
-for sy in (-0.48, -0.24, 0, 0.24, 0.48):
-    box((1.20, 0.14, 0.04), (0, sy, 0.14), material=pallet)
-# Crates, two on the bottom and one turned across the top.
-box((0.62, 0.58, 0.58), (-0.30, -0.18, 0.45), rot=(0, 0, 0.08), material=crate)
-box((0.56, 0.54, 0.54), (0.34, 0.12, 0.43), rot=(0, 0, -0.12), material=crate2)
-box((0.58, 0.46, 0.44), (-0.06, -0.02, 0.96), rot=(0, 0, 0.35), material=crate)
-export("crates", join("crates"))
+def container():
+    reset()
+    paint=mat("Container paint",(.47,.45,.39),category="paint")
+    rust=mat("Edges",(.22,.12,.065))
+    steel=mat("Door fittings",(.37,.38,.33))
+    box((2.42,6.04,2.5),(0,0,1.31),material=paint,bevel=.04)
+    for i in range(17):
+        y=-2.83+i*.35
+        for side in (-1,1):
+            box((.06,.09,2.26),(side*1.23,y,1.31),material=paint,bevel=0)
+        box((2.32,.09,.045),(0,y,2.58),material=paint,bevel=0)
+    for x in (-1.15,1.15):
+        for y in (-2.98,2.98):
+            box((.17,.17,2.6),(x,y,1.3),material=rust)
+    for x in (-.6,.6):
+        box((1.14,.06,2.35),(x,3.055,1.32),material=paint)
+        for dx in (-.34,.34):
+            cyl(.035,2.15,(x+dx,3.11,1.32),verts=6,material=steel)
+        box((.42,.06,.045),(x,3.17,1.1),material=steel)
+    box((.62,.012,.22),(-.4,-3.04,1.9),material=steel,bevel=0)
 
-print("PROPS DONE")
+
+def crates():
+    reset()
+    timber=mat("Wood",(.32,.23,.13))
+    pale=mat("Boards",(.45,.34,.21))
+    iron=mat("Straps",(.13,.15,.12))
+    for y in (-.43,0,.43):
+        box((1.35,.12,.12),(0,y,.06),material=timber)
+    for y in (-.48,-.24,0,.24,.48):
+        box((1.35,.15,.045),(0,y,.14),material=pale)
+    for x,y,z,w,d,h in [(-.33,-.12,.45,.62,.68,.56),(.35,.15,.43,.57,.54,.52),(-.1,-.02,.95,.61,.5,.43)]:
+        box((w,d,h),(x,y,z),material=timber)
+        for k in (-1,0,1):
+            box((w-.03,d+.016,.04),(x,y,z+k*h*.29),material=pale,bevel=0)
+        for sx in (-1,1):
+            box((.055,d+.025,h+.025),(x+sx*w*.34,y,z),material=iron,bevel=0)
+
+
+for name, build in dict(car=car, ambulance=ambulance, dumpster=dumpster, fence=fence,
+                        sign=sign, lamp=lamp, barrier=barrier, container=container, crates=crates).items():
+    build()
+    export(name, join(name), OUT)

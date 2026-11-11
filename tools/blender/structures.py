@@ -5,7 +5,7 @@ tower, the garden and the well.
 Before this kit every structure was the same box scaled per kind, so a tower and a
 wall differed only in height and colour. Each model below is authored to the footprint
 the simulation already uses (one navigation cell is 2 m), with Z up and the front
-facing -Y, the same convention as the props and the unit models.
+facing -Y. Authored colours are packed by propkit into one material batch per model.
 
 Usage (headless):
   blender --background --factory-startup --python tools/blender/structures.py -- <out_dir>
@@ -20,18 +20,8 @@ OUT = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "apps/web/publ
 os.makedirs(OUT, exist_ok=True)
 
 
-def reset():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-
-
-def mat(name, rgb, rough=0.85, metal=0.0):
-    m = bpy.data.materials.new(name)
-    m.use_nodes = True
-    bsdf = m.node_tree.nodes["Principled BSDF"]
-    bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
-    bsdf.inputs["Roughness"].default_value = rough
-    bsdf.inputs["Metallic"].default_value = metal
-    return m
+sys.path.insert(0, os.path.dirname(__file__))
+from propkit import reset, mat, box, cyl, beam, mesh, join, export as export_packed
 
 
 CONCRETE = None
@@ -56,51 +46,8 @@ def materials():
     WATER = mat("water", (0.20, 0.32, 0.36), 0.3)
 
 
-def box(size, loc, rot=(0, 0, 0), material=None):
-    bpy.ops.mesh.primitive_cube_add(size=1, location=loc, rotation=rot)
-    ob = bpy.context.object
-    ob.scale = size
-    bpy.ops.object.transform_apply(scale=True)
-    if material:
-        ob.data.materials.append(material)
-    return ob
-
-
-def cyl(radius, depth, loc, rot=(0, 0, 0), verts=10, material=None):
-    bpy.ops.mesh.primitive_cylinder_add(radius=radius, depth=depth, vertices=verts, location=loc, rotation=rot)
-    ob = bpy.context.object
-    if material:
-        ob.data.materials.append(material)
-    return ob
-
-
-def join(name, objects):
-    bpy.ops.object.select_all(action="DESELECT")
-    for ob in objects:
-        ob.select_set(True)
-    bpy.context.view_layer.objects.active = objects[0]
-    bpy.ops.object.join()
-    ob = bpy.context.object
-    ob.name = name
-    return ob
-
-
 def export(name, ob):
-    bpy.ops.object.select_all(action="DESELECT")
-    ob.select_set(True)
-    bpy.context.view_layer.objects.active = ob
-    path = os.path.join(OUT, f"{name}.glb")
-    bpy.ops.export_scene.gltf(
-        filepath=path,
-        export_format="GLB",
-        use_selection=True,
-        export_apply=True,
-        export_yup=True,
-        export_normals=True,
-        export_texcoords=False,
-    )
-    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
-    print(f"STRUCTURE {name}: {len(ob.data.vertices)} verts, {tris} tris, {os.path.getsize(path)} B")
+    export_packed(name, ob, OUT)
 
 
 def wall():
@@ -126,6 +73,15 @@ def wall():
     # Rubble at the foot.
     parts.append(box((0.5, 0.35, 0.18), (-0.6, 0.28, 0.09), material=CONCRETE))
     parts.append(box((0.35, 0.3, 0.14), (0.5, -0.3, 0.07), material=CONCRETE))
+    # Mortar seams and bolt plates break up the broad concrete face.
+    dark = mat("Mortar", (.16,.15,.12))
+    for side in (-1,1):
+        for z in (.58,1.18,1.88):
+            parts.append(box((1.94,.012,.025),(0,side*.258,z),material=dark,bevel=0))
+        for x,z in ((-.55,.88),(.5,1.57),(-.1,2.25)):
+            parts.append(box((.025,.012,.5),(x,side*.258,z),material=dark,bevel=0))
+        for x in (-.8,.8):
+            parts.append(cyl(.038,.035,(x,side*.31,1.35),rot=(math.pi/2,0,0),verts=6,material=METAL))
     return join("wall", parts)
 
 
@@ -154,6 +110,9 @@ def gate():
     parts.append(diagonal)
     for z in (0.55, 1.55):
         parts.append(box((0.22, 0.12, 0.09), (-0.9, 0, z), material=METAL))
+    for x in (-.4,.4):
+        parts.append(box((.07,.12,.22),(x,-.075,1.05),material=WOOD))
+    parts.append(box((.2,.12,.07),(.55,-.11,1.04),material=WOOD))
     return join("gate", parts)
 
 
@@ -207,6 +166,12 @@ def tower():
         parts.append(box((0.07, 0.07, 4.6), (sx, -half - 0.2, 2.3), material=METAL))
     for i in range(10):
         parts.append(box((0.70, 0.06, 0.05), (0, -half - 0.2, 0.3 + i * 0.44), material=METAL))
+    for side in (-1,1):
+        parts.append(beam((-half,side*half,.25),(half,side*half,4.5),.12,WOOD))
+    for x in (-1.5,-1,-.5,0,.5,1,1.5):
+        parts.append(box((.055,3.6,.055),(x,0,6.34),rot=(math.radians(5),0,0),material=METAL,bevel=0))
+    for y in (-1.3,-.8,-.3,.2,.7,1.2):
+        parts.append(box((3.3,.025,.012),(0,y,4.77),material=METAL,bevel=0))
     return join("tower", parts)
 
 
@@ -218,6 +183,8 @@ def garden():
     for i in range(5):
         y = -3.0 + i * 1.5
         parts.append(box((7.0, 1.0, 0.26), (0, y, 0.13), material=SOIL))
+        for edge in (-.52,.52):
+            parts.append(box((7.1,.07,.3),(0,y+edge,.15),material=WOOD))
         # Two rows of cabbages per bed, sized to read from the game camera.
         for row in (-0.24, 0.24):
             for j in range(7):
@@ -250,10 +217,19 @@ def well():
     reset()
     materials()
     parts = []
-    parts.append(cyl(0.95, 0.75, (0, 0, 0.38), verts=12, material=STONE))
-    # Rim: a slightly wider ring on top of the shaft.
-    parts.append(cyl(1.02, 0.12, (0, 0, 0.80), verts=12, material=STONE))
-    parts.append(cyl(0.70, 0.03, (0, 0, 0.74), verts=12, material=WATER))
+    # Individual annular bricks leave the shaft genuinely open above the water.
+    for row in range(3):
+        z0 = row*.35 if row < 2 else .7
+        z1 = z0 + (.335 if row < 2 else .13)
+        outer = .97 if row < 2 else 1.02
+        for i in range(12):
+            a = (i + (row%2)*.5)*math.tau/12 + .012
+            b = a + math.tau/12 - .024
+            ring = [(r*math.cos(t),r*math.sin(t)) for r,t in ((.7,a),(outer,a),(outer,b),(.7,b))]
+            vertices = [(x,y,z) for z in (z0,z1) for x,y in ring]
+            faces = [(3,2,1,0),(4,5,6,7)]+[(k,(k+1)%4,(k+1)%4+4,k+4) for k in range(4)]
+            parts.append(mesh("Well stone",vertices,faces,STONE))
+    parts.append(cyl(.72,.025,(0,0,.18),verts=16,material=WATER))
     # A-frame and windlass.
     for sx in (-0.9, 0.9):
         parts.append(box((0.13, 0.13, 1.75), (sx, 0, 1.42), material=WOOD))

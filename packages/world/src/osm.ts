@@ -33,6 +33,8 @@ export interface OverpassElement {
   lon?: number;
   tags?: Record<string, string>;
   geometry?: ({ lat: number; lon: number } | null)[];
+  /** A relation's members carry their own geometry when the query asks for `out geom`. */
+  members?: { type: string; ref: number; role: string; geometry?: ({ lat: number; lon: number } | null)[] }[];
 }
 
 export interface OverpassResponse {
@@ -171,6 +173,7 @@ export function overpassQuery(lat: number, lon: number, size: number): string {
   return `[out:json][timeout:40];
 (
   way["building"](${box});
+  relation["building"](${box});
   way["highway"](${box});
   way["leisure"~"^(park|garden|playground|pitch)$"](${box});
   way["landuse"~"^(grass|recreation_ground|forest|meadow|village_green)$"](${box});
@@ -230,9 +233,50 @@ const ZONE_OF: Record<BuildingType, Zone> = {
 interface RawBuilding {
   osmId: number;
   poly: Vec2[];
+  /** Courtyard outlines inside the building, when OSM maps it as a multipolygon. */
+  holes?: Vec2[][];
   tags: Record<string, string>;
   area: number;
   centroid: Vec2;
+}
+
+/**
+ * The outer ring and the courtyards of a building relation.
+ *
+ * OSM maps a building with a courtyard — a Parisian block, a hospital with an inner square —
+ * as a multipolygon: one outer way and one inner way per hole. Only ways were read, so those
+ * buildings were missing from the map entirely, and a courtyard that arrived as a plain way
+ * was stamped solid.
+ */
+function relationRings(el: OverpassElement, project: (p: { lat: number; lon: number }) => Vec2): { outer: Vec2[]; holes: Vec2[][] } | null {
+  const ring = (member: { geometry?: ({ lat: number; lon: number } | null)[] }): Vec2[] | null => {
+    const pts = (member.geometry ?? []).filter((g): g is { lat: number; lon: number } => !!g).map(project);
+    if (pts.length < 4) return null;
+    const closed = Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 0.01;
+    const ringPts = simplifyPolygon(closed ? pts.slice(0, -1) : pts);
+    return ringPts.length >= 3 ? ringPts : null;
+  };
+  let best: Vec2[] | null = null;
+  let bestArea = 0;
+  const holes: Vec2[][] = [];
+  for (const m of el.members ?? []) {
+    if (m.type !== "way") continue;
+    const r = ring(m);
+    if (!r) continue;
+    if (m.role === "inner") {
+      if (polygonArea(r) > 20) holes.push(r);
+      continue;
+    }
+    const area = polygonArea(r);
+    if (area > bestArea) {
+      bestArea = area;
+      best = r;
+    }
+  }
+  if (!best) return null;
+  // A hole that is not inside the outer ring is not a courtyard.
+  const inside = holes.filter((h) => polygonCentroid(h) && pointInPolygon(polygonCentroid(h).x, polygonCentroid(h).y, best!));
+  return { outer: best, holes: inside };
 }
 
 export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): CityMap {
@@ -256,6 +300,17 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     const tags = el.tags ?? {};
     if (el.type === "node") {
       if (el.lat !== undefined && el.lon !== undefined) pois.push({ p: project({ lat: el.lat, lon: el.lon }), tags });
+      continue;
+    }
+    if (el.type === "relation") {
+      if (!tags.building || tags.building === "no" || tags.type !== "multipolygon") continue;
+      const rings = relationRings(el, project);
+      if (!rings) continue;
+      const outer: Vec2[] = rings.outer;
+      if (!outer.every((p) => p.x > inner.x && p.y > inner.y && p.x < inner.x + inner.w && p.y < inner.y + inner.h)) continue;
+      const area = polygonArea(outer) - rings.holes.reduce((n, h) => n + polygonArea(h), 0);
+      if (area < 30) continue;
+      rawBuildings.push({ osmId: el.id, poly: outer, holes: rings.holes, tags, area, centroid: polygonCentroid(outer) });
       continue;
     }
     if (el.type !== "way" || !el.geometry) continue;
@@ -365,6 +420,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       zone: ZONE_OF[k.type],
       rect: polygonBounds(k.rb.poly),
       footprint: k.rb.poly,
+      holes: k.rb.holes,
       area: Math.round(k.rb.area),
       floors,
       height: floors * 3.2 + 0.6,

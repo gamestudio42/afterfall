@@ -3,7 +3,7 @@
  * `tools/blender/props.py`; this only records what is on disk, so the manifest
  * keeps describing real bytes and `pnpm assets:check` keeps meaning something.
  *
- * Usage: pnpm assets:props
+ * Usage: pnpm assets:props [props structures survivors infected]
  */
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -12,11 +12,14 @@ import { resolve } from "node:path";
 const ART = resolve(import.meta.dirname, "../apps/web/public/art");
 const MANIFEST = resolve(ART, "manifest.json");
 
-const dirs = ["props", "survivors", "infected", "structures"];
+const selected = process.argv.slice(2);
+const allowed = ["props", "survivors", "infected", "structures"];
+if (selected.some((dir) => !allowed.includes(dir))) throw new Error("Unknown model directory");
+const dirs = selected.length ? selected : allowed;
 /** Every folder of GLBs, and the script that bakes it. */
 const GENERATORS: Record<string, string> = {
   props: "tools/blender/props.py",
-  survivors: "tools/blender/props.py",
+  survivors: "tools/blender/survivors.py",
   infected: "tools/blender/infected.py",
   structures: "tools/blender/structures.py",
 };

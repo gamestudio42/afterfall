@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pointInPolygon } from "@afterfall/shared";
+import { pointInPolygon, polygonCentroid } from "@afterfall/shared";
 import { CellKind, NavGrid, OsmImportError, cityFromOverpass, overpassQuery } from "../src";
 import { FIXTURE_CENTER, syntheticOverpass } from "./fixtures/osm";
 
@@ -226,5 +226,53 @@ describe("landmarks", () => {
   it("leaves an ordinary building without a landmark", () => {
     const city = cityFromOverpass(syntheticOverpass(), opts);
     expect(city.buildings.every((b) => !b.landmark)).toBe(true);
+  });
+});
+
+describe("a building with a courtyard", () => {
+  const kLon = 111_320 * Math.cos((FIXTURE_CENTER.lat * Math.PI) / 180);
+  const at = (dx: number, dy: number) => ({ lat: FIXTURE_CENTER.lat - dy / 111_132, lon: FIXTURE_CENTER.lon + dx / kLon });
+  const ring = (x0: number, x1: number, y0: number, y1: number) => [at(x0, y0), at(x1, y0), at(x1, y1), at(x0, y1), at(x0, y0)];
+
+  function withCourtyard() {
+    const data = syntheticOverpass();
+    return {
+      elements: [
+        ...data.elements,
+        {
+          type: "relation" as const,
+          id: 9501,
+          tags: { type: "multipolygon", building: "yes" },
+          members: [
+            { type: "way", ref: 1, role: "outer", geometry: ring(-90, -40, -90, -40) },
+            { type: "way", ref: 2, role: "inner", geometry: ring(-78, -52, -78, -52) },
+          ],
+        },
+      ],
+    };
+  }
+
+  it("imports the outer ring and keeps the courtyard open", () => {
+    // Only ways were read, so a block mapped as a multipolygon did not exist on the map at
+    // all — and a courtyard that arrived as a plain way was stamped solid.
+    const city = cityFromOverpass(withCourtyard(), opts);
+    const block = city.buildings.find((b) => b.holes?.length);
+    expect(block).toBeDefined();
+    expect(block!.holes).toHaveLength(1);
+    // 50x50 outer, 26x26 hole: the area is what stands, not what it encloses.
+    expect(block!.area).toBeLessThan(50 * 50);
+    expect(block!.area).toBeGreaterThan(50 * 50 - 26 * 26 - 100);
+  });
+
+  it("leaves the courtyard walkable in the navigation grid", () => {
+    const city = cityFromOverpass(withCourtyard(), opts);
+    const block = city.buildings.find((b) => b.holes?.length)!;
+    const g = NavGrid.fromCity(city);
+    const c = polygonCentroid(block.holes![0]);
+    const cell = g.index(Math.floor(c.x / g.cell), Math.floor(c.y / g.cell));
+    expect(g.kind[cell]).toBe(CellKind.Free);
+    // And the ring around it is solid.
+    const wall = { x: block.footprint![0].x + 1, y: block.footprint![0].y + 1 };
+    expect(g.kind[g.index(Math.floor(wall.x / g.cell), Math.floor(wall.y / g.cell))]).toBe(CellKind.Building);
   });
 });

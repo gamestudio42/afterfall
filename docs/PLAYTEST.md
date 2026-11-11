@@ -153,3 +153,116 @@ run as the target.
   or a representative player-hardware performance benchmark. Speed-specific
   human review at 2×/4× remains open; automated checks cover distance/frame-rate
   independence and frozen animation while paused.
+
+## Urban surfaces and vegetation — 2026-11-11
+
+- **Fantasy / pillars:** reclaim an abandoned city (1); read safe routes and
+  entrances while scavenging (3).
+- **Hypothesis:** layered asphalt, weathered paving, road-aligned wear and varied
+  Refloreste vegetation give streets a convincing history at tactical and close zoom.
+- **Watch:** repeated stamps, decal spill beyond curved roads, flickering surfaces,
+  canopy readability, visible entrances, loading fallbacks and scene cost.
+- **Change again if:** vegetation hides access routes, decal noise overwhelms
+  characters, or imported streets show dirt across unrelated courtyards.
+- **Observed:** inspected actual Chromium renders of seed 4242 at street/park zoom
+  and at 10:00/22:00, plus the synthetic imported-map fixture at midday. The first
+  pass repeated bright clouds in asphalt/grass; reduced contrast and a rotated
+  second texture scale corrected that. Lane paint was changed from uniform
+  speckles to clustered wear after inspecting the crossing capture.
+- **Implemented:** asphalt/paving bump and roughness, twelve road-aligned decal
+  types, worn crossings, Refloreste manacá/pequi/bare trees/bushes with wind and
+  earth around roots. Seed 4242 uses seven vegetation batches for 66 plants
+  (44 trees and 22 bushes); this count is not a player-hardware benchmark.
+- **Automated:** `pnpm check` passed (209 tests). V8 coverage passed all 68%
+  thresholds (71.39% statements, 70.52% branches, 73.91% functions, 72.88% lines).
+  Build and production debug-hook exclusion passed; all 52 art assets passed
+  header/checksum/budget validation (3748 KiB, below the 8 MiB limit). Dependency
+  audit passed its high/critical threshold, with three moderate advisories.
+  The final complete Chromium run passed all 18 active tests; 16 optional capture
+  tests were skipped. The dedicated environment/imported-map capture run also
+  passed all three selected tests with the screenshot flags enabled.
+- **Regression found during validation:** StrictMode discarded the first game
+  controller but left its audio-unlock listeners registered. The added browser
+  assertion reproduced two native audio contexts instead of one. Disposal now
+  removes those listeners, closes the context, clears its diagnostic hook and
+  prevents late loading from reviving it. Three concurrent audio regressions
+  passed after the fix. The missing-asset case also uses the existing main-loop
+  allowance for a queued base command, requiring exactly four founding survivors.
+- **Evidence files:** `docs/art/environment_street.png`, `environment_park.png`,
+  `environment_night.png` and the refreshed `osm_ground.png`.
+- **Not executed:** a human playtest, a full campaign, WebKit/Firefox rendering,
+  or a representative player-hardware performance benchmark.
+
+## Buildings and urban objects — 2026-11-11
+
+- **Fantasy / pillars:** reclaim a recognisable city (1), and read routes and
+  destinations during scavenging (3); defenses should read as built by survivors (2).
+- **Loop beats:** choose a headquarters, scavenge, build and hold.
+- **Hypothesis:** shaped vehicles, authored street/roof equipment, layered facade
+  details and material wear make the remaining scenery belong to the renewed streets.
+- **Watch:** oversized props, blocked doorways, repeated facade details, lost
+  resource/selection colours, night readability and extra rendering batches.
+- **Change again if:** detail hides characters or entrances, a model outgrows its
+  existing footprint, or a normal city becomes impractical to render.
+- **Implemented:** 19 rebuilt street, roof and settlement models, packed vertex
+  colours, per-instance vehicle/container paint, floor bands and upper-window
+  sills, roof felt with relief/roughness and restrained facade weathering. Vehicles
+  align with curbs, check their complete footprint and leave door clearance.
+- **Observed:** inspected normal seed-4242 city renders at 10:00 and 22:00, a
+  residential facade close-up, and all three model kits in isolated arrangements
+  using the actual renderer. Body/glass faces initially pointed inward; the new
+  ray regression failed before the winding correction. Close inspection also
+  exposed displaced lamp arms and tower braces caused by baking the primitive's
+  location before rotating it; explicit transform flags corrected the pivots.
+  A second ray regression failed on the detached arm and passed after regeneration.
+  Ground-floor sills were removed after a regression showed them projecting
+  across a doorway; upper-floor depth remains.
+- **Evidence files:** `docs/art/urban_street_day.png`, `urban_street_night.png`,
+  `urban_facade.png`, `urban_objects.png`, `urban_roof_equipment.png` and
+  `urban_structures.png`. The last three are inspection arrangements, not
+  settlements or streets built through normal play.
+- **Automated:** `pnpm check` passed (216 tests). Coverage passed all 68%
+  thresholds: 71.61% statements, 70.56% branches, 74.24% functions and 73.10%
+  lines. Production build and debug-hook exclusion passed. All 54 assets passed
+  header/checksum/budget validation (5111 KiB total, below 8 MiB). The dependency
+  audit passed its high/critical threshold with three existing moderate advisories.
+  The optional urban-kit capture passed, including all 19 runtime models.
+- **Browser load observation:** the first full Chromium run with three workers
+  passed 18 tests and timed out in the combined start/scavenge/save test (120 s).
+  The host reported a load average near 22 across 16 logical CPUs. That test
+  passed unchanged in isolation with tracing (about 72 s); this supports runner
+  contention as a contributor, but does not establish a player-hardware frame rate.
+  The two-worker CI configuration also reached the total deadline, this time
+  during the final population check after Continue. The test now has a 180 s
+  combined budget for two scene boots and real-time scavenging, pauses before
+  saving, and checks the saved population exactly plus preserved search progress.
+  Its individual action/progress checks remain bounded. The final full run,
+  `CI=1 pnpm test:e2e`, passed all 19 active tests in 4.2 minutes; 16 optional
+  captures were skipped. Final TypeScript, targeted lint and formatting checks
+  also passed after the browser-test changes.
+- **Rendering diagnostic:** five frozen, GPU-synchronized frames measured
+  1.1–1.6 ms with the full scene, 0.6–0.9 ms with props hidden, 0.8–1.0 ms with
+  trim hidden and 0.7–1.0 ms without prop shadows in this Chromium/SwiftShader
+  session. Full submission: 46 calls, 467646 triangles. This short diagnostic
+  excludes simulation and loading and does not support a gameplay FPS claim.
+- **Not executed:** a human playtest, a complete campaign, WebKit/Firefox rendering
+  or a representative player-hardware performance benchmark.
+
+## Abandoned vehicles and collision — 2026-11-11
+
+- **Player report:** cars occupied sidewalks and civilians walked through them.
+- **Pillars / loop:** reclaim an abandoned city (1), read routes while scavenging
+  (3), and prepare defenses (2). Vehicles should look abandoned and be obstacles.
+- **Implemented:** shared deterministic road placement for renderer and navigation,
+  curbside and stranded vehicles, open doors, collision for survivors/infected,
+  and recovery of saved characters overlapping new vehicle cells. Clear entrance
+  approaches preserve defense construction space.
+- **Observed:** inspected the actual road capture in `docs/art/abandoned_cars.png`.
+  Unit movement tests exercise both agents crossing a vehicle's vicinity, checking
+  every position and arrival. A save regression verifies relocation from a car.
+- **Validation:** `pnpm check` passed (217 tests), `pnpm build` passed, and
+  `CI=1 pnpm test:e2e` passed all 20 active Chromium tests (16 optional captures
+  skipped). The vehicle capture also passed separately and was visually inspected.
+  `pnpm test:coverage` passed its thresholds: 71.48% statements, 70.71% branches,
+  74.01% functions and 73.04% lines. Human campaign playtesting and validation on
+  representative player hardware remain open.

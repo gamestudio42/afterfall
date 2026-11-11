@@ -11,6 +11,7 @@ import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials
 import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
+import { Vegetation } from "./vegetation";
 import { Doors } from "./doors";
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { VfxSystem, type FxEvent } from "./vfx";
@@ -240,6 +241,7 @@ export class GameRenderer {
           const mat = new THREE.MeshStandardMaterial({
             name: src.name,
             color: src.color.clone(),
+            vertexColors: !!geo.getAttribute("color"),
             roughness: src.roughness ?? 0.85,
             metalness: src.metalness ?? 0,
             flatShading: true,
@@ -311,12 +313,14 @@ export class GameRenderer {
         polygonOffsetUnits: -2,
       });
       this.decalMat = mat;
+      mat.opacity = 0;
       new THREE.TextureLoader().load(
         `${this.artBase}art/decals.png`,
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
           tex.anisotropy = 4;
           mat.map = tex;
+          mat.opacity = 1;
           mat.needsUpdate = true;
         },
         undefined,
@@ -326,7 +330,7 @@ export class GameRenderer {
       );
     }
     const mesh = new THREE.Mesh(decalGeometry(placements), this.decalMat);
-    // Above the carriageway (0.01), the lane dashes (0.03) and the kerb top (0.06).
+    // Above asphalt (0.03) and paint (0.05), below the raised curb (0.12).
     mesh.position.y = 0.07;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
@@ -506,6 +510,16 @@ export class GameRenderer {
       set("curbs", art.concrete);
       set("roads", art.asphalt);
       set("parks", art.grass);
+      for (const [mat, detail, scale] of [
+        [g.roads, art.asphalt_detail, 0.025],
+        [g.blocks, art.sidewalk_detail, 0.045],
+      ] as const) {
+        if (!mat || !detail || mat.bumpMap === detail) continue;
+        mat.bumpMap = detail;
+        mat.bumpScale = scale;
+        mat.roughnessMap = detail;
+        mat.needsUpdate = true;
+      }
     }
     if (this.buildings) this.buildings.setArt(art);
     this.doors?.setMap(art.door);
@@ -520,6 +534,7 @@ export class GameRenderer {
 
   private groundMats: GroundMaterials | null = null;
   private groundImported = false;
+  private vegetation: Vegetation | null = null;
   private art: ArtTextures;
   private propScene: PropScene | null = null;
   private unitBatch: CharacterBatch | null = null;
@@ -696,7 +711,11 @@ export class GameRenderer {
     const city = sim.city;
     this.selectionOutlineOf = -1;
     const ground = buildCityGround(city);
+    this.vegetation?.dispose();
     this.cityGroup = ground.group;
+    this.vegetation = new Vegetation(ground.group.getObjectByName("park-tree-fallback"));
+    ground.group.add(this.vegetation.group);
+    void this.vegetation.load(city, this.artBase);
     this.groundMats = ground.materials;
     this.groundImported = ground.imported;
     this.applyArt(this.art);
@@ -863,6 +882,7 @@ export class GameRenderer {
   render(dt: number): void {
     const sim = this.sim;
     this.time += dt;
+    this.vegetation?.update(this.time);
     this.rts.update(dt);
     if (sim) {
       const alpha = sim.alpha;
@@ -1246,6 +1266,7 @@ export class GameRenderer {
 
   dispose(): void {
     this.disposed = true;
+    this.vegetation?.dispose();
     this.unitBatch?.dispose();
     this.infectedBatch?.dispose();
     this.motions.clear();

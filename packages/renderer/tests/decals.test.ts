@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BuildingDef, CityMap, RoadDef } from "@afterfall/world";
+import { distToPolyline } from "@afterfall/shared";
 import { DECAL_COLS, DECAL_ROWS, decalGeometry, placeDecals } from "../src/decals";
 
 function road(x: number, y: number, w: number, h: number): RoadDef {
@@ -84,6 +85,21 @@ describe("placeDecals", () => {
 
   it("never exceeds its cap", () => {
     expect(placeDecals(city(), 11, 25).length).toBeLessThanOrEqual(25);
+  });
+
+  it("follows a bent imported road instead of scattering across its bounding rectangle", () => {
+    const path = [
+      { x: 10, y: 10 },
+      { x: 90, y: 90 },
+      { x: 150, y: 90 },
+    ];
+    const map = { ...city(), roads: [{ ...road(6, 6, 148, 88), path, width: 8 }] };
+    const placements = placeDecals(map, 11);
+    expect(placements.length).toBeGreaterThan(50);
+    const pos = decalGeometry(placements).getAttribute("position");
+    for (let i = 0; i < pos.count; i++) {
+      expect(distToPolyline(pos.getX(i), pos.getZ(i), path)).toBeLessThanOrEqual(4.001);
+    }
   });
 });
 

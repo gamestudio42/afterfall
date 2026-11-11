@@ -87,19 +87,34 @@ function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferG
 export const URBAN_GROUND_TINT = 0x77736b;
 
 export const TEXTURED_TINT: Record<keyof GroundMaterials, number> = {
-  roads: 0xa7abae,
-  ground: 0xe9c8ff,
-  // Blocks wear the sidewalk slabs (mean sRGB 174, 174, 171).
-  blocks: 0xd0cabe,
+  roads: 0xa2a5aa,
+  ground: 0xd8c3ff,
+  // Blocks wear the sidewalk slabs (mean sRGB 170, 169, 165).
+  blocks: 0xd5d0c4,
   // Curbs wear the concrete map and stay a step lighter than the sidewalk.
   curbs: 0xf8f9f8,
   parks: 0xffffff,
 };
 
-/** The sidewalk map is one 6.4 m module of 0.8 m slabs. */
-export const SIDEWALK_TILE = 6.4;
+/** The sidewalk map is one 3.2 m module of 0.8 m slabs. */
+export const SIDEWALK_TILE = 3.2;
 /** How far a sidewalk reaches past the road edge on imported maps. */
 export const SIDEWALK_WIDTH = 2.6;
+
+/** A second, larger sample breaks up obvious repetition across broad surfaces. */
+function layeredSurface(material: THREE.MeshStandardMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <map_fragment>",
+      `#include <map_fragment>
+      #ifdef USE_MAP
+        vec2 broadUv = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.173 + vec2(0.37, 0.61);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * texture2D(map, broadUv).rgb, 0.38);
+      #endif`,
+    );
+  };
+  material.customProgramCacheKey = () => "layered-ground-v1";
+}
 /** Curb: a low lip at the block edge, low enough that feet do not sink in it. */
 const CURB_W = 0.3;
 const CURB_H = 0.12;
@@ -172,6 +187,7 @@ export function buildCityGround(city: CityMap): {
   const imported = city.blocksX === 0 || city.blockSize <= 0;
   const margin = 400;
   const groundMat = new THREE.MeshStandardMaterial({ color: imported ? 0x6f6d66 : 0x4a4d40, roughness: 1 });
+  layeredSurface(groundMat);
   const materials: GroundMaterials = { ground: groundMat, blocks: null, curbs: null, roads: null, parks: null };
   const groundGeo = plane(-margin, -margin, city.width + margin * 2, city.height + margin * 2, -0.05);
   worldUv(groundGeo, 12);
@@ -232,6 +248,7 @@ export function buildCityGround(city: CityMap): {
       polygonOffsetUnits: -1,
     });
     const roadMesh = new THREE.Mesh(roadGeo, materials.roads);
+    layeredSurface(materials.roads);
     roadMesh.receiveShadow = true;
     group.add(roadMesh);
   }
@@ -243,13 +260,64 @@ export function buildCityGround(city: CityMap): {
     const len = r.horizontal ? r.rect.w : r.rect.h;
     for (let s = 0; s < len; s += 6) {
       const along = s;
-      const inIntersection = along % pitch < city.roadWidth + 1 || along % pitch > pitch - 1;
+      const inIntersection = along % pitch < city.roadWidth + 6 || along % pitch > pitch - 8;
       if (inIntersection) continue;
       if (r.horizontal) dashes.push(plane(r.rect.x + along, r.rect.y + r.rect.h / 2 - 0.1, 3, 0.2, 0.05));
       else dashes.push(plane(r.rect.x + r.rect.w / 2 - 0.1, r.rect.y + along, 0.2, 3, 0.05));
     }
   }
-  if (dashes.length) group.add(new THREE.Mesh(mergeGeometries(dashes), new THREE.MeshBasicMaterial({ color: 0x8c8a6e })));
+  // Short zebra crossings anchor the street scale, leaving the junction itself open.
+  if (!imported) {
+    const half = city.roadWidth / 2;
+    for (const p of city.intersections) {
+      for (const side of [-1, 1]) {
+        const along = side * (half + 3);
+        for (let across = -half + 1.2; across < half - 1.2; across += 1.35) {
+          if (p.x + along > 2 && p.x + along < city.width - 2) dashes.push(plane(p.x + along - 1.25, p.y + across, 2.5, 0.65, 0.05));
+          if (p.y + along > 2 && p.y + along < city.height - 2) dashes.push(plane(p.x + across, p.y + along - 1.25, 0.65, 2.5, 0.05));
+        }
+      }
+    }
+  }
+  if (dashes.length) {
+    const paint = new THREE.MeshStandardMaterial({
+      color: 0x9c9581,
+      roughness: 1,
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
+    });
+    // Irregular chips in paint, computed in world space so neighbouring stripes differ.
+    paint.onBeforeCompile = (shader) => {
+      shader.vertexShader = "varying vec3 paintPosition;\n" + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\npaintPosition = position;");
+      shader.fragmentShader =
+        `varying vec3 paintPosition;
+        float paintNoise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          vec4 h = fract(sin(vec4(dot(i, vec2(127.1, 311.7)),
+            dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7)),
+            dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7)),
+            dot(i + vec2(1.0), vec2(127.1, 311.7)))) * 43758.5453);
+          return mix(mix(h.x, h.y, f.x), mix(h.z, h.w, f.x), f.y);
+        }\n` + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <alphatest_fragment>",
+        `
+        float wear = mix(paintNoise(paintPosition.xz * 5.0), paintNoise(paintPosition.xz * 18.0), 0.22);
+        diffuseColor.a *= (1.0 - smoothstep(0.56, 0.72, wear)) * 0.72;
+        #include <alphatest_fragment>`,
+      );
+    };
+    paint.customProgramCacheKey = () => "worn-road-paint-v1";
+    const mesh = new THREE.Mesh(mergeGeometries(dashes), paint);
+    mesh.receiveShadow = true;
+    mesh.name = "street-markings";
+    group.add(mesh);
+  }
 
   // Parks with trees.
   const parks = city.parks.map((p) => (p.polygon ? flatPolygon(p.polygon, 0.04) : plane(p.rect.x, p.rect.y, p.rect.w, p.rect.h, 0.08)));
@@ -257,6 +325,7 @@ export function buildCityGround(city: CityMap): {
     const parkGeo = mergeGeometries(parks);
     worldUv(parkGeo, 8);
     materials.parks = new THREE.MeshStandardMaterial({ color: 0x4d6b35, roughness: 1 });
+    layeredSurface(materials.parks);
     const parkMesh = new THREE.Mesh(parkGeo, materials.parks);
     parkMesh.receiveShadow = true;
     group.add(parkMesh);
@@ -277,7 +346,10 @@ export function buildCityGround(city: CityMap): {
       crowns.setMatrixAt(i, m);
     });
     trunks.castShadow = crowns.castShadow = true;
-    group.add(trunks, crowns);
+    const fallback = new THREE.Group();
+    fallback.name = "park-tree-fallback";
+    fallback.add(trunks, crowns);
+    group.add(fallback);
   }
   return { group, materials, imported };
 }

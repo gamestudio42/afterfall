@@ -1,6 +1,7 @@
 import { pointInPolygon, polygonBounds, polygonCentroid, type Vec2 } from "@afterfall/shared";
 import type { CityMap } from "./city";
 import { MinHeap } from "./heap";
+import { abandonedVehicles, vehicleContains } from "./vehicles";
 
 export const enum CellKind {
   Free = 0,
@@ -26,7 +27,8 @@ export interface PathResult {
 
 /**
  * Uniform navigation grid used for local and long-range pathfinding.
- * Buildings are stamped in once; structures are added/removed at runtime.
+ * Buildings and abandoned vehicles are stamped in once; structures are
+ * added/removed at runtime.
  */
 export class NavGrid {
   readonly cols: number;
@@ -74,7 +76,7 @@ export class NavGrid {
     const g = new NavGrid(city.width, city.height, city.cellSize);
     for (const b of city.buildings) {
       if (b.footprint) {
-        g.stampPolygon(b.footprint, b.index);
+        g.stampPolygon(b.footprint, b.index, b.holes);
         continue;
       }
       const x0 = Math.floor(b.rect.x / g.cell);
@@ -89,11 +91,22 @@ export class NavGrid {
           g.buildingAt[i] = b.index;
         }
     }
+    for (const car of abandonedVehicles(city)) {
+      for (let y = Math.floor((car.z - 4) / g.cell); y <= Math.ceil((car.z + 4) / g.cell); y++) {
+        for (let x = Math.floor((car.x - 4) / g.cell); x <= Math.ceil((car.x + 4) / g.cell); x++) {
+          if (!g.inBounds(x, y)) continue;
+          const p = g.centerOf(g.index(x, y));
+          if (vehicleContains(car, p.x, p.y, (g.cell * Math.SQRT2) / 2) && g.kind[g.index(x, y)] === CellKind.Free)
+            g.kind[g.index(x, y)] = CellKind.Solid;
+        }
+      }
+    }
+    g.version++;
     return g;
   }
 
   /** Marks the cells whose centers fall inside a building outline (at least one cell). */
-  stampPolygon(poly: Vec2[], building: number): number {
+  stampPolygon(poly: Vec2[], building: number, holes: Vec2[][] = []): number {
     const r = polygonBounds(poly);
     const x0 = Math.max(0, Math.floor(r.x / this.cell));
     const y0 = Math.max(0, Math.floor(r.y / this.cell));
@@ -102,7 +115,11 @@ export class NavGrid {
     let n = 0;
     for (let y = y0; y <= y1; y++)
       for (let x = x0; x <= x1; x++) {
-        if (!pointInPolygon((x + 0.5) * this.cell, (y + 0.5) * this.cell, poly)) continue;
+        const cx = (x + 0.5) * this.cell;
+        const cy = (y + 0.5) * this.cell;
+        if (!pointInPolygon(cx, cy, poly)) continue;
+        // A courtyard is inside the outline and not a building: a survivor can cross it.
+        if (holes.some((h) => pointInPolygon(cx, cy, h))) continue;
         const i = this.index(x, y);
         this.kind[i] = CellKind.Building;
         this.buildingAt[i] = building;

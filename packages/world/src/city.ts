@@ -10,6 +10,8 @@ export interface BuildingDef {
   rect: Rect;
   /** Real footprint outline, for imported maps. Procedural buildings are just their rect. */
   footprint?: Vec2[];
+  /** Courtyards: rings inside the footprint that are open air, not building. */
+  holes?: Vec2[][];
   /**
    * A silhouette the extruder should not use: a footprint cannot draw a tower, a spire or
    * an obelisk, because the way OSM maps them is the square around their feet.

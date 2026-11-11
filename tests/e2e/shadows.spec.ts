@@ -1,8 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 type Win = { __afterfall: any };
 
 /** The shadow camera's half-extent, after a frame has run the lighting update. */
-async function shadowHalf(page: import("@playwright/test").Page, distance: number, expected: number): Promise<number> {
+async function shadowHalf(page: Page, distance: number, expected: number): Promise<number> {
   await page.evaluate((d: number) => {
     const g = (window as unknown as Win).__afterfall;
     g.renderer.rts.distance = d;

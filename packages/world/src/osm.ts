@@ -60,9 +60,76 @@ export class OsmImportError extends Error {
 
 /** Overpass QL for everything the importer reads inside the play area plus a margin. */
 
+/**
+ * How wide a street is, in metres.
+ *
+ * The class table alone is a guess: it draws every residential street eight metres wide,
+ * and in a dense centre that is several metres wider than the street, so the asphalt runs
+ * inside the buildings and a footprint that is exactly where OSM puts it reads as a
+ * building standing on the road. The tag knows better; the lane count is the second best.
+ */
+function roadWidth(tags: Record<string, string>, kind: string): number {
+  const byClass = ROAD_WIDTH[kind] ?? 8;
+  const tag = Number.parseFloat(tags.width ?? "");
+  const lanes = Number.parseFloat(tags.lanes ?? "");
+  const guess = Number.isFinite(lanes) && lanes > 0 ? lanes * 3.2 + 1 : byClass;
+  const width = Number.isFinite(tag) && tag > 0 ? tag : guess;
+  return Math.max(3, Math.min(width, 24));
+}
+
+/**
+ * Pulls a footprint back to the kerb where it reaches into a street.
+ *
+ * The ribbon is drawn from the way's own width, so a footprint mapped two metres into the
+ * carriageway paints asphalt over the lot and the building reads as standing on the road.
+ * Moving the polygon's vertices out to the corridor edge is cheaper than clipping two
+ * polygons and keeps the shape recognisable; a footprint that would lose too much of
+ * itself is dropped instead of mangled.
+ */
+function pullOutOfStreets(poly: Vec2[], roads: { line: Vec2[]; width: number }[]): Vec2[] | null {
+  const out = poly.map((p) => ({ ...p }));
+  for (const v of out) {
+    let best = Infinity;
+    let bx = 0;
+    let by = 0;
+    let half = 0;
+    for (const r of roads) {
+      const h = r.width / 2;
+      for (let i = 1; i < r.line.length; i++) {
+        const a = r.line[i - 1];
+        const b = r.line[i];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const l2 = dx * dx + dy * dy || 1;
+        let t = ((v.x - a.x) * dx + (v.y - a.y) * dy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const cx = a.x + dx * t;
+        const cy = a.y + dy * t;
+        const d = Math.hypot(v.x - cx, v.y - cy);
+        if (d - h < best) {
+          best = d - h;
+          bx = cx;
+          by = cy;
+          half = h;
+        }
+      }
+    }
+    if (best >= 0) continue;
+    const dx = v.x - bx;
+    const dy = v.y - by;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-3) continue; // exactly on the centre line: no side to push towards
+    const target = half + 0.25;
+    if (len > half + 6) continue;
+    v.x = bx + (dx / len) * target;
+    v.y = by + (dy / len) * target;
+  }
+  return polygonArea(out) > polygonArea(poly) * 0.6 ? out : null;
+}
+
 /** Share of a footprint that falls inside a street corridor. */
-function streetFraction(poly: Vec2[], roads: { kind: string; line: Vec2[] }[]): number {
-  const corridors = roads.map((r) => ({ line: r.line, half: (ROAD_WIDTH[r.kind] ?? 8) / 2 }));
+function streetFraction(poly: Vec2[], roads: { kind: string; line: Vec2[]; width: number }[]): number {
+  const corridors = roads.map((r) => ({ line: r.line, half: r.width / 2 }));
   const b = polygonBounds(poly);
   const step = Math.max(0.8, Math.min(b.w, b.h) / 10);
   let total = 0;
@@ -182,7 +249,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
 
   const pois: { p: Vec2; tags: Record<string, string> }[] = [];
   const rawBuildings: RawBuilding[] = [];
-  const rawRoads: { id: number; kind: string; line: Vec2[] }[] = [];
+  const rawRoads: { id: number; kind: string; line: Vec2[]; width: number }[] = [];
   const rawParks: { id: number; poly: Vec2[] }[] = [];
 
   for (const el of data.elements) {
@@ -205,7 +272,9 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       if (area < 30) continue;
       rawBuildings.push({ osmId: el.id, poly, tags, area, centroid: polygonCentroid(poly) });
     } else if (tags.highway && ROAD_WIDTH[tags.highway] && tags.tunnel !== "yes" && tags.area !== "yes") {
-      for (const piece of clipPolylineToRect(pts, bounds)) rawRoads.push({ id: el.id, kind: tags.highway, line: piece });
+      for (const piece of clipPolylineToRect(pts, bounds)) {
+        rawRoads.push({ id: el.id, kind: tags.highway, line: piece, width: roadWidth(tags, tags.highway) });
+      }
     } else if (closed && (tags.leisure || tags.landuse || tags.natural)) {
       const poly = clipPolygonToRect(pts.slice(0, -1), bounds);
       if (poly.length >= 3 && polygonArea(poly) > 150) rawParks.push({ id: el.id, poly });
@@ -233,7 +302,15 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   // swallow the road the survivors walk on. OSM has a few of these (a monument over a
   // passage, a mall mapped across an arcade). Keep the ones that merely overhang the
   // sidewalk; drop the ones that sit on the carriageway.
-  const onStreet = deduped.filter((rb) => streetFraction(rb.poly, rawRoads) < 0.4);
+  const onStreet: RawBuilding[] = [];
+  for (const rb of deduped) {
+    // A building standing on the carriageway is not usable; one that pokes into it is
+    // pulled back to the kerb so the street stays a street.
+    if (streetFraction(rb.poly, rawRoads) > 0.4) continue;
+    const pulled = pullOutOfStreets(rb.poly, rawRoads);
+    if (!pulled) continue;
+    onStreet.push({ ...rb, poly: pulled, centroid: polygonCentroid(pulled) });
+  }
   rawBuildings.length = 0;
   rawBuildings.push(...onStreet);
 
@@ -247,7 +324,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
 
   const roads: RoadDef[] = rawRoads.map((r, i) => {
     const b = polygonBounds(r.line);
-    const width = ROAD_WIDTH[r.kind];
+    const width = r.width;
     return {
       id: `r${r.id}_${i}`,
       rect: { x: b.x - width / 2, y: b.y - width / 2, w: b.w + width, h: b.h + width },

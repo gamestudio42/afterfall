@@ -29,9 +29,22 @@ async function startGame(page: Page) {
 }
 
 test("loads the sound kit and plays an effect the simulation emits", async ({ page }) => {
+  // StrictMode mounts, disposes and remounts the controller before the first
+  // gesture. A disposed controller must not create a second audio context.
+  await page.addInitScript(() => {
+    const state = window as unknown as { __audioContextCreations: number };
+    state.__audioContextCreations = 0;
+    window.AudioContext = new Proxy(window.AudioContext, {
+      construct(target, args, newTarget) {
+        state.__audioContextCreations++;
+        return Reflect.construct(target, args, newTarget);
+      },
+    });
+  });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await startGame(page);
+  expect(await page.evaluate(() => (window as unknown as { __audioContextCreations: number }).__audioContextCreations)).toBe(1);
 
   // Os 9 efeitos + as 2 camas de ambiencia passaram por fetch + decodeAudioData.
   await page.waitForFunction(() => (window as unknown as Win).__afterfallAudio?.().loaded === 11, null, {

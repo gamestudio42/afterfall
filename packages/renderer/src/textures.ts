@@ -5,6 +5,8 @@ import * as THREE from "three";
 export interface ArtTextures {
   concrete: THREE.Texture | null;
   asphalt: THREE.Texture | null;
+  asphalt_detail: THREE.Texture | null;
+  sidewalk_detail: THREE.Texture | null;
   grass: THREE.Texture | null;
   rust: THREE.Texture | null;
   /** Flipbook of the impact burst, packed by `tools/make-spark-atlas.ts`. */
@@ -28,9 +30,10 @@ export interface ArtTextures {
   facade_office_lit: THREE.Texture | null;
   facade_industrial_lit: THREE.Texture | null;
   facade_storefront_lit: THREE.Texture | null;
-  /** Flat roof seen from above, from the same bake. */
+  /** Weathered roofing rolls and packed height/roughness from make-surfaces.ts. */
   roof: THREE.Texture | null;
-  /** Concrete sidewalk slabs seen from above, a 6.4 m module. */
+  roof_detail: THREE.Texture | null;
+  /** Concrete sidewalk slabs seen from above, a 3.2 m module. */
   sidewalk: THREE.Texture | null;
   /** A double door in its surround, 2.4 by 3.2 m. */
   door: THREE.Texture | null;
@@ -43,6 +46,8 @@ export type ArtName = keyof ArtTextures;
 const NAMES: ArtName[] = [
   "concrete",
   "asphalt",
+  "asphalt_detail",
+  "sidewalk_detail",
   "grass",
   "rust",
   "spark_atlas",
@@ -61,6 +66,7 @@ const NAMES: ArtName[] = [
   "facade_industrial_lit",
   "facade_storefront_lit",
   "roof",
+  "roof_detail",
   "sidewalk",
   "door",
 ];
@@ -75,8 +81,6 @@ const JPEG = new Set<ArtName>([
   "facade_office_lit",
   "facade_industrial_lit",
   "facade_storefront_lit",
-  "roof",
-  "sidewalk",
   "door",
 ]);
 
@@ -89,6 +93,8 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
   const art: ArtTextures = {
     concrete: null,
     asphalt: null,
+    asphalt_detail: null,
+    sidewalk_detail: null,
     grass: null,
     rust: null,
     spark_atlas: null,
@@ -107,6 +113,7 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
     facade_industrial_lit: null,
     facade_storefront_lit: null,
     roof: null,
+    roof_detail: null,
     sidewalk: null,
     door: null,
   };
@@ -116,7 +123,7 @@ export function loadArtTextures(baseUrl: string, onReady: (art: ArtTextures) => 
       `${baseUrl}art/${name}.${JPEG.has(name) ? "jpg" : "png"}`,
       (tex) => {
         tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.colorSpace = name.endsWith("_detail") ? THREE.NoColorSpace : THREE.SRGBColorSpace;
         tex.anisotropy = 4;
         tex.needsUpdate = true;
         art[name] = tex;

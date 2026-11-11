@@ -4,7 +4,7 @@
  *
  * Everything is procedural and deterministic, like the surface maps in
  * `make-textures.ts`, so the same seed and the same file come out of every run. The atlas
- * is 4 by 2 tiles of 128 px, which keeps it under 200 KB and lets the renderer merge every
+ * is 4 by 3 tiles of 128 px, which keeps it under 200 KB and lets the renderer merge every
  * decal of a map into one instanced-free mesh with per-vertex UVs.
  *
  * Usage: pnpm assets:decals
@@ -16,14 +16,14 @@ import { encodePng } from "./png";
 
 const TILE = 128;
 const COLS = 4;
-const ROWS = 2;
+const ROWS = 3;
 const W = TILE * COLS;
 const H = TILE * ROWS;
 const OUT = resolve(import.meta.dirname, "../apps/web/public/art");
 const MANIFEST = resolve(OUT, "manifest.json");
 
 /** Tile order is the contract with `decals.ts`: do not reorder without changing both. */
-const TILES = ["crack_a", "crack_b", "patch", "oil", "rubble", "weeds", "leaves", "soot"] as const;
+const TILES = ["crack_a", "crack_b", "patch", "oil", "rubble", "weeds", "leaves", "soot", "manhole", "drain", "puddle", "paper"] as const;
 
 function hash(x: number, y: number, seed: number): number {
   let h = x * 374761393 + y * 668265263 + seed * 2147483647;
@@ -46,15 +46,27 @@ function noise(x: number, y: number, cells: number, seed: number): number {
   return top + (bottom - top) * sy;
 }
 
-/** A branch: a wandering line from the tile edge toward the middle. */
+/** Branching fractures with irregular junctions, rather than repeated crosses. */
 function crackMask(x: number, y: number, seed: number, width: number): number {
-  // Warp the sample point, then measure the distance to a jagged vertical line.
-  const wobble = (noise(x, y, 5, seed) - 0.5) * 26 + (noise(x, y, 13, seed + 7) - 0.5) * 9;
-  const centre = TILE / 2 + wobble + (x / TILE - 0.5) * 18;
-  const d = Math.abs(y - centre);
-  const taper = 1 - Math.abs(x / TILE - 0.5) * 1.4;
-  const edge = width * taper * (0.55 + noise(x, y, 21, seed + 3) * 0.8);
-  return Math.max(0, 1 - d / Math.max(0.001, edge));
+  let distance = Infinity;
+  for (let branch = 0; branch < 4; branch++) {
+    let ax = branch === 0 ? 12 : 40 + hash(branch, 0, seed) * 42;
+    let ay = branch === 0 ? 48 : 48 + hash(branch, 1, seed) * 20;
+    const direction = branch === 0 ? 0 : (hash(branch, 2, seed) - 0.5) * 4;
+    for (let step = 0; step < 7; step++) {
+      const angle = direction + (hash(step, branch, seed + 4) - 0.5) * 1.2;
+      const bx = ax + Math.cos(angle) * (9 + hash(step, branch, seed + 8) * 7);
+      const by = ay + Math.sin(angle) * (9 + hash(step, branch, seed + 8) * 7);
+      const dx = bx - ax,
+        dy = by - ay;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy)));
+      distance = Math.min(distance, Math.hypot(x - ax - t * dx, y - ay - t * dy));
+      ax = bx;
+      ay = by;
+    }
+  }
+  const edge = Math.min(x, y, TILE - 1 - x, TILE - 1 - y) / 10;
+  return Math.max(0, 1 - distance / width) * Math.min(1, Math.max(0, edge));
 }
 
 type Pixel = (x: number, y: number) => [number, number, number, number];
@@ -79,19 +91,16 @@ function main(): void {
 
   // 0-1. Cracks: dark, thin, fading at the edges so they sit in the asphalt.
   for (const [index, seed, width] of [
-    [0, 11, 4.2],
-    [1, 29, 6.0],
+    [0, 11, 1.7],
+    [1, 29, 2.3],
   ] as const) {
     tile(pixels, index, (x, y) => {
-      const m = crackMask(x, y, seed, width);
-      // A second, finer crack crossing it, so the shape is not a single wand.
-      const m2 = crackMask(y, x, seed + 41, width * 0.55) * 0.85;
-      const a = Math.max(m, m2);
+      const a = crackMask(x, y, seed, width);
       if (a <= 0.02) return [0, 0, 0, 0];
       if (a < 0.46) {
         // The lip: sun-bleached aggregate along the break, which is what makes a crack
         // visible from an RTS camera instead of vanishing into the asphalt.
-        const lip = 104 + Math.round(noise(x, y, 17, seed + 5) * 36);
+        const lip = 82 + Math.round(noise(x, y, 17, seed + 5) * 18);
         return [lip, lip - 2, lip - 6, Math.round((0.46 - a) * 1.4 * 190)];
       }
       const shade = 24 + Math.round(noise(x, y, 9, seed) * 18);
@@ -201,6 +210,45 @@ function main(): void {
     if (d > 1) return [0, 0, 0, 0];
     const shade = 14 + Math.round(noise(x, y, 20, 37) * 16);
     return [shade, shade, shade, Math.round((1 - d) * 210)];
+  });
+
+  // Street infrastructure gives wear a recognisable scale.
+  tile(pixels, 8, (x, y) => {
+    const radius = Math.hypot(x - 64, y - 64);
+    if (radius > 48) return [0, 0, 0, 0];
+    const ring = radius > 43 || (radius < 39 && radius > 36);
+    const hatch = (x + y) % 12 < 2 || (x - y + 256) % 12 < 2;
+    const v = ring ? 37 : hatch ? 46 : 73 + noise(x, y, 24, 91) * 12;
+    return [v, v + 2, v + 1, 245];
+  });
+  tile(pixels, 9, (x, y) => {
+    if (x < 12 || x > 116 || y < 28 || y > 100) return [0, 0, 0, 0];
+    const rim = x < 18 || x > 110 || y < 34 || y > 94;
+    const slit = (x - 18) % 13 < 7;
+    const v = rim ? 90 : slit ? 19 : 65;
+    return [v, v + 1, v - 2, 245];
+  });
+  tile(pixels, 10, (x, y) => {
+    const d = Math.hypot((x - 64) / 51, (y - 64) / 36) + (noise(x, y, 6, 131) - 0.5) * 0.5;
+    if (d > 1) return [0, 0, 0, 0];
+    const rim = d > 0.84;
+    return rim ? [80, 78, 67, Math.round((1 - d) * 440)] : [70, 82, 87, Math.round((1 - d) * 135)];
+  });
+  tile(pixels, 11, (x, y) => {
+    for (let i = 0; i < 16; i++) {
+      const cx = 18 + hash(i, 0, 53) * 90,
+        cy = 30 + hash(i, 1, 53) * 67;
+      const dx = x - cx,
+        dy = y - cy,
+        angle = hash(i, 2, 53) * 6.28;
+      const u = dx * Math.cos(angle) + dy * Math.sin(angle),
+        v = -dx * Math.sin(angle) + dy * Math.cos(angle);
+      if (Math.abs(u) < 3 + hash(i, 3, 53) * 3 && Math.abs(v) < 2 + hash(i, 4, 53) * 3) {
+        const tone = i % 3 === 0 ? 88 : 165;
+        return [tone + 8, tone + 4, tone - 8, 215];
+      }
+    }
+    return [0, 0, 0, 0];
   });
 
   const png = encodePng(W, H, new Uint8Array(pixels.buffer));

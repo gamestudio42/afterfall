@@ -52,3 +52,28 @@ Both entrypoints use `tools/blender/characters.py`, validate mesh and morph
 topology, enforce the 512 KiB per-model budget, and update manifest checksums.
 The renderer uses Three.js instanced morph textures, including the shadow pass,
 with a fixed number of material batches rather than one batch per animation key.
+
+## Environment and lifecycle regressions
+
+See [Environment art](ENVIRONMENT_ART.md) for surface/model regeneration and
+optional street, park and night captures. The environment browser tests cover
+actual WebGL materials, instancing, shader compilation and asset-load failure.
+Unit tests keep decal corners on imported road paths and plant trunks out of
+roads and building margins.
+
+The urban kit asset regression loads all 19 GLBs and checks outward-facing
+vehicle surfaces, an open well shaft, vertex colours and per-model budgets.
+The urban-kit browser test checks the actual instanced materials and roof detail.
+`URBAN_SHOT=1 pnpm test:e2e tests/e2e/urban-kit.spec.ts --workers=1` adds city and
+model-inspection captures to the Playwright output directory.
+
+The audio browser test also counts native `AudioContext` construction. React
+StrictMode's initial mount/dispose/remount must produce just one context after
+the first user gesture. An abandoned controller must remove its unlock listeners,
+close its context and stop publishing diagnostics after asynchronous loading.
+
+The combined start/scavenge/save browser test has a 180 s total budget for two
+scene boots, pointer interactions and up to 60 s of real-time scavenging. It
+pauses before saving, requires a living population, then checks the restored
+population exactly and verifies that exploration progress was not lost. Individual
+action and progress deadlines remain bounded separately.

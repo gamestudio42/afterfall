@@ -9,10 +9,23 @@ import type { CityMap } from "@afterfall/world";
  * (`tools/make-decals.ts`) and this file have to agree, which is why the order lives here
  * as a constant instead of a comment there.
  */
-export const DECAL_TILES = ["crack_a", "crack_b", "patch", "oil", "rubble", "weeds", "leaves", "soot"] as const;
+export const DECAL_TILES = [
+  "crack_a",
+  "crack_b",
+  "patch",
+  "oil",
+  "rubble",
+  "weeds",
+  "leaves",
+  "soot",
+  "manhole",
+  "drain",
+  "puddle",
+  "paper",
+] as const;
 export type DecalTile = (typeof DECAL_TILES)[number];
 export const DECAL_COLS = 4;
-export const DECAL_ROWS = 2;
+export const DECAL_ROWS = 3;
 
 export interface DecalPlacement {
   tile: number;
@@ -22,6 +35,8 @@ export interface DecalPlacement {
   rot: number;
   /** Brightness multiplier, so two cracks of the same tile do not look stamped. */
   shade: number;
+  /** Cross-road scale relative to length. */
+  aspect?: number;
 }
 
 /** Deterministic hash noise in [0, 1), the same family the map generators use. */
@@ -34,9 +49,8 @@ function hash(x: number, y: number, seed: number): number {
 const TILE_INDEX = new Map<DecalTile, number>(DECAL_TILES.map((t, i) => [t, i]));
 
 /**
- * Scatters the wear the way a city accumulates it: nothing in the middle of the road,
- * everything against the kerb, and the buildings that have been picked over carry rubble
- * at their door.
+ * Repairs and fractures follow the carriageway; litter collects by the kerb.
+ * Buildings that have been picked over carry rubble at their door.
  */
 export function placeDecals(
   city: CityMap,
@@ -48,33 +62,72 @@ export function placeDecals(
   kept: ReadonlySet<number> = new Set(),
 ): DecalPlacement[] {
   const out: DecalPlacement[] = [];
-  const push = (tile: DecalTile, x: number, z: number, size: number, s: number, shade: number) => {
+  const push = (tile: DecalTile, x: number, z: number, size: number, s: number, shade: number, rot?: number, aspect = 1) => {
     if (out.length >= max) return;
-    out.push({ tile: TILE_INDEX.get(tile) ?? 0, x, z, size, rot: hash(Math.round(x), Math.round(z), seed + 7) * Math.PI * 2, shade });
+    out.push({
+      tile: TILE_INDEX.get(tile) ?? 0,
+      x,
+      z,
+      size,
+      rot: rot ?? hash(Math.round(x), Math.round(z), seed + 7) * Math.PI * 2,
+      shade,
+      aspect,
+    });
   };
 
-  // Roads: cracks and repairs in the carriageway, weeds and leaves against the kerb.
+  // Sample actual centerline segments. An imported road's rectangle is only
+  // a bounding box: filling it stamps courtyards and the inside of every bend.
   for (const road of city.roads) {
-    const { x, y, w, h } = road.rect;
-    const step = 3.2;
-    for (let cz = y + 1; cz < y + h; cz += step) {
-      for (let cx = x + 1; cx < x + w; cx += step) {
-        const r = hash(Math.round(cx * 3), Math.round(cz * 3), seed);
-        const edge = Math.min(cx - x, x + w - cx, cz - y, y + h - cz);
-        const jitterX = (hash(cx | 0, cz | 0, seed + 1) - 0.5) * step * 0.8;
-        const jitterZ = (hash(cx | 0, cz | 0, seed + 2) - 0.5) * step * 0.8;
-        // Jitter must not push a decal off the carriageway and into a kerb or a wall.
-        const px = Math.min(x + w, Math.max(x, cx + jitterX));
-        const pz = Math.min(y + h, Math.max(y, cz + jitterZ));
-        if (edge < 1.6) {
-          if (r < 0.34) push("weeds", px, pz, 1.0 + r * 1.4, seed, 0.9 + r * 0.25);
-          else if (r < 0.5) push("leaves", px, pz, 1.8 + r * 2.2, seed, 0.8 + r * 0.3);
-        } else if (edge < 5) {
-          if (r < 0.34) push("crack_a", px, pz, 4.4 + r * 4.6, seed, 0.7 + r * 0.5);
-          else if (r < 0.5) push("crack_b", px, pz, 5.2 + r * 4.8, seed, 0.65 + r * 0.5);
-          else if (r < 0.55) push("patch", px, pz, 3.6 + r * 3.6, seed, 0.75 + r * 0.35);
-        } else if (r < 0.1) {
-          push("oil", px, pz, 1.8 + r * 3.2, seed, 0.7 + r);
+    const r = road.rect;
+    const path =
+      road.path ??
+      (road.horizontal
+        ? [
+            { x: r.x, y: r.y + r.h / 2 },
+            { x: r.x + r.w, y: r.y + r.h / 2 },
+          ]
+        : [
+            { x: r.x + r.w / 2, y: r.y },
+            { x: r.x + r.w / 2, y: r.y + r.h },
+          ]);
+    const width = road.path ? (road.width ?? 8) : road.horizontal ? r.h : r.w;
+    for (let segment = 1; segment < path.length; segment++) {
+      const a = path[segment - 1],
+        b = path[segment];
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      if (length < 2 || width < 2) continue;
+      const dx = (b.x - a.x) / length,
+        dz = (b.y - a.y) / length,
+        angle = Math.atan2(dz, dx);
+      for (let along = 2; along < length - 2; along += 3.2) {
+        for (let lane = -1; lane <= 1; lane++) {
+          const roll = hash(Math.round((a.x + dx * along) * 3), Math.round((a.y + dz * along) * 3), seed + lane * 91);
+          const edge = lane !== 0;
+          const across = lane * (width / 2 - 0.85);
+          const x = a.x + dx * along - dz * across,
+            z = a.y + dz * along + dx * across;
+          if (edge) {
+            const tile = roll < 0.25 ? "weeds" : roll < 0.58 ? "leaves" : roll < 0.78 ? "paper" : null;
+            if (tile) push(tile, x, z, 1.5, seed, 0.72 + roll * 0.35, angle, 0.65);
+            if (Math.floor(along / 3.2) % 10 === 3 && lane === 1) push("drain", x, z, 1.2, seed, 1, angle, 0.75);
+          } else {
+            // A narrower footprint stays inside the carriageway at every angle.
+            const size = Math.min(2.6 + roll * 1.5, width * 0.66);
+            const tile =
+              roll < 0.32
+                ? "crack_a"
+                : roll < 0.47
+                  ? "crack_b"
+                  : roll < 0.62
+                    ? "patch"
+                    : roll < 0.74
+                      ? "oil"
+                      : roll < 0.85
+                        ? "puddle"
+                        : null;
+            if (tile) push(tile, x, z, size, seed, 0.8 + roll * 0.2, angle + (roll - 0.5) * 0.3, 0.65);
+            if (Math.floor(along / 3.2) % 13 === 5) push("manhole", x - dz * width * 0.2, z + dx * width * 0.2, 1.15, seed, 1, angle);
+          }
         }
       }
     }
@@ -134,11 +187,12 @@ export function decalGeometry(placements: DecalPlacement[]): THREE.BufferGeometr
     const h = d.size / 2;
     const c = Math.cos(d.rot) * h;
     const s = Math.sin(d.rot) * h;
+    const aspect = d.aspect ?? 1;
     const corners: [number, number][] = [
-      [-c + s, -s - c],
-      [c + s, s - c],
-      [c - s, s + c],
-      [-c - s, -s + c],
+      [-c + s * aspect, -s - c * aspect],
+      [c + s * aspect, s - c * aspect],
+      [c - s * aspect, s + c * aspect],
+      [-c - s * aspect, -s + c * aspect],
     ];
     const uvsCorners: [number, number][] = [
       [u0, v0],

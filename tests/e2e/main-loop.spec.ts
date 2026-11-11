@@ -29,6 +29,10 @@ async function buildingOnScreen(page: Page, index: number) {
 }
 
 test("start a game, choose a base, scavenge and save", async ({ page }) => {
+  // Two scene boots, pointer selection and up to 60 s of real-time scavenging
+  // share this budget. Under concurrent software rendering the old 120 s cap
+  // expired during Continue, even though the same flow passed in isolation.
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await startGame(page);
@@ -97,12 +101,23 @@ test("start a game, choose a base, scavenge and save", async ({ page }) => {
     })
     .toBeGreaterThan(0);
 
+  await page.getByTestId("speed-0").click();
+  const saved = await page.evaluate((target) => {
+    const sim = (window as unknown as Win).__afterfall.sim;
+    return { population: sim.survivorCount(), progress: sim.state.buildings[target].searchProgress };
+  }, target);
+  expect(saved.population).toBeGreaterThan(0);
   await page.getByTestId("save").click();
   await page.waitForTimeout(500);
   await page.reload();
   await expect(page.getByTestId("continue")).toBeVisible();
   await page.getByTestId("continue").click();
-  await expect(page.getByTestId("pop")).not.toHaveText("0");
+  await expect(page.getByTestId("pop")).toHaveText(String(saved.population), { timeout: 20_000 });
+  const restoredProgress = await page.evaluate(
+    (target) => (window as unknown as Win).__afterfall.sim.state.buildings[target].searchProgress,
+    target,
+  );
+  expect(restoredProgress).toBeGreaterThanOrEqual(saved.progress);
   expect(errors).toEqual([]);
 });
 

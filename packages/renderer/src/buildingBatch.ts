@@ -32,6 +32,11 @@ const STYLE_OF: Record<string, FacadeStyle> = {
 /** Types whose ground floor is a shop front with roller shutters. */
 const STOREFRONT = new Set(["shop", "supermarket", "pharmacy"]);
 
+/** The courtyards of a footprint, or none. */
+export function holesOf(b: BuildingDef): { x: number; y: number }[][] {
+  return b.holes ?? [];
+}
+
 export function facadeStyle(type: string): FacadeStyle {
   return STYLE_OF[type] ?? "residential";
 }
@@ -78,6 +83,7 @@ export interface FacadeArt {
   facade_industrial_lit: THREE.Texture | null;
   facade_storefront_lit: THREE.Texture | null;
   roof: THREE.Texture | null;
+  roof_detail?: THREE.Texture | null;
   concrete: THREE.Texture | null;
 }
 
@@ -131,6 +137,7 @@ export class BuildingBatch {
         if (count) mine.push({ group, start, count });
       };
       const poly = outlineOf(b);
+      const holes = holesOf(b);
       const top = Math.max(FLOOR * 0.5, b.height - TOP);
       const style = facadeStyle(b.type);
       // Shift each building by whole bays and floors, so neighbours do not
@@ -157,12 +164,15 @@ export class BuildingBatch {
         add(style, (o) => frustumWalls(poly, scalePoly(poly, 0.78), shoulder, top, o, du, dv, MODULE, MODULE));
       } else {
         add(style, (o) => walls(poly, base, top, o, du, dv, MODULE, MODULE));
+        add("trim", (o) => facadeDetails(poly, base, top, style, du, o));
       }
       // The crown follows the walls: a building whose top stepped in cannot carry a
       // cornice and a roof at the width of its base, or the taper disappears under it.
       const crown = slim ? scalePoly(poly, 0.78) : poly;
       add("trim", (o) => cornice(crown, top, b.height + PARAPET, o));
-      add("roof", (o) => roof(crown, b.height, o));
+      add("roof", (o) => roof(crown, b.height, o, holes));
+      // A courtyard is a hole you can see into: its walls face the yard, not the street.
+      for (const hole of holes) add(style, (o) => walls(hole, 0, b.height, o, du, dv, MODULE, MODULE, true));
       local.push(mine);
     }
 
@@ -246,6 +256,11 @@ export class BuildingBatch {
         this.lit[g] = true;
         dirty = true;
       }
+      if (g === "roof" && art.roof_detail && mat.bumpMap !== art.roof_detail) {
+        mat.bumpMap = mat.roughnessMap = art.roof_detail;
+        mat.bumpScale = 0.045;
+        dirty = true;
+      }
       if (dirty) mat.needsUpdate = true;
     }
     this.setNight(this.night);
@@ -292,14 +307,66 @@ function facadeMaterial(group: Group): THREE.MeshStandardMaterial {
   // `glow` decides which buildings use it (settlement buildings only).
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float glow;\nvarying float vGlow;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;");
+      .replace("#include <common>", "#include <common>\nattribute float glow;\nvarying float vGlow;\nvarying vec3 facadePosition;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;\nfacadePosition = position;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vGlow;")
+      .replace("#include <common>", "#include <common>\nvarying float vGlow;\nvarying vec3 facadePosition;")
       .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vGlow;");
+    if (group !== "roof") {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float column = floor((facadePosition.x + facadePosition.z) * 1.9);
+        float streak = fract(sin(column * 127.1) * 43758.5453);
+        float damp = 1.0 - smoothstep(0.2, 2.6, facadePosition.y);
+        float rain = smoothstep(0.68, 0.98, streak) * 0.12;
+        diffuseColor.rgb *= 1.0 - damp * 0.23 - rain;
+      `,
+      );
+    }
   };
-  mat.customProgramCacheKey = () => "facade-glow";
+  mat.customProgramCacheKey = () => `facade-weather-${group}`;
   return mat;
+}
+
+/** Shallow floor bands and residential sills cast real highlights and shadows. */
+function facadeDetails(poly: { x: number; y: number }[], base: number, top: number, style: FacadeStyle, du: number, out: Builder): void {
+  const outer = inflate(poly, 0.09);
+  for (let y = Math.max(FLOOR, base); y < Math.min(top, FLOOR * 12); y += FLOOR) {
+    walls(outer, y - 0.06, y + 0.06, out, 0, 0, 3, 3);
+    ring(poly, outer, y + 0.06, 1, out);
+    ring(poly, outer, y - 0.06, -1, out);
+  }
+  if (style !== "residential") return;
+  let run = du;
+  const sign = isCcw(poly) ? 1 : -1;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i],
+      b = poly[(i + 1) % poly.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 0.1) continue;
+    const dx = (b.x - a.x) / len,
+      dz = (b.y - a.y) / len;
+    const nx = dz * sign,
+      nz = -dx * sign;
+    for (let along = Math.ceil((run - 0.85) / FLOOR) * FLOOR + 0.85 - run; along + 1.5 < len; along += FLOOR) {
+      if (along < 0.15) continue;
+      const x = a.x + along * dx,
+        z = a.y + along * dz;
+      const sill = [
+        { x, y: z },
+        { x: x + dx * 1.5, y: z + dz * 1.5 },
+        { x: x + dx * 1.5 + nx * 0.22, y: z + dz * 1.5 + nz * 0.22 },
+        { x: x + nx * 0.22, y: z + nz * 0.22 },
+      ];
+      // Keep the ground floor flush: a projected sill must not cross a door.
+      for (let y = Math.max(base, FLOOR) + 0.82; y < Math.min(top, FLOOR * 10); y += FLOOR) {
+        walls(sill, y - 0.1, y, out, 0, 0, 3, 3);
+        cap(sill, y, out, 3);
+      }
+    }
+    run += len;
+  }
 }
 
 function paint(a: THREE.BufferAttribute, r: Range, c: THREE.Color): void {
@@ -395,13 +462,16 @@ function walls(
 }
 
 /** Flat cap over a polygon at height y, facing up. */
-function cap(poly: { x: number; y: number }[], y: number, out: Builder, tile: number): void {
+function cap(poly: { x: number; y: number }[], y: number, out: Builder, tile: number, holes: { x: number; y: number }[][] = []): void {
   const contour = poly.map((p) => new THREE.Vector2(p.x, p.y));
-  const tris = THREE.ShapeUtils.triangulateShape(contour, []);
+  const rings = holes.map((h) => h.map((p) => new THREE.Vector2(p.x, p.y)));
+  const tris = THREE.ShapeUtils.triangulateShape(contour, rings);
+  // The indices run over the contour followed by every hole, in order.
+  const all = [...poly, ...holes.flat()];
   for (const [i, j, k] of tris) {
-    const a = poly[i];
-    let b = poly[j];
-    let c = poly[k];
+    const a = all[i];
+    let b = all[j];
+    let c = all[k];
     const cy = (c.x - a.x) * (b.y - a.y) - (b.x - a.x) * (c.y - a.y);
     if (cy < 0) [b, c] = [c, b];
     for (const p of [a, b, c]) {
@@ -412,8 +482,8 @@ function cap(poly: { x: number; y: number }[], y: number, out: Builder, tile: nu
   }
 }
 
-function roof(poly: { x: number; y: number }[], y: number, out: Builder): void {
-  cap(poly, y, out, MODULE);
+function roof(poly: { x: number; y: number }[], y: number, out: Builder, holes: { x: number; y: number }[][] = []): void {
+  cap(poly, y, out, MODULE, holes);
 }
 
 /**

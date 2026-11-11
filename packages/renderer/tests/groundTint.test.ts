@@ -4,14 +4,14 @@ import { TEXTURED_TINT } from "../src/cityMeshes";
 
 /**
  * Mean colour of each map in public/art, in sRGB, measured from the PNGs the
- * manifest pins (asphalt, grass, concrete, and the sidewalk JPEG). If a map is regenerated, measure
+ * manifest pins (asphalt, grass, concrete, and sidewalk). If a map is regenerated, measure
  * again and update the tint: this test is what notices the drift.
  */
 const MAP_MEAN = {
-  asphalt: [84, 85, 89],
-  grass: [82, 100, 45],
+  asphalt: [87, 88, 91],
+  grass: [89, 103, 45],
   concrete: [184, 179, 170],
-  sidewalk: [174, 174, 171],
+  sidewalk: [170, 169, 165],
 } as const;
 
 /** The colour each material had before it wore a map. */

@@ -97,6 +97,14 @@ describe("building batch", () => {
     expect(batch.pick(roofRay)).toBe(0);
   });
 
+  it("keeps ground-floor doorways flush while upper sills project from the wall", () => {
+    const batch = new BuildingBatch([building(0, "house", 0)]);
+    const rayAt = (height: number) => new THREE.Raycaster(new THREE.Vector3(5, height, -5), new THREE.Vector3(0, 0, 1));
+    expect(rayAt(0.78).intersectObject(batch.mesh)[0].point.z).toBeCloseTo(0, 5);
+    expect(rayAt(FLOOR + 0.78).intersectObject(batch.mesh)[0].point.z).toBeCloseTo(-0.22, 5);
+    batch.dispose();
+  });
+
   it("lights windows only where a building glows, and only once the mask has arrived", () => {
     const batch = new BuildingBatch([building(0, "house", 0), building(1, "house", 30)]);
     batch.setColors(0, new THREE.Color(1, 1, 1), new THREE.Color(0.7, 0.7, 0.7), 1);
@@ -210,5 +218,46 @@ describe("landmarks", () => {
     const batch = new BuildingBatch([b]);
     const bands = profile(batch, 90, 6, 6).filter((w) => w > 0);
     expect(bands[bands.length - 1]).toBeLessThan(bands[0] * 0.85);
+  });
+});
+
+describe("a courtyard", () => {
+  it("leaves the roof open over the yard and walls it", () => {
+    const outer = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 40 },
+      { x: 0, y: 40 },
+    ];
+    const yard = [
+      { x: 12, y: 12 },
+      { x: 28, y: 12 },
+      { x: 28, y: 28 },
+      { x: 12, y: 28 },
+    ];
+    const b: BuildingDef = {
+      ...building(0, "apartment", 0, 4, 40, 40),
+      footprint: outer,
+      holes: [yard],
+      area: 40 * 40 - 16 * 16,
+    };
+    const batch = new BuildingBatch([b]);
+    const pos = batch.mesh.geometry.getAttribute("position");
+    // No roof triangle may cover the middle of the yard; one vertex inside it is enough to
+    // catch a cap that ignored the hole.
+    const roofGroup = GROUPS.indexOf("roof");
+    const range = batch.mesh.geometry.groups[roofGroup];
+    let inside = 0;
+    for (let v = range.start; v < range.start + range.count; v++) {
+      const x = pos.getX(v);
+      const z = pos.getZ(v);
+      if (x > 13 && x < 27 && z > 13 && z < 27) inside++;
+    }
+    expect(inside).toBe(0);
+    // And the yard has walls of its own: the residential group holds the building's four
+    // sides plus the four of the courtyard.
+    const wallVerts = batch.mesh.geometry.groups[GROUPS.indexOf("residential")].count;
+    const solid = new BuildingBatch([{ ...b, holes: undefined }]);
+    expect(wallVerts).toBeGreaterThan(solid.mesh.geometry.groups[GROUPS.indexOf("residential")].count);
   });
 });

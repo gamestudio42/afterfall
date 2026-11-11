@@ -31,7 +31,9 @@ export class GameController {
   fps = 60;
   private disposers: (() => void)[] = [];
   private audio: AudioDirector | null = null;
+  private audioContext: AudioContext | null = null;
   private audioTried = false;
+  private disposed = false;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     this.renderer = new GameRenderer(canvas, { baseUrl: import.meta.env.BASE_URL });
@@ -41,6 +43,10 @@ export class GameController {
     const unlock = () => void this.ensureAudio();
     window.addEventListener("pointerdown", unlock, { once: true });
     window.addEventListener("keydown", unlock, { once: true });
+    this.disposers.push(() => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    });
     const loop = () => {
       this.raf = requestAnimationFrame(loop);
       this.frame();
@@ -79,8 +85,13 @@ export class GameController {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     cancelAnimationFrame(this.raf);
     for (const d of this.disposers) d();
+    void this.audioContext?.close().catch(() => {});
+    this.audioContext = null;
+    this.audio = null;
     this.renderer.dispose();
   }
 
@@ -179,15 +190,18 @@ export class GameController {
 
   /** Cria o diretor de audio no primeiro gesto e carrega os sons. */
   private async ensureAudio(): Promise<void> {
-    if (this.audioTried) return;
+    if (this.audioTried || this.disposed) return;
     this.audioTried = true;
     if (typeof AudioContext === "undefined") return;
     try {
       const ctx = new AudioContext();
+      this.audioContext = ctx;
       const audio = new AudioDirector(ctx, { baseUrl: import.meta.env.BASE_URL, range: 650 });
       this.audio = audio;
       await audio.resume();
+      if (this.disposed) return;
       await audio.load();
+      if (this.disposed) return;
       const uiNow = useUi.getState();
       audio.setVolume(uiNow.volume);
       audio.setMuted(uiNow.muted);
@@ -200,7 +214,12 @@ export class GameController {
       // Diagnostico so em desenvolvimento: o bundle de producao nao pode expor
       // nada (pages.yml rejeita a string no dist).
       if (import.meta.env.DEV) {
-        (window as unknown as { __afterfallAudio?: () => DirectorStats }).__afterfallAudio = () => audio.stats;
+        const debug = window as unknown as { __afterfallAudio?: () => DirectorStats };
+        const stats = () => audio.stats;
+        debug.__afterfallAudio = stats;
+        this.disposers.push(() => {
+          if (debug.__afterfallAudio === stats) delete debug.__afterfallAudio;
+        });
       }
     } catch {
       this.audio = null;

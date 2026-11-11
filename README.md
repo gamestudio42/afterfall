@@ -152,6 +152,8 @@ version ([`AGPL-3.0-or-later`](LICENSE)). Copyright (c) 2026 Marcel Savegnago. I
 modified version for other people, including as a website or over a network, you must offer
 them its source under the same licence.
 
-Code, the city generator, the rules and the procedural art are original. Real maps use data
+Code, the city generator, the rules and the procedural art are original. Trees and shrubs
+adapt the GameStudio42 Refloreste kit; source paths, regeneration and renderer changes are
+documented in [Environment art](docs/ENVIRONMENT_ART.md). Real maps use data
 © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the
 ODbL; the game shows this attribution while you play on one.

@@ -168,7 +168,7 @@ describe("district props", () => {
     expect(kinds.has("ambulance")).toBe(false);
   });
 
-  it("parks an ambulance on a block with a pharmacy, and only there", () => {
+  it("does not invent sidewalk ambulances when the map has no roads", () => {
     const base = city(2);
     const withPharmacy: CityMap = {
       ...base,
@@ -188,7 +188,7 @@ describe("district props", () => {
       ] as BuildingDef[],
     };
     const plain: CityMap = { ...base, buildings: [] };
-    expect(placeProps(withPharmacy, grid(CellKind.Free), 7).has("ambulance")).toBe(true);
+    expect(placeProps(withPharmacy, grid(CellKind.Free), 7).has("ambulance")).toBe(false);
     expect(placeProps(plain, grid(CellKind.Free), 7).has("ambulance")).toBe(false);
   });
 });

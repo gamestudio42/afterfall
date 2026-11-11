@@ -21,7 +21,16 @@ import {
   type WeaponId,
 } from "@afterfall/content";
 import { Rng, SIMULATION_TICK_MS, TICKS_PER_DAY, clockFromTick, deriveSeed, type GameClock, type Vec2 } from "@afterfall/shared";
-import { NavGrid, SpatialHash, generateCity, type Agent, type CityMap, type CityOptions } from "@afterfall/world";
+import {
+  NavGrid,
+  SpatialHash,
+  generateCity,
+  abandonedVehicles,
+  vehicleContains,
+  type Agent,
+  type CityMap,
+  type CityOptions,
+} from "@afterfall/world";
 import { applyCommand, type Command } from "./commands";
 import type { AlertSeverity, BuildingState, Entity, EntityId, Fx, GameState, ResourceTotals, Skills } from "./state";
 import { infectedSystem, InfectedFields } from "./systems/infected";
@@ -74,6 +83,18 @@ export class Simulation {
         // Built structures change passability; blueprints only reserve their cells.
         if (s.built) this.stampStructure(e);
         else this.grid.reserveStructure(s.cells, e.id);
+      }
+      const cars = abandonedVehicles(this.city);
+      for (const e of restored.entities.values()) {
+        const t = e.transform;
+        if (!t || (!e.survivor && !e.infected) || (e.survivor && (e.survivor.inside >= 0 || e.survivor.mounted >= 0))) continue;
+        if (!cars.some((car) => vehicleContains(car, t.x, t.y, (this.grid.cell * Math.SQRT2) / 2))) continue;
+        const point = this.grid.nearestPassable(t.x, t.y, e.survivor ? "survivor" : "infected");
+        if (point) {
+          t.x = t.px = point.x;
+          t.y = t.py = point.y;
+        }
+        if (e.mover?.goal) this.setDestination(e, e.mover.goal.x, e.mover.goal.y, e.survivor ? "survivor" : "infected");
       }
     } else {
       this.rng = new Rng(deriveSeed(opts.seed, "sim"));

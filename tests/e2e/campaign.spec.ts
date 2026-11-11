@@ -62,7 +62,7 @@ test("research buys a capability, and the ledger shows what the day cost", async
 
 test("the built structures wear their models, not the fallback box", async ({ page }) => {
   await startGame(page);
-  // Five GLBs arrive asynchronously; a missing or broken file silently keeps the box,
+  // The structure kit arrives asynchronously; a missing or broken file silently keeps the box,
   // which is exactly the regression this guards.
   await expect
     .poll(() => page.evaluate(() => (window as unknown as Win).__afterfall.renderer.structuresReady), { timeout: 20_000 })
@@ -73,8 +73,7 @@ test("the built structures wear their models, not the fallback box", async ({ pa
     for (const [kind, model] of r.structureModels) kinds.push(`${kind}:${model.parts.length}`);
     return kinds.sort();
   });
-  // One instanced mesh per material per kind: walls and gates are single-material, the
-  // tower, the garden and the well carry wood, metal, soil, plants or stone as well.
-  expect(parts.length).toBe(5);
+  // Check every gameplay model and both visual wall variants explicitly.
+  expect(parts.map((entry) => entry.split(":")[0])).toEqual(["farm", "gate", "tower", "wall", "wall_junction", "wall_patch", "well"]);
   for (const entry of parts) expect(Number(entry.split(":")[1])).toBeGreaterThan(0);
 });

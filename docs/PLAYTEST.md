@@ -266,3 +266,25 @@ run as the target.
   `pnpm test:coverage` passed its thresholds: 71.48% statements, 70.71% branches,
   74.01% functions and 73.04% lines. Human campaign playtesting and validation on
   representative player hardware remain open.
+
+## Defense structure materials and joints — 2026-11-11
+
+- **Hypothesis:** authored junction piers and distinct weathered materials make
+  defenses read as reclaimed construction rather than stretched repeated blocks.
+  This serves pillar 2 during building and holding the night.
+- **Scope:** presentation only; navigation footprints, costs and health stay intact.
+- **Implemented:** authored full-cell masonry junctions, a salvaged-sheet wall
+  variant, deterministic tint/rotation, distinct material roughness/metalness,
+  procedural pores/grain/rust, footings and base soiling, and health-driven cracks.
+  Adjacent wells and farms no longer influence wall orientation.
+- **Observed:** inspected the Chromium kit capture and real structure instances in
+  L and T layouts (`docs/art/structure_joints.png`). Junctions meet the runs at unit
+  scale; the damaged panel visibly carries fractures. These are inspection fixtures,
+  not a human settlement playthrough.
+- **Validation:** `pnpm check` passed all 220 tests; `pnpm build` passed; the asset
+  checker verified all 56 assets. Both targeted browser captures passed. The first
+  full run exposed an obsolete assertion requiring five models; it now checks the
+  seven model names explicitly. The final `CI=1 pnpm test:e2e` passed 21 active
+  tests in 3.7 minutes, with 16 optional captures skipped.
+- **Limits:** cracks are surface shading, not mesh destruction. A human campaign,
+  representative GPU performance and cross-browser rendering remain untested.

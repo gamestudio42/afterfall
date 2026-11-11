@@ -54,7 +54,7 @@ raised farm beds and a hollow stone well with visible water. The geometry and
 materials change; build costs, collision, save data and construction rules do not.
 
 `tools/blender/propkit.py` shares geometry helpers and packs authored palettes into
-vertex colours. Each of the 19 GLBs uses one to three material batches, at most
+vertex colours. Each of the 21 GLBs uses one to three material batches, at most
 6,500 triangles and at most 512 KiB. This lets the existing instanced renderer
 retain small details without a draw call for every paint colour. Large street
 silhouettes, roof tanks and stair bulkheads cast shadows; small roof clutter does not.
@@ -115,7 +115,7 @@ Optional captures are written to the Playwright output directory, showing a stre
 and park by day and a park at night. They are renderer inspections, not a human
 playtest or a player-hardware performance benchmark.
 
-`urbanAssets.test.ts` loads all 19 shipped GLBs, checks colour attributes and
+`urbanAssets.test.ts` loads all 21 shipped GLBs, checks colour attributes and
 geometry/batch budgets, and casts rays to detect inward-facing vehicle surfaces
 or a well shaft blocked above its water. `props.test.ts` checks vehicle alignment
 and rejects footprints that intersect a wall even when their centre is free.
@@ -135,3 +135,20 @@ five frozen render frames with props, trim or prop shadows disabled in turn.
 It synchronizes WebGL with `finish()` and reports submitted triangles and calls.
 This diagnostic excludes simulation, camera motion and asset loading; it is not
 a gameplay FPS benchmark.
+
+## Defense surfaces and junctions
+
+Walls now use authored masonry piers at orthogonal junctions, plus regular and
+salvaged-sheet repair variants. Only adjacent walls and gates influence alignment.
+The pier occupies the existing full navigation cell without stretching the wall's
+bracing. Module rotation and tint vary deterministically by cell.
+
+Structure materials preserve masonry, timber and hardware roughness/metalness.
+`structureMaterial.ts` adds metre-scaled procedural grain, pores, rust and base
+soiling; no external texture downloads or simulation randomness are required.
+An instance damage attribute reveals dark fractures as health falls, alongside
+subtle darkening. These are surface cracks, not destructible mesh fragments.
+
+`structure-joints.spec.ts` renders real structure instances in L and T layouts,
+checks unit-scale piers, excludes an adjacent well from wall connections, and
+checks the damage attribute. `STRUCTURE_SHOT=1` saves its inspection image.

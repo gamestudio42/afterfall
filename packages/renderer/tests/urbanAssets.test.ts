@@ -28,7 +28,7 @@ describe("shipped urban kit", () => {
   it("preserves authored colours within the download and draw budgets", async () => {
     for (const asset of [
       ...[...PROP_KINDS, ...ROOF_KINDS].map((name) => `props/${name}`),
-      ...["wall", "gate", "tower", "farm", "well"].map((name) => `structures/${name}`),
+      ...["wall", "wall_junction", "wall_patch", "gate", "tower", "farm", "well"].map((name) => `structures/${name}`),
     ]) {
       const { scene, bytes } = await load(asset);
       let triangles = 0,
@@ -48,6 +48,28 @@ describe("shipped urban kit", () => {
       expect(batches, asset).toBeLessThanOrEqual(3);
       release(scene);
     }
+  });
+
+  it("authors a full-cell junction and retains distinct construction materials", async () => {
+    const { scene } = await load("structures/wall_junction");
+    const bounds = new THREE.Box3().setFromObject(scene);
+    const size = bounds.getSize(new THREE.Vector3());
+    expect(size.x).toBeCloseTo(2.04, 2);
+    expect(size.z).toBeCloseTo(2.04, 2);
+    expect(size.y).toBeGreaterThan(2.6);
+    release(scene);
+    const wall = await load("structures/wall");
+    const materials = new Map<string, THREE.MeshStandardMaterial>();
+    wall.scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        const material = obj.material as THREE.MeshStandardMaterial;
+        materials.set(material.name, material);
+      }
+    });
+    expect(materials.size).toBe(3);
+    expect(materials.get("surface_masonry")!.roughness).toBeGreaterThan(materials.get("surface_hardware")!.roughness);
+    expect(materials.get("surface_hardware")!.metalness).toBeGreaterThan(0);
+    release(wall.scene);
   });
 
   it("exposes the car hood and windscreen to rays from outside the vehicle", async () => {

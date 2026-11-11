@@ -39,7 +39,7 @@ test("the urban kit retains its palettes, roof detail and instancing in WebGL", 
     };
   });
   expect(result.props).toBeGreaterThanOrEqual(14);
-  expect(result.structures).toBe(5);
+  expect(result.structures).toBe(20);
   expect(result.packed).toBe(true);
   expect(result.carColours).toBeGreaterThan(1);
   expect(result.roofLinear && result.roofRoughness).toBe(true);
@@ -167,9 +167,11 @@ test("the urban kit retains its palettes, roof detail and instancing in WebGL", 
                   ["farm", -4.5, -1, 0],
                   ["tower", 4.5, -3, 0],
                   ["well", 4, 4, 0],
+                  ["wall_junction", -5, 6, 0],
+                  ["wall", -5, 4, Math.PI / 2],
                   ["wall", -3, 6, 0],
                   ["gate", -1, 6, 0],
-                  ["wall", 1, 6, 0],
+                  ["wall_patch", 1, 6, 0],
                 ];
         for (const [name, ox, oz, yaw] of layout) {
           const sources =

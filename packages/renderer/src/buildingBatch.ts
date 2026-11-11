@@ -137,14 +137,32 @@ export class BuildingBatch {
       // show the same lit windows and boards in the same places.
       const du = ((b.index * 5) % 4) * FLOOR;
       const dv = ((b.index * 3) % 4) * FLOOR;
+      if (b.landmark) {
+        buildLandmark(b, poly, style, du, dv, add);
+        local.push(mine);
+        continue;
+      }
       let base = 0;
       if (STOREFRONT.has(b.type) && top >= FLOOR * 1.5) {
         add("storefront", (o) => walls(poly, 0, FLOOR, o, du, 0, MODULE, FLOOR));
         base = FLOOR;
       }
-      add(style, (o) => walls(poly, base, top, o, du, dv, MODULE, MODULE));
-      add("trim", (o) => cornice(poly, top, b.height + PARAPET, o));
-      add("roof", (o) => roof(poly, b.height, o));
+      // A footprint that is much taller than it is wide reads as a slab unless its top
+      // steps in: the taper costs one extra ring and makes every slim tower read as one.
+      const width = Math.min(b.rect.w, b.rect.h);
+      const slim = width > 0.5 && b.height / width > 5;
+      if (slim) {
+        const shoulder = base + (top - base) * 0.55;
+        add(style, (o) => walls(poly, base, shoulder, o, du, dv, MODULE, MODULE));
+        add(style, (o) => frustumWalls(poly, scalePoly(poly, 0.78), shoulder, top, o, du, dv, MODULE, MODULE));
+      } else {
+        add(style, (o) => walls(poly, base, top, o, du, dv, MODULE, MODULE));
+      }
+      // The crown follows the walls: a building whose top stepped in cannot carry a
+      // cornice and a roof at the width of its base, or the taper disappears under it.
+      const crown = slim ? scalePoly(poly, 0.78) : poly;
+      add("trim", (o) => cornice(crown, top, b.height + PARAPET, o));
+      add("roof", (o) => roof(crown, b.height, o));
       local.push(mine);
     }
 
@@ -434,6 +452,162 @@ function ring(a: { x: number; y: number }[], b: { x: number; y: number }[], y: n
       out.nrm.push(0, up, 0);
       out.uv.push(p.x / 3, p.y / 3);
     }
+  }
+}
+
+/**
+ * Draws a landmark as the thing it is rather than as the square around its feet.
+ *
+ * OSM maps the Eiffel Tower as one way tagged `building=tower`, `height=330`, and its
+ * footprint is the square that encloses the four legs: extruded like a building, the
+ * tower becomes the hall between them, six floors tall. A tower wants rings that step in
+ * as they rise, a church wants a slender spire over a squat nave, and a monument wants an
+ * obelisk — all three come out of the same footprint and two dozen lines of geometry.
+ */
+function buildLandmark(
+  b: BuildingDef,
+  poly: { x: number; y: number }[],
+  style: Group,
+  du: number,
+  dv: number,
+  add: (group: Group, fn: (out: Builder) => void) => void,
+): void {
+  const h = b.height;
+  const ring = (k: number) => scalePoly(poly, k);
+  const wall = (g: Group, bottom: { x: number; y: number }[], top: { x: number; y: number }[], y0: number, y1: number) =>
+    add(g, (o) => frustumWalls(bottom, top, y0, y1, o, du, dv, MODULE, MODULE));
+
+  if (b.landmark === "tower") {
+    // Four stages, each narrower than the one below it, then a mast.
+    const stages: [number, number][] = [
+      [0.0, 1.0],
+      [0.16, 0.52],
+      [0.42, 0.26],
+      [0.68, 0.11],
+    ];
+    for (let i = 0; i < stages.length; i++) {
+      const [at, k] = stages[i];
+      const next = stages[i + 1]?.[1] ?? 0.11;
+      const y0 = at * h;
+      const y1 = (stages[i + 1]?.[0] ?? 0.92) * h;
+      wall(style, ring(k), ring(next), y0, y1);
+      if (i > 0) add("trim", (o) => cap(ring(k * 1.04), y0, o, MODULE));
+    }
+    add(style, (o) => walls(ring(0.11), 0.92 * h, h, o, du, dv, MODULE, MODULE));
+    add("roof", (o) => cap(ring(0.11), h, o, MODULE));
+    return;
+  }
+
+  if (b.landmark === "spire") {
+    const nave = 0.45;
+    add(style, (o) => walls(poly, 0, h * nave, o, du, dv, MODULE, MODULE));
+    wall(style, poly, ring(0.03), h * nave, h);
+    add("trim", (o) => cornice(ring(1.03), h * nave, h * nave + 0.6, o));
+    return;
+  }
+
+  // Obelisk: a shaft that starts in the middle of itself and ends in a point.
+  add(style, (o) => walls(poly, 0, h * 0.3, o, du, dv, MODULE, MODULE));
+  wall(style, poly, ring(0.06), h * 0.3, h);
+}
+
+/** Shrinks a polygon towards its centroid — the cross-section of a leaning wall. */
+function scalePoly(poly: { x: number; y: number }[], k: number): { x: number; y: number }[] {
+  let cx = 0;
+  let cy = 0;
+  for (const p of poly) {
+    cx += p.x / poly.length;
+    cy += p.y / poly.length;
+  }
+  return poly.map((p) => ({ x: cx + (p.x - cx) * k, y: cy + (p.y - cy) * k }));
+}
+
+/**
+ * Connects two rings of the same length, so a wall can lean.
+ *
+ * `walls` builds a vertical quad from one polygon; a tower needs the top ring to be
+ * smaller than the bottom one, and that is a different set of triangles with a normal
+ * that is not horizontal.
+ */
+function frustumWalls(
+  bottom: { x: number; y: number }[],
+  top: { x: number; y: number }[],
+  y0: number,
+  y1: number,
+  out: Builder,
+  du = 0,
+  dv = 0,
+  uSize = MODULE,
+  vSize = MODULE,
+): void {
+  if (y1 <= y0 || bottom.length !== top.length) return;
+  let cx = 0;
+  let cy = 0;
+  for (const p of bottom) {
+    cx += p.x / bottom.length;
+    cy += p.y / bottom.length;
+  }
+  let run = du;
+  for (let i = 0; i < bottom.length; i++) {
+    const j = (i + 1) % bottom.length;
+    const a0 = bottom[i];
+    const b0 = bottom[j];
+    const b1 = top[j];
+    const a1 = top[i];
+    const ex = b0.x - a0.x;
+    const ez = b0.y - a0.y;
+    const len = Math.hypot(ex, ez);
+    if (len < 1e-6) continue;
+    const ux = a1.x - a0.x;
+    const uz = a1.y - a0.y;
+    const uy = y1 - y0;
+    // cross((ex, 0, ez), (ux, uy, uz))
+    let nx = -ez * uy;
+    let ny = ez * ux - ex * uz;
+    let nz = ex * uy;
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl;
+    ny /= nl;
+    nz /= nl;
+    const mx = (a0.x + b0.x) / 2 - cx;
+    const mz = (a0.y + b0.y) / 2 - cy;
+    const tri = [
+      [a0.x, y0, a0.y],
+      [b0.x, y0, b0.y],
+      [b1.x, y1, b1.y],
+      [a0.x, y0, a0.y],
+      [b1.x, y1, b1.y],
+      [a1.x, y1, a1.y],
+    ];
+    if (nx * mx + nz * mz < 0) {
+      [tri[1], tri[2]] = [tri[2], tri[1]];
+      [tri[4], tri[5]] = [tri[5], tri[4]];
+      nx = -nx;
+      ny = -ny;
+      nz = -nz;
+    }
+    const u0 = run / uSize;
+    const u1 = (run + len) / uSize;
+    const v0 = (y0 + dv) / vSize;
+    const v1 = (y1 + dv) / vSize;
+    const uvs = [
+      [u0, v0],
+      [u1, v0],
+      [u1, v1],
+      [u0, v0],
+      [u1, v1],
+      [u0, v1],
+    ];
+    if (tri[1][0] === b1.x && tri[1][1] === y1) {
+      [uvs[1], uvs[2]] = [uvs[2], uvs[1]];
+      [uvs[4], uvs[5]] = [uvs[5], uvs[4]];
+    }
+    tri.forEach((v, k) => {
+      out.pos.push(v[0], v[1], v[2]);
+      out.nrm.push(nx, ny, nz);
+      out.uv.push(uvs[k][0], uvs[k][1]);
+    });
+    run += len;
   }
 }
 

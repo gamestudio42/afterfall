@@ -196,3 +196,35 @@ describe("street width and footprint", () => {
     }
   });
 });
+
+describe("landmarks", () => {
+  const kLon = 111_320 * Math.cos((FIXTURE_CENTER.lat * Math.PI) / 180);
+  const at = (dx: number, dy: number) => ({ lat: FIXTURE_CENTER.lat - dy / 111_132, lon: FIXTURE_CENTER.lon + dx / kLon });
+  const ring = (x0: number, x1: number, y0: number, y1: number) => [at(x0, y0), at(x1, y0), at(x1, y1), at(x0, y1), at(x0, y0)];
+
+  function withWay(id: number, tags: Record<string, string>, geo: { lat: number; lon: number }[]) {
+    const data = syntheticOverpass();
+    return { elements: [...data.elements, { type: "way" as const, id, tags, geometry: geo }] };
+  }
+
+  it("keeps a tower's real height and marks the silhouette", () => {
+    // The Eiffel Tower is one way: building=tower, height=330. The twenty-floor cap turned
+    // it into a six-storey hall between its own legs.
+    const city = cityFromOverpass(withWay(9201, { building: "tower", man_made: "tower", height: "330" }, ring(-60, 10, -60, 10)), opts);
+    const tower = city.buildings.find((b) => b.landmark === "tower");
+    expect(tower).toBeDefined();
+    expect(tower!.height).toBeGreaterThan(300);
+  });
+
+  it("marks a church as a spire and a monument as an obelisk", () => {
+    const church = cityFromOverpass(withWay(9202, { building: "church", "building:levels": "3" }, ring(20, 60, 20, 60)), opts);
+    expect(church.buildings.some((b) => b.landmark === "spire")).toBe(true);
+    const monument = cityFromOverpass(withWay(9203, { building: "yes", historic: "monument" }, ring(80, 110, 80, 110)), opts);
+    expect(monument.buildings.some((b) => b.landmark === "obelisk")).toBe(true);
+  });
+
+  it("leaves an ordinary building without a landmark", () => {
+    const city = cityFromOverpass(syntheticOverpass(), opts);
+    expect(city.buildings.every((b) => !b.landmark)).toBe(true);
+  });
+});

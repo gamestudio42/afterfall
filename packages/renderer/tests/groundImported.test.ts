@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BuildingDef, CityMap, RoadDef } from "@afterfall/world";
-import { buildCityGround, URBAN_GROUND_TINT } from "../src/cityMeshes";
+import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT } from "../src/cityMeshes";
 
 function building(index: number): BuildingDef {
   return {
@@ -64,12 +64,20 @@ describe("ground for imported maps", () => {
     expect(generated.materials.ground.color.getHex()).toBe(0x4a4d40);
   });
 
-  it("paints an imported base with a light, neutral tint", () => {
-    // The concrete map is near neutral; the tint must not colour it green or blue.
+  it("keeps the base neutral, never green or blue", () => {
     const c = URBAN_GROUND_TINT;
     const r = (c >> 16) & 255;
     const g = (c >> 8) & 255;
     const b = c & 255;
     expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(20);
+  });
+
+  it("keeps the base darker than the sidewalk, or buildings read as built on the road", () => {
+    // The base started at the sidewalk's own lightness, and every open lot read as
+    // pavement: a screenshot of a building beside a street looked like a building on it.
+    const lum = (hex: number) => 0.2126 * ((hex >> 16) & 255) + 0.7152 * ((hex >> 8) & 255) + 0.0722 * (hex & 255);
+    const base = lum(0x6f6d66) * lum(URBAN_GROUND_TINT);
+    const walk = lum(0x8d897e) * lum(TEXTURED_TINT.blocks);
+    expect(base).toBeLessThan(walk * 0.75);
   });
 });

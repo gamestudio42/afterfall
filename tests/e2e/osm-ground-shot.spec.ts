@@ -29,12 +29,15 @@ test("captures the ground of an imported map", async ({ page }) => {
   const spot = await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
     const c = g.sim.city;
-    const b = c.buildings.find((x: { type: string }) => x.type === "house") ?? c.buildings[0];
-    const cx = b.footprint ? b.footprint.reduce((s: number, p: { x: number }) => s + p.x / b.footprint.length, 0) : b.rect.x;
-    const cy = b.footprint ? b.footprint.reduce((s: number, p: { y: number }) => s + p.y / b.footprint.length, 0) : b.rect.y;
-    g.renderer.rts.jumpTo(cx, cy);
-    g.renderer.rts.goalDistance = 90;
-    g.renderer.rts.distance = 90;
+    // Midday, so the capture is about surfaces rather than about the sun's angle.
+    g.sim.state.tick += 5 * 60 * 10;
+    const b = [...c.buildings].sort((a: { height: number }, x: { height: number }) => x.height - a.height)[0];
+    const pts = b.footprint ?? [{ x: b.rect.x, y: b.rect.y }];
+    const cx = pts.reduce((s: number, p: { x: number }) => s + p.x / pts.length, 0);
+    const cy = pts.reduce((s: number, p: { y: number }) => s + p.y / pts.length, 0);
+    g.renderer.rts.jumpTo(cx + 25, cy + 25);
+    g.renderer.rts.goalDistance = 70;
+    g.renderer.rts.distance = 70;
     g.renderer.rts.yaw = 0.4;
     g.renderer.rts.goalYaw = 0.4;
     return { buildings: c.buildings.length, blocksX: c.blocksX };

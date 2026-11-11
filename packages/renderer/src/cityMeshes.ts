@@ -79,8 +79,12 @@ function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferG
  * the bare ground reads a little more yellow; the parks keep white because the
  * grass map is already the park's green.
  */
-/** The paved base of an imported map: concrete under a light, neutral tint. */
-export const URBAN_GROUND_TINT = 0xb9b5ad;
+/**
+ * The base of an imported map: worn ground, clearly darker than the sidewalk that runs
+ * along each street. It started at the sidewalk's own lightness, which made every open
+ * lot read as pavement — buildings looked like they had been built on the road.
+ */
+export const URBAN_GROUND_TINT = 0x77736b;
 
 export const TEXTURED_TINT: Record<keyof GroundMaterials, number> = {
   roads: 0xa7abae,

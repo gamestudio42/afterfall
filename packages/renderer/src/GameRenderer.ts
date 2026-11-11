@@ -4,7 +4,7 @@ import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } fr
 import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
-import { axialYaw, cornerBlockScale } from "./structureLayout";
+import { cornerBlockScale, wallFrame } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
 import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
@@ -1258,10 +1258,19 @@ export class GameRenderer {
     // are part of, or a north-south wall is drawn as a row of slabs lying across the
     // line. The neighbours in the navigation grid decide; a corner (both axes) and a
     // lone piece default to the east-west orientation the model is authored in.
-    const wallYaw = (s: { cx: number; cy: number }): number => {
+    const wallMeasure = (s: { cx: number; cy: number }): { yaw: number; stretch: number } => {
       const g = sim.grid;
       const at = (x: number, y: number) => g.inBounds(x, y) && g.structureAt[g.index(x, y)] >= 0;
-      return axialYaw(at(s.cx, s.cy - 1), at(s.cx, s.cy + 1), at(s.cx + 1, s.cy), at(s.cx - 1, s.cy));
+      return wallFrame(
+        at(s.cx, s.cy - 1),
+        at(s.cx, s.cy + 1),
+        at(s.cx + 1, s.cy),
+        at(s.cx - 1, s.cy),
+        at(s.cx + 1, s.cy - 1),
+        at(s.cx + 1, s.cy + 1),
+        at(s.cx - 1, s.cy + 1),
+        at(s.cx - 1, s.cy - 1),
+      );
     };
     // A junction needs both orientations: the slab only fills its own axis, so an L or T
     // cell left as one slab shows a shoulder-width notch where the other run stops.
@@ -1290,9 +1299,13 @@ export class GameRenderer {
         // The ghost wears the same footprint and the same orientation as the finished
         // piece: a wall under construction is a thin slab along its line, not a cube.
         const axial = s.kind === "wall" || s.kind === "gate";
-        const yawB = axial ? wallYaw(s) : 0;
-        tmpQ2.setFromAxisAngle(up, yawB);
-        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(size - 0.1, Math.max(0.2, def.height * frac), axial ? 0.5 : size - 0.1));
+        const frameB = axial ? wallMeasure(s) : { yaw: 0, stretch: 1 };
+        tmpQ2.setFromAxisAngle(up, frameB.yaw);
+        tmpM.compose(
+          tmpV.set(cx, 0, cz),
+          tmpQ2,
+          tmpS.set(axial ? (size - 0.1) * frameB.stretch : size - 0.1, Math.max(0.2, def.height * frac), axial ? 0.5 : size - 0.1),
+        );
         this.blueprints.setMatrixAt(b, tmpM);
         this.blueprints.setColorAt(b, tmpC.setHex(e.id === this.selection.structure ? 0xffd34d : 0x6fd0ff));
         this.blueprintIds[b++] = e.id;
@@ -1311,7 +1324,8 @@ export class GameRenderer {
         continue;
       }
       const axial = s.kind === "wall" || s.kind === "gate";
-      const yaw = axial ? wallYaw(s) : 0;
+      const frame = axial ? wallMeasure(s) : { yaw: 0, stretch: 1 };
+      const yaw = frame.yaw;
       // A junction is a solid block for the whole cell. Drawing both slabs crossed left
       // two dead arms poking a metre out of every corner, which read as battlements; the
       // cell block fills the four quadrants the slabs cannot reach.
@@ -1328,7 +1342,7 @@ export class GameRenderer {
         const n = model.ids.length;
         tmpQ2.setFromAxisAngle(up, placement.yaw);
         // The wall model's slab is 0.5 m thick, so a full cell needs a 4x on that axis.
-        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(1, 1, placement.thick));
+        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(frame.stretch, 1, placement.thick));
         for (const part of model.parts) {
           part.setMatrixAt(n, tmpM);
           part.setColorAt(n, tmpC);

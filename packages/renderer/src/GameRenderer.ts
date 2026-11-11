@@ -757,7 +757,7 @@ export class GameRenderer {
     );
     this.blueprints = this.instanced(
       box,
-      new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.35, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.45, depthWrite: false }),
       MAX_STRUCTURES,
       false,
     );
@@ -1283,7 +1283,10 @@ export class GameRenderer {
       const cz = (s.cy + def.size / 2) * cell;
       if (!s.built) {
         if (b >= MAX_STRUCTURES) continue;
-        const frac = Math.max(0.08, s.progress / def.work);
+        // A ghost is a promise, not a progress bar: at eight percent of the wall's height
+        // a blueprint was a hairline on the grass, and a line of them read as nothing at
+        // all — the ninth playtest report ("não consigo traçar uma linha reta").
+        const frac = Math.max(0.35, s.progress / def.work);
         // The ghost wears the same footprint and the same orientation as the finished
         // piece: a wall under construction is a thin slab along its line, not a cube.
         const axial = s.kind === "wall" || s.kind === "gate";

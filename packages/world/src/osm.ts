@@ -368,6 +368,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       area: Math.round(k.rb.area),
       floors,
       height: floors * 3.2 + 0.6,
+      landmark: landmarkOf(k.rb.tags),
       entrance: k.entrance,
       facing: k.facing,
     });
@@ -476,11 +477,29 @@ function ensureEssentials(typed: { rb: RawBuilding; type: BuildingType }[], size
   }
 }
 
+/**
+ * Towers, spires and monuments, which OSM maps as the square around their base.
+ *
+ * The Eiffel Tower is one way tagged `building=tower`, `height=330`: extruded like a
+ * building it becomes the hall between its four legs, six floors tall.
+ */
+function landmarkOf(tags: Record<string, string>): "tower" | "spire" | "obelisk" | undefined {
+  if (tags.man_made === "tower" || tags.building === "tower" || tags["tower:type"]) return "tower";
+  if (/^(cathedral|church|chapel|basilica|mosque|synagogue|temple|abbey)$/.test(tags.building ?? "")) return "spire";
+  if (tags.historic === "monument" || tags.historic === "memorial" || tags.man_made === "obelisk") return "obelisk";
+  return undefined;
+}
+
 function floorsOf(tags: Record<string, string>, type: BuildingType, rng: Rng): number {
   const levels = Number(tags["building:levels"]);
   if (Number.isFinite(levels) && levels >= 1) return Math.min(20, Math.round(levels));
   const height = parseFloat(tags.height ?? "");
-  if (Number.isFinite(height) && height > 2) return Math.max(1, Math.min(20, Math.round(height / 3.2)));
+  if (Number.isFinite(height) && height > 2) {
+    // A landmark keeps its real height: the twenty-floor cap is there so a downtown does
+    // not wall off the camera, and a tower is the one thing that should tower.
+    const cap = landmarkOf(tags) ? 125 : 20;
+    return Math.max(1, Math.min(cap, Math.round(height / 3.2)));
+  }
   const [lo, hi] = BUILDING_TYPES[type].floors;
   return rng.int(lo, hi);
 }

@@ -146,3 +146,69 @@ describe("large cities", () => {
     }
   });
 });
+
+describe("landmarks", () => {
+  /** Widest radius of a building's geometry in each tenth of its height. */
+  function profile(batch: BuildingBatch, height: number, cx: number, cz: number): number[] {
+    const pos = batch.mesh.geometry.getAttribute("position");
+    const bands = Array.from({ length: 10 }, () => 0);
+    // One building, so every vertex in the geometry belongs to it.
+    for (let v = 0; v < pos.count; v++) {
+      const k = Math.min(9, Math.max(0, Math.floor((pos.getY(v) / height) * 10)));
+      bands[k] = Math.max(bands[k], Math.hypot(pos.getX(v) - cx, pos.getZ(v) - cz));
+    }
+    return bands;
+  }
+
+  function tower(landmark: "tower" | "spire" | "obelisk"): BuildingBatch {
+    const b: BuildingDef = {
+      id: "t1",
+      index: 0,
+      type: "civic" as BuildingDef["type"],
+      zone: "downtown" as BuildingDef["zone"],
+      rect: { x: 0, y: 0, w: 100, h: 100 },
+      footprint: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 },
+      ],
+      area: 10_000,
+      floors: 103,
+      height: 330,
+      landmark,
+      entrance: { x: 50, y: -1 },
+      facing: { x: 0, y: -1 },
+    };
+    return new BuildingBatch([b]);
+  }
+
+  it("a tower narrows as it rises", () => {
+    // OSM maps the Eiffel Tower as the square around its four legs; extruded like a
+    // building it is the hall between them, and it needs rings that step in.
+    // Vertices only exist at the ring heights, so empty bands carry no width and the
+    // comparison runs over the bands that do.
+    const bands = profile(tower("tower"), 330, 50, 50).filter((w) => w > 0);
+    expect(bands[0]).toBeGreaterThan(40);
+    expect(bands[bands.length - 1]).toBeLessThan(bands[0] * 0.4);
+    for (let k = 1; k < bands.length; k++) expect(bands[k]).toBeLessThanOrEqual(bands[k - 1] + 0.01);
+  });
+
+  it("a spire is slender at the top, an obelisk narrows once", () => {
+    const spire = profile(tower("spire"), 330, 50, 50).filter((w) => w > 0);
+    expect(spire[spire.length - 1]).toBeLessThan(spire[0] * 0.1);
+    const obelisk = profile(tower("obelisk"), 330, 50, 50).filter((w) => w > 0);
+    expect(obelisk[obelisk.length - 1]).toBeLessThan(obelisk[0] * 0.1);
+  });
+
+  it("a tall, slim building tapers even without a landmark tag", () => {
+    const b: BuildingDef = {
+      ...building(0, "office", 0, 10, 12, 12),
+      height: 90,
+      floors: 28,
+    };
+    const batch = new BuildingBatch([b]);
+    const bands = profile(batch, 90, 6, 6).filter((w) => w > 0);
+    expect(bands[bands.length - 1]).toBeLessThan(bands[0] * 0.85);
+  });
+});

@@ -10,6 +10,11 @@ export interface BuildingDef {
   rect: Rect;
   /** Real footprint outline, for imported maps. Procedural buildings are just their rect. */
   footprint?: Vec2[];
+  /**
+   * A silhouette the extruder should not use: a footprint cannot draw a tower, a spire or
+   * an obelisk, because the way OSM maps them is the square around their feet.
+   */
+  landmark?: "tower" | "spire" | "obelisk";
   /** Ground area in m². */
   area: number;
   floors: number;

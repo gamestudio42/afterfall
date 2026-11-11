@@ -3,6 +3,7 @@ import { Simulation, deserialize, serialize, type Command, type EntityId } from 
 import type { CityMap } from "@afterfall/world";
 import { GameRenderer } from "@afterfall/renderer";
 import { CellKind } from "@afterfall/world";
+import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
 import { useUi, type Speed } from "../app/store";
 import { translate } from "../i18n";
@@ -516,18 +517,10 @@ export class GameController {
       const off = Math.floor(def.size / 2);
       return [[end[0] - off, end[1] - off]];
     }
-    // Walls: straight line along the dominant axis.
-    const dx = end[0] - start[0];
-    const dy = end[1] - start[1];
-    const cells: [number, number][] = [];
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      const s = Math.sign(dx) || 1;
-      for (let i = 0; i <= Math.abs(dx); i++) cells.push([start[0] + i * s, start[1]]);
-    } else {
-      const s = Math.sign(dy) || 1;
-      for (let i = 0; i <= Math.abs(dy); i++) cells.push([start[0], start[1] + i * s]);
-    }
-    return cells.slice(0, 200);
+    // Walls: a straight line from where the drag started to where it is now, at any angle.
+    // This used to snap to the dominant axis, so a diagonal drag built a wall that ran off
+    // at ninety degrees from the mouse and the line could not follow a fence or a kerb.
+    return lineCells(start, end).slice(0, 200);
   }
 
   private cellValid(kind: StructureKind, cx: number, cy: number): boolean {

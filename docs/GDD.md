@@ -59,3 +59,15 @@ Over seeds 1 to 40, open wins about 72% and fort about 78%. Most defeats happen 
 The last recorded sweep (2026-10-31, `main` at `02c8d10`, `pnpm sweep 40 1`)
 gave **open 29/40 (72.5%)** and **fort 31/40 (77.5%)**. This is a scripted
 regression baseline, not human playtest evidence; see [PLAYTEST.md](PLAYTEST.md).
+
+## Character presentation
+
+Survivors have shaped faces, hair, layered field jackets, packs, boots and visible
+crowbars, pistols or rifles. Clothing and skin palettes vary deterministically by
+entity, while selection and infection remain readable. Walkers drag an uneven
+step, runners use a separate running cycle, and brutes have a broader silhouette.
+Distance-driven, continuously blended poses cover locomotion, breathing, aiming,
+melee and hit reactions; simulation time freezes them when paused. This serves
+community identity (pillar 4) and readable threats during scavenging and defense
+(pillars 2–3). These are presentation changes; attack timing, damage, movement
+speed, collision, saved state and the economy are unchanged.

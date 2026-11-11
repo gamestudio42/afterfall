@@ -117,3 +117,39 @@ run as the target.
   with the commit and date.
 - If a feature is cut, say so in `docs/GDD.md` instead of leaving a dead
   system behind.
+
+## Character presentation — 2026-11-11
+
+- **Fantasy / pillars:** keep a recognisable community alive (4), and read the
+  infected threat before it reaches the defenses (2).
+- **Loop beats:** scavenge, return, hold; presentation only, with unchanged rules.
+- **Hypothesis:** shaped faces, layered clothing and equipment, distinct infected
+  silhouettes, grounded strides and continuous pose blending make people feel
+  alive and attacks readable at both close and tactical zoom.
+- **Watch:** foot contact, silhouette separation, idle-to-walk transitions,
+  animation at pause/1×/2×/4×, combat feedback and horde rendering cost.
+- **Change again if:** feet detach or skate, enemies resemble survivors, poses
+  snap, or the new geometry makes a normal horde impractical to render.
+- **Observed:** Chromium rendered all six representative characters with layered
+  clothing, independent palettes, readable faces and equipped weapons. Captured
+  contact, passing, stride, windup and impact frames using the game's renderer.
+  Visual inspection caught a limb-ring orientation flip that collapsed calves
+  between poses; a stable transverse basis fixed it. The new GLB regression test
+  failed on the old infected asset (mid-blend triangle area ratio 0.00645) and
+  passed after regeneration. `docs/art/characters.png` is the inspection scene,
+  with obstructing scenery hidden, not a normal gameplay screenshot.
+- **Executed:** `pnpm check` (203 tests), `pnpm build`, and asset validation
+  (44 assets, 2,195 KiB total). Full Chromium suite: 16 passed, 16 optional
+  captures skipped. Final character capture passed; final infected-load and
+  600-infected stress checks passed. Each infected material drew exactly 600
+  instances in four batches. Three GPU-synchronized stress frames measured
+  3.2 / 6.7 / 3.8 ms in this Chromium/SwiftShader configuration (60 total scene
+  draw calls); this short diagnostic is not a hardware FPS benchmark.
+- **Interpreted:** continuously blended gait and stable limb volume address the
+  observed snapping and stick-like anatomy; silhouettes separate the three
+  infected archetypes without changing gameplay.
+- **Decision:** keep this presentation pass, pending human feel feedback.
+- **Not executed:** a human playtest, a full campaign, cross-browser rendering,
+  or a representative player-hardware performance benchmark. Speed-specific
+  human review at 2×/4× remains open; automated checks cover distance/frame-rate
+  independence and frozen animation while paused.

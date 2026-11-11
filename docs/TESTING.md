@@ -15,3 +15,40 @@
 - `pnpm sim <seed> <days>`: headless scripted game for balance. It prints the report (survivors, kills, stock, navigation failures, average tick time).
 
 Simulation cost is measured at about 0.06 ms per tick (Node, 10 survivors and about 40 infected).
+
+## Character art and animation
+
+`packages/renderer/tests/characters.test.ts` checks distance-driven gait,
+frame-rate independence, planted idle, pause, teleport handling, angle wrapping,
+attack/reaction blend bounds and the final-bullet-to-melee transition.
+`tests/e2e/characters.spec.ts` verifies actual WebGL morph blending, independent
+skin palettes, equipped weapons and paused GPU data, and fails on shader errors.
+The infected model check verifies all sixteen morph keys and four material batches.
+`characterAssets.test.ts` loads the shipped GLBs and checks intermediate triangle
+area across both gaits, preventing limb-ring roll flips from collapsing anatomy.
+
+Optional rendered checks:
+
+```sh
+CHARACTER_SHOT=1 pnpm test:e2e tests/e2e/characters.spec.ts --workers=1
+CHARACTER_STRESS=1 pnpm test:e2e tests/e2e/characters.spec.ts --workers=1
+```
+
+The first writes character and motion/contact frames to the Playwright output
+folder using the actual renderer, with obstructing scenery hidden. The second
+renders 600 infected and reports GPU-synchronized frame times; SwiftShader results
+are diagnostic and must not be presented as player hardware performance.
+
+Regenerate the original low-poly meshes with Blender (no external art dependency):
+
+```sh
+blender --background --factory-startup --python tools/blender/survivors.py
+blender --background --factory-startup --python tools/blender/infected.py
+pnpm exec prettier --write apps/web/public/art/manifest.json
+pnpm assets:check
+```
+
+Both entrypoints use `tools/blender/characters.py`, validate mesh and morph
+topology, enforce the 512 KiB per-model budget, and update manifest checksums.
+The renderer uses Three.js instanced morph textures, including the shadow pass,
+with a fixed number of material batches rather than one batch per animation key.

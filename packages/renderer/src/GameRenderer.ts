@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } from "@afterfall/content";
 import type { Simulation, EntityId } from "@afterfall/core";
-import { lerp } from "@afterfall/shared";
+import { lerp, TICK_SECONDS } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
 import { cornerBlockScale, wallFrame } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
@@ -12,6 +12,7 @@ import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Doors } from "./doors";
+import { CharacterBatch, CharacterMotion } from "./characters";
 import { VfxSystem, type FxEvent } from "./vfx";
 
 export type OverlayMode = "none" | "resources" | "danger";
@@ -40,30 +41,6 @@ const MAX_TRACERS = 96;
  * most of the pixels the scale gave up.
  */
 const UNIT_SCALE = 1.0;
-/**
- * Walk poses baked into both unit models (`tools/blender/survivors.py` and
- * `infected.py`): six keys of a stride plus one standing pose, exported as
- * `pose0`…`pose6`. The renderer picks one per unit, so the cycle costs
- * `poses x materials` draw calls and no skeleton — `InstancedMesh` cannot carry one,
- * and a `SkinnedMesh` per unit would cost a draw call per survivor.
- */
-const WALK_POSES = 6;
-const STAND_POSE = 6;
-const POSES = WALK_POSES + 1;
-/**
- * Metres of travel per pose step. Six steps make one full stride (two footfalls),
- * around 1.6 m, so the planted foot stays with the ground instead of sliding.
- */
-const STRIDE_STEP = 0.26;
-
-/** A loaded model: one instanced mesh per pose and part, plus the flat view. */
-interface PoseSet {
-  poses: THREE.InstancedMesh[][];
-  /** The part that takes the gameplay tint, per pose. */
-  colored: (THREE.InstancedMesh | null)[];
-  flat: THREE.InstancedMesh[];
-}
-
 /** Tint applied to settlement buildings, by function. */
 export const FUNCTION_TINT: Record<string, number> = {
   hq: 0xe8913a,
@@ -152,8 +129,8 @@ export class GameRenderer {
   survivorPortrait(): string | null {
     if (this.portraitTried) return this.portrait;
     this.portraitTried = true;
-    // The contact pose alone: drawing every pose would stack six bodies in the frame.
-    const parts = this.unitPoses[0] ?? [];
+    // Use the neutral body; equipped weapons would obstruct the portrait.
+    const parts = this.unitParts.filter((part) => !["crowbar", "pistol", "rifle"].includes((part.material as THREE.Material).name));
     if (parts.length === 0) return null;
     try {
       const size = 128;
@@ -165,7 +142,8 @@ export class GameRenderer {
         // The shirt is white in the model and takes its colour from the squad
         // tint, which a plain mesh does not have: give it the survivor blue so
         // the portrait is not a white torso.
-        if (mat.color.getHex() === 0xffffff) mat.color.setHex(0x4a90b8);
+        if (mat.name === "cloth") mat.color.setHex(0x608ca0);
+        if (mat.name === "skin") mat.color.setHex(0xd6a47d);
         scene.add(new THREE.Mesh(part.geometry, mat));
       }
       // Three-quarter view from the shoulders up.
@@ -211,132 +189,29 @@ export class GameRenderer {
     }
   }
 
-  /**
-   * Loads the survivor model and swaps it in place of the capsules. The capsule
-   * kit stays in the scene as the fallback until the model is ready, and stays
-   * if the file is missing, so a broken asset costs a silhouette and nothing
-   * else.
-   */
-  /**
-   * Loads a GLB laid out as `pose0`…`pose5`, each mesh carrying one primitive per
-   * material, and returns one instanced mesh per pose and part. Three.js keeps the
-   * glTF mesh name on the primitive, so the pose comes from `child.name`; the
-   * materials decide which part carries the gameplay tint.
-   */
-  private async loadPoseSet(
-    url: string,
-    max: number,
-    dress: (src: THREE.MeshStandardMaterial) => THREE.MeshStandardMaterial | null,
-    tintMaterial: string,
-  ): Promise<PoseSet | null> {
-    let gltf;
-    try {
-      gltf = await new GLTFLoader().loadAsync(url);
-    } catch {
-      return null;
-    }
-    gltf.scene.updateMatrixWorld(true);
-    const poses: THREE.InstancedMesh[][] = Array.from({ length: POSES }, () => []);
-    const colored: (THREE.InstancedMesh | null)[] = Array.from({ length: POSES }, () => null);
-    const flat: THREE.InstancedMesh[] = [];
-    gltf.scene.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return;
-      const poseMatch = /pose(\d+)/.exec(child.name ?? "");
-      if (!poseMatch) return;
-      const pose = Number(poseMatch[1]);
-      if (!Number.isInteger(pose) || pose < 0 || pose >= POSES) return;
-      const geo = child.geometry.clone();
-      geo.applyMatrix4(child.matrixWorld);
-      const src = child.material as THREE.MeshStandardMaterial;
-      const mat = dress(src);
-      if (!mat) return;
-      const inst = new THREE.InstancedMesh(geo, mat, max);
-      inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      // Only the part that carries gameplay colour is tinted: an instanceColor on
-      // every part multiplies the rest to black, the bug that made black heads.
-      if ((src.name ?? "").toLowerCase().includes(tintMaterial)) {
-        inst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
-        colored[pose] = inst;
-      }
-      inst.count = 0;
-      inst.castShadow = true;
-      inst.receiveShadow = true;
-      inst.frustumCulled = false;
-      poses[pose].push(inst);
-      flat.push(inst);
-      this.scene.add(inst);
-    });
-    // Every pose must arrive, or the cycle would fall back to a single stance.
-    if (poses.some((parts) => parts.length === 0)) {
-      for (const m of flat) this.scene.remove(m);
-      return null;
-    }
-    return { poses, colored, flat };
-  }
-
   private async loadUnitModel(): Promise<void> {
-    const set = await this.loadPoseSet(
-      `${this.artBase}art/survivors/walker.glb`,
-      MAX_UNITS,
-      (src) => {
-        // Survivors get a human tone and a shirt that takes the squad colour. They
-        // keep dark eyes: the glow the model shipped with belongs to the infected,
-        // and a squad that glows reads as the enemy.
-        const name = (src.name ?? "").toLowerCase();
-        const isClothes = name.includes("roupa");
-        const isSkin = name.includes("pele");
-        return new THREE.MeshStandardMaterial({
-          name: src.name,
-          color: isClothes ? new THREE.Color(0xffffff) : isSkin ? new THREE.Color(0xd8ab86) : src.color.clone(),
-          roughness: isSkin ? 0.75 : 0.9,
-          metalness: 0,
-          flatShading: true,
-          emissive: new THREE.Color(0x000000),
-          emissiveIntensity: 0,
-        });
-      },
-      "roupa",
-    );
-    if (!set) return;
-    for (const m of this.unitFallback) m.visible = false;
-    this.unitPoses = set.poses;
-    this.unitPoseColored = set.colored;
-    this.unitParts = set.flat;
+    const batch = await CharacterBatch.load(this.scene, `${this.artBase}art/survivors/walker.glb`, MAX_UNITS, false);
+    if (!batch) return;
+    if (this.disposed) {
+      batch.dispose();
+      return;
+    }
+    this.unitBatch = batch;
+    this.unitParts = batch.meshes;
+    this.portraitTried = false;
+    for (const mesh of this.unitFallback) mesh.visible = false;
   }
 
-  /**
-   * Loads the infected model and swaps it in place of the capsule: one instanced
-   * mesh per pose and material, so a horde of six hundred walks for `6 x 3` draw
-   * calls and a silhouette that says "enemy" before the health bar does.
-   */
   private async loadInfectedModel(): Promise<void> {
-    const set = await this.loadPoseSet(
-      `${this.artBase}art/infected/infected.glb`,
-      MAX_INFECTED,
-      (src) => {
-        const name = (src.name ?? "").toLowerCase();
-        // `skin` is white in the model and takes INFECTED[kind].color as its
-        // instance colour. The rags stay near black and the eyes are the only
-        // emissive surface, which is what makes a horde read after dark.
-        const isEyes = name.includes("eye");
-        return new THREE.MeshStandardMaterial({
-          name: src.name,
-          color: src.color.clone(),
-          roughness: isEyes ? 0.4 : 0.8,
-          metalness: 0,
-          flatShading: true,
-          emissive: isEyes ? new THREE.Color(0x8fe35a) : new THREE.Color(0x000000),
-          emissiveIntensity: isEyes ? 1.4 : 0,
-        });
-      },
-      "skin",
-    );
-    // Without the skin there is nothing to tint by kind, so the capsule stays.
-    if (!set) return;
+    const batch = await CharacterBatch.load(this.scene, `${this.artBase}art/infected/infected.glb`, MAX_INFECTED, true);
+    if (!batch) return;
+    if (this.disposed) {
+      batch.dispose();
+      return;
+    }
+    this.infectedBatch = batch;
+    this.infectedParts = batch.meshes;
     this.infected.visible = false;
-    this.infectedPoses = set.poses;
-    this.infectedPoseColored = set.colored;
-    this.infectedParts = set.flat;
   }
 
   /**
@@ -647,21 +522,12 @@ export class GameRenderer {
   private groundImported = false;
   private art: ArtTextures;
   private propScene: PropScene | null = null;
-  /** Meshes of the survivor model: one instanced mesh per pose and part. */
-  private unitPoses: THREE.InstancedMesh[][] = [];
-  private unitPoseColored: (THREE.InstancedMesh | null)[] = [];
-  /** Flat view of every pose part, for the per-frame needsUpdate and the portrait. */
+  private unitBatch: CharacterBatch | null = null;
+  private infectedBatch: CharacterBatch | null = null;
   private unitParts: THREE.InstancedMesh[] = [];
-  /** The same for the infected model. */
-  private infectedPoses: THREE.InstancedMesh[][] = [];
-  private infectedPoseColored: (THREE.InstancedMesh | null)[] = [];
   private infectedParts: THREE.InstancedMesh[] = [];
-  /**
-   * Walk phase per entity, advanced by the distance it actually travelled: a stride
-   * locked to movement keeps the planted foot with the ground, where a phase ticking
-   * with time slides the feet whenever the simulation speeds up or slows down.
-   */
-  private walkPhase = new Map<EntityId, { x: number; y: number; p: number; idle: number }>();
+  private motions = new Map<EntityId, CharacterMotion>();
+  private disposed = false;
   private portrait: string | null = null;
   private portraitTried = false;
   private unitFallback: THREE.InstancedMesh[] = [];
@@ -806,51 +672,6 @@ export class GameRenderer {
     this.vfx.setCollapseAtlas(this.art.collapse_atlas);
   }
 
-  /**
-   * Picks a unit's walk pose from the distance it has travelled and writes the matrix
-   * into that pose's bucket. A unit that has not moved keeps the contact pose, so a
-   * standing survivor plants both feet instead of marching on the spot.
-   */
-  private placePose(
-    set: THREE.InstancedMesh[][],
-    colored: (THREE.InstancedMesh | null)[],
-    buckets: Int32Array,
-    id: EntityId,
-    x: number,
-    z: number,
-    matrix: THREE.Matrix4,
-    tint: THREE.Color,
-  ): void {
-    let state = this.walkPhase.get(id);
-    let moved = 0;
-    if (!state) {
-      // A deterministic per-unit offset, or a squad that walks in lockstep reads as a
-      // chorus line instead of four people.
-      state = { x, y: z, p: (id * 0.618) % WALK_POSES, idle: 60 };
-      this.walkPhase.set(id, state);
-    } else {
-      moved = Math.hypot(x - state.x, z - state.y);
-      state.x = x;
-      state.y = z;
-      // A jump longer than a stride in one frame is a teleport, not a step.
-      if (moved > 1e-4 && moved < 2) state.p = (state.p + moved / STRIDE_STEP) % WALK_POSES;
-    }
-    if (moved > 1e-4 && moved < 2) state.idle = 0;
-    else state.idle = Math.min(state.idle + 1, 600);
-    // Standing units get the standing pose: freezing them on the contact pose leaves a
-    // squad permanently mid-lunge with its feet almost a metre apart. The idle grace
-    // bridges the frames between simulation ticks, which would otherwise flicker the
-    // pose at 60 fps with a 20 ms tick.
-    const pose = state.idle < 8 ? Math.floor(state.p) % WALK_POSES : STAND_POSE;
-    const parts = set[pose];
-    if (!parts || parts.length === 0) return;
-    const at = buckets[pose];
-    if (at >= parts[0].instanceMatrix.count) return;
-    for (const part of parts) part.setMatrixAt(at, matrix);
-    colored[pose]?.setColorAt(at, tint);
-    buckets[pose] = at + 1;
-  }
-
   private instanced(geo: THREE.BufferGeometry, mat: THREE.Material, count: number, shadows: boolean): THREE.InstancedMesh {
     const m = new THREE.InstancedMesh(geo, mat, count);
     m.count = 0;
@@ -864,6 +685,7 @@ export class GameRenderer {
 
   setSimulation(sim: Simulation): void {
     this.sim = sim;
+    this.motions.clear();
     if (this.cityGroup) {
       this.scene.remove(this.cityGroup);
     }
@@ -1147,9 +969,9 @@ export class GameRenderer {
     let sr = 0;
     let zi = 0;
     let bars = 0;
-    /** How many units each pose is drawing this frame: the buckets the poses fill. */
-    const unitBuckets = new Int32Array(POSES);
-    const infectedBuckets = new Int32Array(POSES);
+    this.unitBatch?.begin();
+    this.infectedBatch?.begin();
+    const animationTime = (sim.state.tick + alpha) * TICK_SECONDS;
     const selected = new Set(this.selection.units);
     const barQ = cam.quaternion;
     const addBar = (x: number, y: number, z: number, frac: number, color: number) => {
@@ -1167,18 +989,26 @@ export class GameRenderer {
       if (!t) continue;
       const x = lerp(t.px, t.x, alpha);
       const z = lerp(t.py, t.y, alpha);
+      if (!e.survivor && !e.infected) continue;
+      let motion = this.motions.get(e.id);
+      if (!motion) {
+        motion = new CharacterMotion(e, x, z, animationTime);
+        this.motions.set(e.id, motion);
+      }
+      const strideScale = e.infected ? INFECTED[e.infected.kind].scale : 1;
+      motion.update(e, x, z, animationTime, strideScale);
       if (e.survivor) {
         const s = e.survivor;
         if (s.inside >= 0 || su >= MAX_UNITS) continue;
         const y = s.mounted >= 0 ? 3.4 : 0;
-        tmpQ.setFromAxisAngle(UP, -t.heading + Math.PI / 2);
+        tmpQ.setFromAxisAngle(UP, -motion.heading + Math.PI / 2);
         tmpM.compose(tmpV.set(x, y, z), tmpQ, tmpS.set(UNIT_SCALE, UNIT_SCALE, UNIT_SCALE));
         this.survivors.setMatrixAt(su, tmpM);
         this.heads.setMatrixAt(su, tmpM);
         const color = s.infected ? 0x9fbf6a : s.manual ? 0x3f7fe0 : 0x4a90b8;
         const tint = tmpC.setHex(selected.has(e.id) ? 0x67c4ff : color);
         this.survivors.setColorAt(su, tint);
-        this.placePose(this.unitPoses, this.unitPoseColored, unitBuckets, e.id, x, z, tmpM, tint);
+        this.unitBatch?.place(e, tmpM, motion, selected.has(e.id), false);
         su++;
         if (bagTotal(s.carry) > 0) this.packs.setMatrixAt(sp++, tmpM);
         if (selected.has(e.id)) {
@@ -1191,22 +1021,14 @@ export class GameRenderer {
       } else if (e.infected) {
         if (zi >= MAX_INFECTED) continue;
         const def = INFECTED[e.infected.kind];
-        const sway = Math.sin(e.infected.bob) * 0.12;
-        tmpQ.setFromAxisAngle(UP, -t.heading + Math.PI / 2);
-        const lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.18 + sway);
-        tmpQ.multiply(lean);
-        tmpM.compose(
-          tmpV.set(x, 0, z),
-          tmpQ,
-          tmpS.set(def.scale * UNIT_SCALE, def.scale * UNIT_SCALE * (1 + sway * 0.1), def.scale * UNIT_SCALE),
-        );
-        tmpC.setHex(def.color);
-        if (this.overlay === "danger") tmpC.lerp(new THREE.Color(0xff3020), 0.5);
-        if (this.infectedPoses.length > 0) {
-          this.placePose(this.infectedPoses, this.infectedPoseColored, infectedBuckets, e.id, x, z, tmpM, tmpC);
+        tmpQ.setFromAxisAngle(UP, -motion.heading + Math.PI / 2);
+        const width = e.infected.kind === "brute" ? 1.25 : e.infected.kind === "runner" ? 0.78 : 1;
+        tmpM.compose(tmpV.set(x, 0, z), tmpQ, tmpS.set(def.scale * width, def.scale, def.scale));
+        if (this.infectedBatch) {
+          this.infectedBatch.place(e, tmpM, motion, false, this.overlay === "danger");
         } else {
           this.infected.setMatrixAt(zi, tmpM);
-          this.infected.setColorAt(zi, tmpC);
+          this.infected.setColorAt(zi, tmpC.setHex(def.color));
         }
         zi++;
         const h = e.health!;
@@ -1214,33 +1036,20 @@ export class GameRenderer {
       }
     }
     // Entities that died keep their phase forever otherwise.
-    for (const id of this.walkPhase.keys()) {
-      if (!sim.state.entities.has(id)) this.walkPhase.delete(id);
+    for (const id of this.motions.keys()) {
+      if (!sim.state.entities.has(id)) this.motions.delete(id);
     }
     this.survivors.count = su;
     this.heads.count = su;
-    // Each pose draws only the units whose phase selected it this frame.
-    for (let p = 0; p < POSES; p++) {
-      for (const part of this.unitPoses[p] ?? []) part.count = unitBuckets[p];
-      for (const part of this.infectedPoses[p] ?? []) part.count = infectedBuckets[p];
-    }
+    this.unitBatch?.end();
+    this.infectedBatch?.end();
     this.packs.count = sp;
     this.rings.count = sr;
     // The capsule only draws the frames before the model lands.
     this.infected.count = this.infectedParts.length > 0 ? 0 : zi;
     this.hpBg.count = bars;
     this.hpFg.count = bars;
-    for (const m of [
-      this.survivors,
-      this.heads,
-      this.packs,
-      this.rings,
-      this.infected,
-      this.hpBg,
-      this.hpFg,
-      ...this.unitParts,
-      ...this.infectedParts,
-    ]) {
+    for (const m of [this.survivors, this.heads, this.packs, this.rings, this.infected, this.hpBg, this.hpFg]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
@@ -1433,6 +1242,10 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.unitBatch?.dispose();
+    this.infectedBatch?.dispose();
+    this.motions.clear();
     this.renderer.dispose();
   }
 }

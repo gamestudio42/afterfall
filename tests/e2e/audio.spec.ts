@@ -45,12 +45,17 @@ test("loads the sound kit and plays an effect the simulation emits", async ({ pa
   // The frame is stepped explicitly: the effect only becomes sound on a frame
   // that consumes `sim.fx`, and waiting on requestAnimationFrame under a software
   // renderer measures the machine instead of the game.
-  await page.evaluate(() => {
-    const g = (window as unknown as Win).__afterfall;
-    const at = g.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
-    g.sim.emitFx("shot", at.x, at.y);
-    g.step(1 / 60, 3);
-  });
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const g = (window as unknown as Win).__afterfall;
+        const at = g.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
+        g.sim.emitFx("shot", at.x, at.y);
+        g.step(1 / 60, 3);
+        return (window as unknown as Win).__afterfallAudio!().played.shot ?? 0;
+      }),
+    )
+    .toBeGreaterThanOrEqual(1);
 
   // Um fx do outro lado do mapa nao toca (atenuacao por distancia).
   await page.evaluate(() => {

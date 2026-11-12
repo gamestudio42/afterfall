@@ -12,7 +12,8 @@ test.skip(!process.env.NIGHT_SHOT, "set NIGHT_SHOT=1 to capture the day cycle");
 
 test("captures dawn, dusk and night", async ({ page }) => {
   test.setTimeout(180_000);
-  await page.goto("/");
+  // Captures show the game as a GPU draws it: bloom and grade forced on.
+  await page.goto("/?post=on");
   await page.getByTestId("new-game").click();
   await page.getByTestId("seed").fill("4242");
   await page.getByTestId("start").click();

@@ -21,6 +21,10 @@ export function TopBar() {
   const beds = sim.state.buildings.reduce((n, b) => n + (b.hp > 0 ? b.beds : 0), 0);
   const pop = sim.survivorCount();
   const phaseIcon = c.phase === "night" ? "☾" : c.phase === "dusk" ? "◐" : c.phase === "dawn" ? "◑" : "☀";
+  const weather = game.renderer.weather;
+  const weatherIcon = weather === "rain" ? "☂" : weather === "fog" ? "≋" : weather === "overcast" ? "☁" : "";
+  // Where the day stands, 0 at midnight and 1 at the next: the strip under the bar.
+  const dayFraction = (c.hour + c.minute / 60) / 24;
   return (
     <header className="topbar" data-testid="topbar">
       <div className="clock">
@@ -30,6 +34,11 @@ export function TopBar() {
           {String(c.hour).padStart(2, "0")}:{String(c.minute).padStart(2, "0")}
         </span>
         <span className="muted">{t(`phase.${c.phase}`)}</span>
+        {weather !== "clear" && (
+          <span className="weather" data-testid="weather" title={t(`weather.${weather}`)}>
+            {weatherIcon} {t(`weather.${weather}`)}
+          </span>
+        )}
       </div>
       <div className="speeds">
         {SPEEDS.map((s) => (
@@ -113,6 +122,10 @@ export function TopBar() {
         <button className="chip" data-testid="open-econ" title={t("econ.title")} onClick={() => set({ showEcon: true })}>
           {t("econ.chip")}
         </button>
+      </div>
+      {/* The day as a strip: night, dawn, day, dusk, night, with a marker for now. */}
+      <div className="daybar" aria-hidden="true">
+        <i style={{ left: `${(dayFraction * 100).toFixed(2)}%` }} />
       </div>
     </header>
   );

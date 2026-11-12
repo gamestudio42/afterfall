@@ -13,9 +13,13 @@ import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Vegetation } from "./vegetation";
 import { Doors } from "./doors";
+import { buildContactShadows } from "./contact";
+import { SkyDome, buildOutskirts, placeOutskirts, skyColors, skyInView } from "./sky";
+import { Rain, WEATHER, easeWeather, weatherFor, type WeatherKind, type WeatherState } from "./weather";
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
 import { VfxSystem, type FxEvent } from "./vfx";
+import { PostFx, rendererName, resolvePost, type PostMode } from "./post";
 
 export type OverlayMode = "none" | "resources" | "danger";
 
@@ -554,7 +558,7 @@ export class GameRenderer {
 
   constructor(
     readonly canvas: HTMLCanvasElement,
-    opts: { baseUrl?: string } = {},
+    opts: { baseUrl?: string; post?: PostMode } = {},
   ) {
     this.artBase = opts.baseUrl ?? "./";
     this.art = loadArtTextures(this.artBase, (art) => this.applyArt(art));
@@ -565,7 +569,17 @@ export class GameRenderer {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
+    // The post chain draws several passes a frame; count them all as one frame.
+    this.renderer.info.autoReset = false;
+    this.gpuName = rendererName(this.renderer.getContext());
     this.rts = new RtsCamera(canvas.clientWidth / Math.max(1, canvas.clientHeight));
+    this.setPost(opts.post ?? "auto");
+    this.scene.add(this.skyDome.mesh);
+    // A software rasteriser gets a lighter shower: the streaks are lines, and lines are its slow path.
+    // The same drops cover the view at every zoom (rainBox), so this is the
+    // density on screen. Lines are cheap on a GPU; a software rasteriser gets fewer.
+    this.rain = new Rain(this.postEnabled ? 6000 : 1200);
+    this.scene.add(this.rain.lines);
     this.scene.fog = new THREE.Fog(0x9fb2c0, 220, 620);
     this.scene.add(this.hemi, this.sun, this.sun.target, this.hqLight, this.markers);
     this.sun.castShadow = true;
@@ -736,6 +750,20 @@ export class GameRenderer {
     this.doors = new Doors(city.buildings);
     this.doors.setMap(this.art.door);
     this.scene.add(this.doors.group);
+    if (this.contact) {
+      this.scene.remove(this.contact);
+      this.contact.geometry.dispose();
+      (this.contact.material as THREE.Material).dispose();
+    }
+    this.contact = buildContactShadows(city.buildings);
+    this.scene.add(this.contact);
+    if (this.outskirts) {
+      this.scene.remove(this.outskirts);
+      this.outskirts.geometry.dispose();
+      (this.outskirts.material as THREE.Material).dispose();
+    }
+    this.outskirts = buildOutskirts(placeOutskirts(city, city.seed ?? 1));
+    this.scene.add(this.outskirts);
     this.refreshBuildingColors();
     this.dressStreets(sim);
     this.buildDecals(sim);
@@ -817,8 +845,72 @@ export class GameRenderer {
     this.refreshBuildingArt(sim);
   }
 
+  /** The driver's name, for the dev overlay and for deciding the post chain. */
+  readonly gpuName: string;
+  private postFx: PostFx | null = null;
+  private skyEnv: THREE.Texture | null = null;
+  private contact: THREE.Mesh | null = null;
+  private outskirts: THREE.InstancedMesh | null = null;
+  private skyDome = new SkyDome();
+  private rain: Rain | null = null;
+  private weatherNow: WeatherState = { ...WEATHER.clear };
+  private weatherOverride: WeatherKind | null = null;
+  private frameDt = 0;
+
+  /** The weather being drawn: the day's, from the seed, unless a capture forced one. */
+  get weather(): WeatherKind {
+    const sim = this.sim;
+    return this.weatherOverride ?? (sim ? weatherFor(sim.state.seed, sim.clock.day) : "clear");
+  }
+
+  /** Forces a weather (captures and tests), or null to follow the day again. `instant` skips the front. */
+  setWeather(kind: WeatherKind | null, instant = false): void {
+    this.weatherOverride = kind;
+    if (instant) this.weatherNow = { ...WEATHER[this.weather] };
+  }
+  private postMode: PostMode = "auto";
+  private daylight = 1;
+  private skyColor = new THREE.Color();
+  private sunDir = new THREE.Vector3();
+
+  /** Whether bloom and the grade are being drawn. */
+  get postEnabled(): boolean {
+    return this.postFx !== null;
+  }
+
+  get post(): PostMode {
+    return this.postMode;
+  }
+
+  /** Turns the post chain on, off, or leaves it to the driver (off on a software rasteriser). */
+  setPost(mode: PostMode): void {
+    this.postMode = mode;
+    const want = resolvePost(mode, this.gpuName);
+    // The sky environment is sampled in every lit fragment. On a GPU that is
+    // free; on a software rasteriser it took the e2e job from 8 minutes to 15
+    // and four specs past their timeouts, so it follows the same switch.
+    if (want && !this.scene.environment) this.scene.environment = this.skyEnv ??= skyEnvironment(this.renderer);
+    else if (!want) this.scene.environment = null;
+    if (want && !this.postFx) {
+      this.postFx = new PostFx(this.renderer, this.scene, this.rts.camera);
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.postFx.setSize(size.x, size.y, this.renderer.getPixelRatio());
+      this.postFx.setMood(this.daylight);
+    } else if (!want && this.postFx) {
+      this.postFx.dispose();
+      this.postFx = null;
+    }
+  }
+
+  private draw(): void {
+    this.renderer.info.reset();
+    if (this.postFx) this.postFx.render();
+    else this.renderer.render(this.scene, this.rts.camera);
+  }
+
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
+    this.postFx?.setSize(width, height, this.renderer.getPixelRatio());
     this.rts.camera.aspect = width / Math.max(1, height);
     this.rts.camera.updateProjectionMatrix();
   }
@@ -885,6 +977,7 @@ export class GameRenderer {
   render(dt: number): void {
     const sim = this.sim;
     this.time += dt;
+    this.frameDt = dt;
     this.vegetation?.update(this.time);
     this.rts.update(dt);
     if (sim) {
@@ -897,7 +990,7 @@ export class GameRenderer {
       this.updateFx(sim, dt);
     }
     this.vfx.update(dt, this.rts.camera);
-    this.renderer.render(this.scene, this.rts.camera);
+    this.draw();
   }
 
   get drawCalls(): number {
@@ -915,7 +1008,7 @@ export class GameRenderer {
 
   /** Draws one frame without advancing the simulation, for probes and captures. */
   renderFrame(): void {
-    this.renderer.render(this.scene, this.rts.camera);
+    this.draw();
   }
 
   private updateLighting(sim: Simulation): void {
@@ -942,20 +1035,55 @@ export class GameRenderer {
       sc.updateProjectionMatrix();
     }
     const dusk = 1 - Math.abs(elev * 2 - 0.4) * 1.2;
-    const sunColor = new THREE.Color(0xfff2dd).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
-    this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x7d93c9));
-    this.sun.intensity = lerp(1.0, 3.4, daylight);
-    this.hemi.intensity = lerp(1.25, 1.6, daylight);
-    this.hemi.color.set(daylight > 0.3 ? 0xbfd4e6 : 0x6a80bb);
-    const sky = new THREE.Color(0x141d33).lerp(new THREE.Color(0x9fb2c0), daylight);
-    if (daylight > 0.05 && daylight < 0.7) sky.lerp(new THREE.Color(0xd08a5a), 0.35 * (1 - Math.abs(daylight - 0.35) / 0.35));
+    const sunColor = new THREE.Color(0xfff0d6).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
+    this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x8ea6e6));
+    // The moon is a real key light: at 1.0 the night was a dark green murk where
+    // the streets, the units and the horde all had the same value.
+    // Weather arrives as a front: the state eases toward the day's kind.
+    const w = (this.weatherNow = easeWeather(this.weatherNow, WEATHER[this.weather], this.frameDt));
+    this.sun.intensity = lerp(2.3, 3.6, daylight) * (1 - w.dim * 0.6);
+    // Fill comes from two places: the hemisphere (cheap, flat) and the sky
+    // environment (follows the surface normal and gives metal something to
+    // reflect). The hemisphere used to carry all of it at 1.6, which filled
+    // every shadow and made noon look overcast; it is lower now, the fill is
+    // bluer than the sun, and the shadows have a colour.
+    // Without the environment the hemisphere carries its share of the fill too.
+    const envFill = lerp(0.3, 0.5, daylight);
+    // Cloud takes from the sun and gives a little back as flat fill.
+    this.hemi.intensity = (lerp(1.25, 1.0, daylight) + (this.scene.environment ? 0 : envFill)) * (1 + w.dim * 0.25);
+    this.hemi.color.set(daylight > 0.3 ? 0xc6d6e8 : 0x6a84cc);
+    this.hemi.groundColor.set(daylight > 0.3 ? 0x4c4234 : 0x232838);
+    this.scene.environmentIntensity = envFill;
+    this.daylight = daylight;
+    this.postFx?.setMood(daylight, w.dim);
+    // The fog and the clear colour take the sky's horizon, so the far ground
+    // dissolves into the dome instead of meeting it at a line.
+    const colors = skyColors(daylight, dusk, w.cloud);
+    const sky = this.skyColor.setRGB(colors.horizon[0], colors.horizon[1], colors.horizon[2]);
     this.scene.background = sky;
+    this.sunDir.copy(this.sun.position).sub(tgt).normalize();
+    this.skyDome.mesh.visible = skyInView(this.rts.pitch, THREE.MathUtils.degToRad(this.rts.camera.fov));
+    if (this.skyDome.mesh.visible) {
+      this.skyDome.update(this.rts.camera.position, colors, this.sunDir, this.sun.color, daylight, w.cloud, this.time);
+    }
+    this.rain?.update(this.time, tgt, w.rain, lerp(0.35, 1, daylight), this.rts.distance);
+    // Rain leaves the asphalt wet: smoother, so it takes a sheen from the sky.
+    const roads = this.groundMats?.roads;
+    if (roads) roads.roughness = lerp(0.9, 0.42, w.rain);
     // Night pulls the fog in: the map edge disappears and the streets read as a
     // place you cannot see the end of, which is the point of the night phase.
     const fog = this.scene.fog as THREE.Fog;
     fog.color.copy(sky);
-    fog.near = lerp(150, 220, daylight);
-    fog.far = lerp(520, 620, daylight);
+    // Fog weather closes in to about a block and a half: the far street is a
+    // guess, the near one is still playable. At 18 to 210 m it was a whiteout.
+    // Fog is measured from the lens, but what the player looks at is the
+    // target: zoomed out to 320 m the whole map sat inside a rain's fog and
+    // read as a white sheet. Pushing it out by how far the camera stands from
+    // the target (past the closest 120 m) keeps the same haze on the ground at
+    // every zoom.
+    const pull = Math.max(0, this.rts.distance - 120);
+    fog.near = lerp(lerp(150, 220, daylight), 45, w.fog) + pull;
+    fog.far = lerp(lerp(520, 620, daylight), 330, w.fog) + pull;
     this.buildings?.setNight(1 - daylight);
     if (this.doorGlow) {
       const lit = Math.max(0, Math.min(1, (1 - daylight) * 1.2 - 0.1));
@@ -1280,6 +1408,44 @@ export class GameRenderer {
     this.unitBatch?.dispose();
     this.infectedBatch?.dispose();
     this.motions.clear();
+    this.postFx?.dispose();
+    this.skyDome.dispose();
+    this.rain?.dispose();
+    this.skyEnv?.dispose();
     this.renderer.dispose();
   }
+}
+
+/**
+ * A prefiltered sky for image-based light: pale at the horizon, blue overhead
+ * and a warm dark ground. It is neutral on purpose, because its intensity
+ * follows the hour and the sun carries the colour of the moment. Without an
+ * environment every metal in the scene reflected black.
+ */
+function skyEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
+  const sky = new THREE.Scene();
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(10, 32, 16),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      vertexShader:
+        "varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+      fragmentShader: `varying vec3 vDir;
+        void main() {
+          float h = normalize(vDir).y;
+          vec3 zenith = vec3(0.5, 0.6, 0.78);
+          vec3 horizon = vec3(0.86, 0.9, 0.95);
+          vec3 ground = vec3(0.2, 0.17, 0.14);
+          vec3 c = h > 0.0 ? mix(horizon, zenith, pow(h, 0.55)) : mix(horizon * 0.55, ground, pow(-h, 0.35));
+          gl_FragColor = vec4(c, 1.0);
+        }`,
+    }),
+  );
+  sky.add(dome);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const env = pmrem.fromScene(sky, 0.04).texture;
+  pmrem.dispose();
+  dome.geometry.dispose();
+  (dome.material as THREE.Material).dispose();
+  return env;
 }

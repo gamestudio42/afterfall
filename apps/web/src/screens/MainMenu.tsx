@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { desktop } from "../app/desktop";
 import { deleteSave, getSave, listSaves, type SaveSlot } from "../app/saves";
 import { useGame, useT } from "../app/hooks";
@@ -47,7 +47,7 @@ export function MainMenu() {
   };
 
   return (
-    <div className="menu">
+    <div className="menu" style={{ "--menu-bg": `url(${import.meta.env.BASE_URL}art/menu_bg.jpg)` } as CSSProperties}>
       <div className="menu-card">
         <h1 className="logo">
           AFTER<span>FALL</span>

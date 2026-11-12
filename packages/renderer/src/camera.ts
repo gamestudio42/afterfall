@@ -47,7 +47,9 @@ export class RtsCamera {
 
   rotate(dYaw: number, dPitch = 0): void {
     this.goalYaw += dYaw;
-    this.goalPitch = Math.min(1.35, Math.max(0.45, this.goalPitch + dPitch));
+    // 0.24 rad lets the top of the frame clear the horizon, so the sky and the
+    // city beyond the map can be seen; at the old 0.45 the camera never saw either.
+    this.goalPitch = Math.min(1.35, Math.max(0.24, this.goalPitch + dPitch));
   }
 
   zoom(factor: number): void {

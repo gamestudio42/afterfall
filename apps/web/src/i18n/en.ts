@@ -43,6 +43,10 @@ export const en: Record<string, string> = {
   "phase.day": "Day",
   "phase.dusk": "Dusk",
   "phase.night": "Night",
+  "weather.overcast": "Overcast",
+  "weather.rain": "Rain",
+  "weather.fog": "Fog",
+  "weather.clear": "Clear",
 
   "res.food": "Food",
   "res.water": "Water",

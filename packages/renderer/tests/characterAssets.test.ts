@@ -38,7 +38,7 @@ describe("shipped character morph topology", () => {
         };
         for (const [offset, count] of [
           [0, 8],
-          [12, 4],
+          [8, 12],
         ]) {
           for (let key = 0; key < count; key++) {
             const from = offset + key;

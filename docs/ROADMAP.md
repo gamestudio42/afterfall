@@ -80,6 +80,13 @@ Two constraints learned the hard way still apply to every new asset:
 
 - [x] **The streets carry wear, and the blocks speak their own language.** Three layers, one per decision: street wear as a single merged mesh (cracks, patches, oil, rubble, weeds through the kerb joints, drifted litter; an 8-tile atlas from `tools/make-decals.ts`, three thousand pieces in one draw call), a building's state on the street (grey and debris at the door once picked clean, swept doorstep and a flag in its function colour once taken), and district props (a container for the industrial blocks, crates for the commercial ones, an ambulance on any block with a pharmacy). Captures in `docs/art/street_wear.png`, `street_wear_close.png`, `settlement_day.png` and `settlement_night.png` (`STREET_SHOT=1`, `SETTLEMENT_SHOT=1`).
 
+## Done — characters rebuilt on a skeleton
+
+- [x] **One continuous body, posed by a skeleton, baked to morphs.** `tools/blender/characters.py` authors the body once as lofted rings bound to eleven bones, two bones per ring across a joint, so a knee or an elbow bends as skin; the old figure was rigid segments, six sides to a limb. Legs are solved by two-bone inverse kinematics from a foot path on the ground, so a planted foot stays planted; spine, arms and head are posed from angles. Survivors wear an open jacket, a pack with a bedroll, straps, a belt and a pouch; the infected are hunched, with a torn sleeve, a bare foot, a slack jaw and dried stains. 1,194 and 988 vertices, 486 KB and 401 KB, both under the 512 KB ceiling.
+- [x] **Gaits that cover their ground.** Eight walk keys and twelve run keys (eight flattened the knee, where the shin swings a right angle in an eighth of a cycle), with heel strike, toe-off, pelvis bob, sway and counter-rotation, and arms swinging against their legs. Each gait's stance sweeps exactly the distance the renderer advances per cycle (asserted in the generator), and the survivor's cycle went from 1.65 m to 2.5 m: at 3.1 m/s that is 2.5 steps a second, a jog, where it used to be 3.8, a scurry. The infected walker drags its right leg; the runner claws forward.
+- [x] **Standing is not freezing.** Idle blends breathing with an occasional shift of weight and a look over the shoulder; being hit has its own pose; starting, stopping and turning ease in. Trousers and hair take a colour per person as jackets and skin already did, and the infected's kind colour is pulled most of the way to a corpse's pallor, so the horde is no longer neon. Captures in `docs/art/characters.png` and `characters_attack.png` (`CHARACTER_SHOT=1`); pose sheets from `tools/blender/characters_preview.py`.
+- Not done: faces are a few planes, there is one body build per kind (height and width are scaled per infected kind, nothing else), and no death animation, the death cloud still covers it.
+
 ## Next — art
 
 The goal before the first human playtest is a coherent, finished-looking city.
@@ -104,7 +111,7 @@ Done so far: facades, roofs, parapets, sidewalks, curbs, doors and the rooftop k
 Every art item has to be measured against a declared ceiling, otherwise "looks better" wins every argument:
 
 - **Initial payload ≤ 1.5 MB.** The JS bundle is 976 kB raw and 276 kB gzip (2026-11-05, up from 869/245 kB before the art pass). Art is not part of it: every map loads after the first frame and the renderer keeps its flat colours until it lands.
-- **Streamed art ≤ 8 MB, 512 KB per file** (raised from 1 MB on 2026-11-06 for the city pass). `public/art` is 5449 KB after the six flipbooks, the facade, sidewalk and door bake, the rooftop kit, the two unit models with their walk poses; `pnpm assets:check` enforces both numbers. Atlases are shared and tiled, and nothing ships per object.
+- **Streamed art ≤ 8 MB, 512 KB per file** (raised from 1 MB on 2026-11-06 for the city pass). `public/art` is 5546 KB after the six flipbooks, the facade, sidewalk and door bake, the rooftop kit, the two unit models with their walk poses; `pnpm assets:check` enforces both numbers. Atlases are shared and tiled, and nothing ships per object.
 - **60 fps at 1080p** with about 100 buildings, forty survivors and one night horde. Shadows, bloom and particle counts are the three knobs that move this number.
 - **Audio and large textures stay out of the bundle:** sound streams from `public/sfx` (372 KB), and no texture over 64 kB is inlined.
 - An asset that cannot be measured against these numbers does not ship.

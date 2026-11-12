@@ -41,12 +41,12 @@ test("the infected model replaces the capsule", async ({ page }) => {
   });
   console.log("INFECTED", JSON.stringify(state));
 
-  // Walk, run, breathing and attack keys share four batches.
-  expect(state.morphs).toBe(16);
-  expect(state.parts).toBe(4);
-  expect(state.materials).toEqual(["cloth", "detail", "eyes", "skin"]);
-  // Clothing and skin vary independently; eyes and fixed details retain their colors.
-  expect(state.tinted).toBe(2);
+  // Walk, run, idle, attack and hit keys share the batches.
+  expect(state.morphs).toBe(26);
+  expect(state.parts).toBe(6);
+  expect(state.materials).toEqual(["cloth", "detail", "eyes", "hair", "pants", "skin"]);
+  // Clothing, trousers, hair and skin vary independently; eyes and fixed details retain their colors.
+  expect(state.tinted).toBe(4);
   expect(state.morphCapacity).toBe(600);
   expect(state.capsuleHidden).toBe(true);
   expect(state.capsuleCount).toBe(0);

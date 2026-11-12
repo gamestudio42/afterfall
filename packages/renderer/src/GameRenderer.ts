@@ -14,7 +14,7 @@ import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacemen
 import { Vegetation } from "./vegetation";
 import { Doors } from "./doors";
 import { buildContactShadows } from "./contact";
-import { SkyDome, buildOutskirts, placeOutskirts, skyColors } from "./sky";
+import { SkyDome, buildOutskirts, placeOutskirts, skyColors, skyInView } from "./sky";
 import { Rain, WEATHER, easeWeather, weatherFor, type WeatherKind, type WeatherState } from "./weather";
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
@@ -1060,7 +1060,10 @@ export class GameRenderer {
     const sky = this.skyColor.setRGB(colors.horizon[0], colors.horizon[1], colors.horizon[2]);
     this.scene.background = sky;
     this.sunDir.copy(this.sun.position).sub(tgt).normalize();
-    this.skyDome.update(this.rts.camera.position, colors, this.sunDir, this.sun.color, daylight, w.cloud, this.time);
+    this.skyDome.mesh.visible = skyInView(this.rts.pitch, THREE.MathUtils.degToRad(this.rts.camera.fov));
+    if (this.skyDome.mesh.visible) {
+      this.skyDome.update(this.rts.camera.position, colors, this.sunDir, this.sun.color, daylight, w.cloud, this.time);
+    }
     this.rain?.update(this.time, tgt, w.rain, lerp(0.35, 1, daylight));
     // Rain leaves the asphalt wet: smoother, so it takes a sheen from the sky.
     const roads = this.groundMats?.roads;

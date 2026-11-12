@@ -34,6 +34,16 @@ export function skyColors(daylight: number, dusk: number, cloud: number): { zeni
 }
 
 /**
+ * Whether any sky is in frame: the top of the view has to clear the horizon.
+ * `pitch` is the camera's angle below the horizontal and `fov` its vertical
+ * field of view, both in radians. At the default pitch the camera only sees
+ * ground, and the dome is not drawn at all.
+ */
+export function skyInView(pitch: number, fov: number): boolean {
+  return pitch - fov / 2 < 0.06;
+}
+
+/**
  * A dome that follows the camera: gradient, sun or moon with a glow, drifting
  * clouds and stars. It sits on the far plane and is drawn after everything
  * opaque, so its shader only runs on the pixels the city leaves uncovered:

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CityMap } from "@afterfall/world";
-import { OUTSKIRTS_FAR, OUTSKIRTS_NEAR, placeOutskirts, skyColors } from "../src/sky";
+import { OUTSKIRTS_FAR, OUTSKIRTS_NEAR, placeOutskirts, skyColors, skyInView } from "../src/sky";
 import { WEATHER, easeWeather, weatherFor } from "../src/weather";
 
 function city(): CityMap {
@@ -45,6 +45,13 @@ describe("sky", () => {
     expect(warmth(skyColors(0.5, 1, 0))).toBeGreaterThan(0.2);
     expect(warmth(skyColors(1, 1, 0))).toBeLessThan(0);
     expect(warmth(skyColors(0, 1, 0))).toBeLessThan(0);
+  });
+
+  it("is drawn only when the camera tilts low enough to see it", () => {
+    const fov = (42 * Math.PI) / 180;
+    expect(skyInView(0.92, fov)).toBe(false);
+    expect(skyInView(0.45, fov)).toBe(false);
+    expect(skyInView(0.26, fov)).toBe(true);
   });
 
   it("goes grey under cloud", () => {

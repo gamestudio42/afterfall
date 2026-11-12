@@ -50,7 +50,7 @@ test("characters blend on the GPU, equip weapons and freeze when paused", async 
     return {
       before,
       after: snapshot(),
-      adjacent: before.slice(13, 17).filter((w: any) => w > 0).length,
+      adjacent: before.slice(9, 21).filter((w: any) => w > 0).length,
       weapons: parts.filter((m: any) => ["crowbar", "pistol", "rifle"].includes(m.material.name)).map((m: any) => m.count),
       skin: Array.from(skin.instanceColor.array.slice(0, 9)),
       textureHeight: cloth.morphTexture.image.height,
@@ -86,7 +86,7 @@ test("characters blend on the GPU, equip weapons and freeze when paused", async 
       }
       return { counts: g.renderer.infectedParts.map((m: any) => m.count), samples, calls: g.renderer.drawCalls };
     });
-    expect(stress.counts).toEqual([600, 600, 600, 600]);
+    expect(stress.counts).toEqual([600, 600, 600, 600, 600, 600]);
     console.log("CHARACTER STRESS", JSON.stringify(stress));
   }
 

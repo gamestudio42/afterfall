@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 /* The game exposes its controller on window for tests and diagnostics. */
 type Win = { __afterfall: any };
@@ -56,9 +57,7 @@ test("start a game, choose a base, scavenge and save", async ({ page }) => {
   await page.mouse.click(p.x, p.y);
   await expect(page.getByTestId("set-base")).toBeVisible();
   await page.getByTestId("set-base").click();
-  // Known flake on a loaded runner: the base command is applied on the next tick and
-  // the counter can still read 0 after the default five seconds.
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 20_000 });
+  await expectPopulation(page, "4");
 
   // Box-select the founding group around the door.
   const door = await page.evaluate(() => {
@@ -112,7 +111,7 @@ test("start a game, choose a base, scavenge and save", async ({ page }) => {
   await page.reload();
   await expect(page.getByTestId("continue")).toBeVisible();
   await page.getByTestId("continue").click();
-  await expect(page.getByTestId("pop")).toHaveText(String(saved.population), { timeout: 20_000 });
+  await expectPopulation(page, String(saved.population));
   const restoredProgress = await page.evaluate(
     (target) => (window as unknown as Win).__afterfall.sim.state.buildings[target].searchProgress,
     target,
@@ -127,9 +126,7 @@ test("resolve a pending event while time is frozen", async ({ page }) => {
     const g = (window as unknown as Win).__afterfall;
     g.command({ type: "setBase", building: 0 });
   });
-  // Known flake on a loaded runner: the base command is applied on the next tick and
-  // the counter can still read 0 after the default five seconds.
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 20_000 });
+  await expectPopulation(page, "4");
 
   await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
@@ -284,9 +281,7 @@ test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }
   await page.mouse.click(p.x, p.y);
   await expect(page.getByTestId("set-base")).toBeVisible();
   await page.getByTestId("set-base").click();
-  // Known flake on a loaded runner: the base command is applied on the next tick and
-  // the counter can still read 0 after the default five seconds.
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 20_000 });
+  await expectPopulation(page, "4");
   await page.screenshot({ path: "test-results/real-place.png" });
 
   // Saving keeps the map, so a reload continues on the same place.

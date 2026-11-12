@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any };
 
@@ -37,7 +38,7 @@ test("captures dawn, dusk and night", async ({ page }) => {
     return best;
   });
   await page.evaluate((index) => (window as unknown as Win).__afterfall.command({ type: "setBase", building: index }), hq);
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 15_000 });
+  await expectPopulation(page, "4");
 
   await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;

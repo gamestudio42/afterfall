@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any };
 
@@ -39,7 +40,7 @@ test("captures the city by day and by night", async ({ page }) => {
     }
     g.command({ type: "setBase", building: best });
   });
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 15_000 });
+  await expectPopulation(page, "4");
 
   await expect
     .poll(

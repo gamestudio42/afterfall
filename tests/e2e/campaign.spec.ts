@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any };
 
@@ -26,7 +27,7 @@ async function startGame(page: Page, seed = "4242") {
     return best;
   });
   await page.evaluate((index) => (window as unknown as Win).__afterfall.command({ type: "setBase", building: index }), hq);
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 20_000 });
+  await expectPopulation(page, "4");
 }
 
 test("research buys a capability, and the ledger shows what the day cost", async ({ page }) => {

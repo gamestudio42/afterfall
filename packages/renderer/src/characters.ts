@@ -4,19 +4,44 @@ import { INFECTED, WEAPONS, type WeaponId } from "@afterfall/content";
 import type { Entity } from "@afterfall/core";
 
 export const WALK_KEYS = 8;
+export const RUN_KEYS = 12;
+/** The morph layout `tools/blender/characters.py` exports, in order. */
 export const CHARACTER_MORPHS = [
   ...Array.from({ length: WALK_KEYS }, (_, i) => `walk${i}`),
+  ...Array.from({ length: RUN_KEYS }, (_, i) => `run${i}`),
   "breath",
+  "shift",
   "windup",
   "strike",
   "aim",
-  ...Array.from({ length: 4 }, (_, i) => `run${i}`),
+  "hit",
 ];
-const CLOTHES = [0x608ca0, 0xb48b56, 0x74846a, 0x996556, 0x667d99, 0x9eaaa1];
+const RUN = WALK_KEYS;
+const BREATH = WALK_KEYS + RUN_KEYS;
+const SHIFT = BREATH + 1;
+const WINDUP = BREATH + 2;
+const STRIKE = BREATH + 3;
+const AIM = BREATH + 4;
+const HIT = BREATH + 5;
+/**
+ * Metres of ground one full cycle (two steps) covers. The feet in each gait
+ * were authored to sweep exactly this far while planted, so advancing the
+ * phase by distance over these keeps a planted foot on its spot. They mirror
+ * `CYCLE` in `tools/blender/characters.py`. The old 1.65 m for a survivor at
+ * 3.1 m/s was 3.8 steps a second, a scurry; 2.5 m is 2.5 steps a second, a jog.
+ */
+export const CYCLE_LENGTH = { survivorRun: 2.5, infectedWalk: 1.0, infectedRun: 2.2 } as const;
+// Muted, worn colours: jackets, trousers and hair of people who have been outside for a while.
+const CLOTHES = [0x5d6b52, 0x7a6a4f, 0x4f6274, 0x8a5a48, 0x6b6f76, 0x8c8468, 0x5a4a5e, 0x9a7b4a];
+const PANTS = [0x39424f, 0x4a4438, 0x2f3338, 0x55503f, 0x3d4a57];
+const HAIR = [0x2a1c12, 0x15110e, 0x5b3d22, 0x8a6a3c, 0x6e6a64, 0x3a2418];
 const SKIN = [0xd6a47d, 0x9a694a, 0xe2b997, 0xb7805b, 0x704c38];
 const skinTint = new THREE.Color();
 const clothTint = new THREE.Color();
+const pantsTint = new THREE.Color();
+const hairTint = new THREE.Color();
 const woundTint = new THREE.Color(0xb3b683);
+const pallorTint = new THREE.Color(0x8d9482);
 const selectedTint = new THREE.Color(0x75ceee);
 const dangerTint = new THREE.Color(0xff3020);
 
@@ -60,12 +85,14 @@ export class CharacterMotion {
     this.y = y;
     this.time = time;
     const running = !!e.survivor || e.infected?.kind === "runner";
-    if (walking) this.phase = (this.phase + distance / ((running ? 1.65 : 1.32) * strideScale)) % 1;
+    const cycle = e.survivor ? CYCLE_LENGTH.survivorRun : running ? CYCLE_LENGTH.infectedRun : CYCLE_LENGTH.infectedWalk;
+    if (walking) this.phase = (this.phase + distance / (cycle * strideScale)) % 1;
     if (teleport) this.moving = 0;
-    else this.moving += ((walking ? 1 : 0) - this.moving) * (1 - Math.exp(-dt * 16));
+    // A body takes a moment to get going and to settle: at 16 the gait snapped on and off.
+    else this.moving += ((walking ? 1 : 0) - this.moving) * (1 - Math.exp(-dt * 9));
     const angle = e.transform!.heading;
     const turn = Math.atan2(Math.sin(angle - this.heading), Math.cos(angle - this.heading));
-    this.heading += turn * (1 - Math.exp(-dt * 18));
+    this.heading += turn * (1 - Math.exp(-dt * 12));
     const cooldown = e.survivor?.cooldown ?? e.infected?.cooldown ?? 0;
     if (cooldown > this.cooldown + 0.001) {
       this.attackAt = time;
@@ -80,26 +107,35 @@ export class CharacterMotion {
     const attack = Math.max(0, 1 - age / (this.ranged ? 0.48 : 0.6));
     this.weights.fill(0);
     const walk = this.moving * (1 - attack * 0.8);
-    const keys = running ? 4 : WALK_KEYS;
-    const offset = running ? 12 : 0;
+    const keys = running ? RUN_KEYS : WALK_KEYS;
+    const offset = running ? RUN : 0;
     const p = this.phase * keys;
     const from = Math.floor(p) % keys;
     this.weights[offset + from] = (1 - (p % 1)) * walk;
     this.weights[offset + ((from + 1) % keys)] = (p % 1) * walk;
-    this.weights[8] = (1 - walk) * (1 - attack) * (0.5 + 0.5 * Math.sin(time * 2.3 + e.id * 1.7));
-    if (this.ranged) this.weights[11] = Math.min(1, attack * 2);
+    // Standing still is not standing frozen: the chest rises and falls, and every
+    // so often the weight goes onto the other leg with a look over the shoulder.
+    const idle = (1 - walk) * (1 - attack);
+    const wander = 0.5 + 0.5 * Math.sin(time * 0.41 + e.id * 2.3);
+    const shift = wander * wander * (3 - 2 * wander);
+    this.weights[SHIFT] = idle * Math.max(0, (shift - 0.55) / 0.45) * 0.9;
+    this.weights[BREATH] = idle * (1 - this.weights[SHIFT] / Math.max(idle, 1e-6)) * (0.5 + 0.5 * Math.sin(time * 1.9 + e.id * 1.7));
+    if (this.ranged) this.weights[AIM] = Math.min(1, attack * 2);
     else if (age < 0.12) {
-      this.weights[9] = 1 - age / 0.12;
-      this.weights[10] = age / 0.12;
-    } else this.weights[10] = attack;
-    const flinch = Math.max(0, 1 - (time - this.hitAt) / 0.22) * 0.35;
+      this.weights[WINDUP] = 1 - age / 0.12;
+      this.weights[STRIKE] = age / 0.12;
+    } else this.weights[STRIKE] = attack;
+    const flinch = Math.max(0, 1 - (time - this.hitAt) / 0.28) * 0.6;
     // A reaction occupies part of the pose, rather than pushing weights past one.
     for (let i = 0; i < this.weights.length; i++) this.weights[i] *= 1 - flinch;
-    this.weights[9] += flinch;
+    this.weights[HIT] += flinch;
     const total = this.weights.reduce((sum, weight) => sum + weight, 0);
     if (total > 1) for (let i = 0; i < this.weights.length; i++) this.weights[i] /= total;
   }
 }
+
+/** Materials whose vertex colours are multiplied by a colour per person. */
+const TINTED = new Set(["skin", "cloth", "pants", "hair"]);
 
 export interface CharacterPart {
   mesh: THREE.InstancedMesh;
@@ -150,7 +186,7 @@ export class CharacterBatch {
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.castShadow = mesh.receiveShadow = true;
         mesh.frustumCulled = false;
-        if (name === "skin" || name === "cloth") mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+        if (TINTED.has(name)) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
         const sample = new THREE.Mesh(geo, mat);
         // Allocate at full capacity before setting count=0; Three sizes the texture by count.
         mesh.setMorphAt(0, sample);
@@ -182,7 +218,14 @@ export class CharacterBatch {
     const s = e.survivor;
     const weapon: WeaponId = s && (s.ammo > 0 || motion.firing) ? s.weapon : "crowbar";
     skinTint.setHex(s ? SKIN[e.id % SKIN.length] : INFECTED[e.infected!.kind].color);
+    // The kind's colour is game information, but straight from the table it is a neon
+    // green walker and an orange runner. Most of the way to a corpse's pallor, the
+    // kinds still differ and the horde reads as dead flesh.
+    if (!s) skinTint.lerp(pallorTint, 0.62);
     clothTint.setHex(CLOTHES[e.id % CLOTHES.length]);
+    // Different strides through each list, so jacket, trousers and hair do not repeat together.
+    pantsTint.setHex(PANTS[(e.id * 3 + 1) % PANTS.length]);
+    hairTint.setHex(HAIR[(e.id * 5 + 2) % HAIR.length]);
     if (s?.infected) skinTint.lerp(woundTint, 0.45);
     if (selected) clothTint.lerp(selectedTint, 0.42);
     else if (s?.manual) clothTint.multiplyScalar(1.12);
@@ -192,7 +235,8 @@ export class CharacterBatch {
       const at = mesh.count;
       if (at >= mesh.instanceMatrix.count) continue;
       mesh.setMatrixAt(at, matrix);
-      if (mesh.instanceColor) mesh.setColorAt(at, name === "skin" ? skinTint : clothTint);
+      if (mesh.instanceColor)
+        mesh.setColorAt(at, name === "skin" ? skinTint : name === "pants" ? pantsTint : name === "hair" ? hairTint : clothTint);
       sample.morphTargetInfluences = motion.weights;
       mesh.setMorphAt(at, sample);
       mesh.count++;

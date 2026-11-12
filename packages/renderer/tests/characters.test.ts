@@ -12,12 +12,12 @@ describe("continuous character animation", () => {
   it("blends adjacent walk keys by distance and settles into a planted stance", () => {
     const { e, motion } = subject();
     motion.update(e, 10.15, 10, 0.05);
-    const walking = motion.weights.slice(12, 16);
+    const walking = motion.weights.slice(8, 20);
     expect(walking.filter((weight) => weight > 0)).toHaveLength(2);
     const phase = motion.phase;
     for (let i = 2; i < 30; i++) motion.update(e, 10.15, 10, i * 0.05);
     expect(motion.phase).toBe(phase);
-    expect(motion.weights.slice(12, 16).reduce((a, b) => a + b, 0)).toBeLessThan(0.001);
+    expect(motion.weights.slice(8, 20).reduce((a, b) => a + b, 0)).toBeLessThan(0.001);
   });
 
   it("freezes breathing, walking and attack recovery while simulation time is paused", () => {
@@ -35,7 +35,7 @@ describe("continuous character animation", () => {
     const phase = motion.phase;
     motion.update(e, 110, 50, 0.1);
     expect(motion.phase).toBe(phase);
-    expect(motion.weights.slice(12, 16).every((weight) => weight === 0)).toBe(true);
+    expect(motion.weights.slice(8, 20).every((weight) => weight === 0)).toBe(true);
   });
 
   it("keeps a stride independent of frame rate and playback speed", () => {
@@ -49,17 +49,17 @@ describe("continuous character animation", () => {
   it("reacts to an actual attack and damage without overdriving the morph mesh", () => {
     const { e, motion } = subject();
     motion.update(e, 10.1, 10, 0.1);
-    expect(motion.weights[9]).toBe(0);
+    expect(motion.weights[22]).toBe(0);
     e.survivor!.cooldown = 1;
     e.health!.hp -= 5;
     motion.update(e, 10.2, 10, 0.2);
-    expect(motion.weights[9]).toBeGreaterThan(0);
+    expect(motion.weights[22]).toBeGreaterThan(0);
     motion.update(e, 10.3, 10, 0.35);
-    expect(motion.weights[10]).toBeGreaterThan(0);
+    expect(motion.weights[23]).toBeGreaterThan(0);
     expect(motion.weights.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1.00001);
     motion.update(e, 10.3, 10, 1.5);
-    expect(motion.weights[9]).toBe(0);
-    expect(motion.weights[10]).toBe(0);
+    expect(motion.weights[22]).toBe(0);
+    expect(motion.weights[23]).toBe(0);
   });
 
   it("shows the final shot, then switches an empty firearm to melee", () => {
@@ -71,14 +71,48 @@ describe("continuous character animation", () => {
     e.survivor!.cooldown = 0.8;
     motion.update(e, 10, 10, 0.1);
     expect(motion.firing).toBe(true);
-    expect(motion.weights[11]).toBeGreaterThan(0);
+    expect(motion.weights[24]).toBeGreaterThan(0);
     e.survivor!.cooldown = 0;
     motion.update(e, 10, 10, 1);
     e.survivor!.cooldown = 0.8;
     motion.update(e, 10, 10, 1.2);
     expect(motion.firing).toBe(false);
-    expect(motion.weights[9]).toBeGreaterThan(0);
-    expect(motion.weights[11]).toBe(0);
+    expect(motion.weights[22]).toBeGreaterThan(0);
+    expect(motion.weights[24]).toBe(0);
+  });
+
+  it("flinches into its own pose when hurt, and recovers", () => {
+    const { e, motion } = subject();
+    motion.update(e, 10, 10, 0.1);
+    expect(motion.weights[25]).toBe(0);
+    e.health!.hp -= 5;
+    motion.update(e, 10, 10, 0.2);
+    expect(motion.weights[25]).toBeGreaterThan(0.4);
+    expect(motion.weights.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1.00001);
+    motion.update(e, 10, 10, 0.6);
+    expect(motion.weights[25]).toBe(0);
+  });
+
+  it("stands alive: it breathes, and now and then shifts its weight", () => {
+    const { e, motion } = subject();
+    let breath = 0;
+    let shift = 0;
+    for (let i = 1; i <= 400; i++) {
+      motion.update(e, 10, 10, i * 0.05);
+      breath = Math.max(breath, motion.weights[20]);
+      shift = Math.max(shift, motion.weights[21]);
+      expect(motion.weights.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1.00001);
+    }
+    expect(breath).toBeGreaterThan(0.5);
+    expect(shift).toBeGreaterThan(0.5);
+  });
+
+  it("covers a jog's ground per cycle: 2.5 m for two steps, not a scurry", () => {
+    const { e, motion } = subject();
+    const start = motion.phase;
+    for (let i = 1; i <= 100; i++) motion.update(e, 10 + i * 0.0125, 10, i * 0.004);
+    // 1.25 m is half a cycle.
+    expect((motion.phase - start + 1) % 1).toBeCloseTo(0.5, 5);
   });
 
   it("turns across the angle wrap by the short route", () => {

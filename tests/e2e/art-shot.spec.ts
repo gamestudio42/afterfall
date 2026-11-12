@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 interface Win {
   __afterfall: {
@@ -50,7 +51,7 @@ test("renders a frame and reports frame cost", async ({ page }) => {
     const g = (window as unknown as Win).__afterfall;
     g.command({ type: "setBase", building: index });
   }, hq);
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 15_000 });
+  await expectPopulation(page, "4");
   await page.waitForTimeout(1_500);
 
   const stats = await page.evaluate(async () => {

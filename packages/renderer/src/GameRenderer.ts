@@ -12,6 +12,7 @@ import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Vegetation } from "./vegetation";
+import { Grass } from "./grass";
 import { Doors } from "./doors";
 import { buildContactShadows } from "./contact";
 import { SkyDome, buildOutskirts, placeOutskirts, skyColors, skyInView } from "./sky";
@@ -19,7 +20,7 @@ import { Rain, WEATHER, easeWeather, weatherFor, type WeatherKind, type WeatherS
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
 import { VfxSystem, type FxEvent } from "./vfx";
-import { PostFx, rendererName, resolvePost, type PostMode } from "./post";
+import { isSoftwareRenderer, PostFx, rendererName, resolvePost, type PostMode } from "./post";
 
 export type OverlayMode = "none" | "resources" | "danger";
 
@@ -542,6 +543,8 @@ export class GameRenderer {
   private groundMats: GroundMaterials | null = null;
   private groundImported = false;
   private vegetation: Vegetation | null = null;
+  private reclamationTex: THREE.DataTexture | null = null;
+  private grass: Grass | null = null;
   private art: ArtTextures;
   private propScene: PropScene | null = null;
   private unitBatch: CharacterBatch | null = null;
@@ -729,10 +732,17 @@ export class GameRenderer {
     this.selectionOutlineOf = -1;
     const ground = buildCityGround(city);
     this.vegetation?.dispose();
+    this.grass?.dispose();
+    this.reclamationTex?.dispose();
+    this.reclamationTex = ground.reclamationTexture;
+    // A CPU rasteriser (CI, a machine without a driver) pays for every alpha-tested
+    // blade; it gets a quarter of the grass, a GPU the whole field.
+    this.grass = new Grass(city, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.25 : 1);
+    ground.group.add(this.grass.mesh);
     this.cityGroup = ground.group;
     this.vegetation = new Vegetation(ground.group.getObjectByName("park-tree-fallback"));
     ground.group.add(this.vegetation.group);
-    void this.vegetation.load(city, this.artBase);
+    void this.vegetation.load(city, this.artBase, ground.reclamation);
     this.groundMats = ground.materials;
     this.groundImported = ground.imported;
     this.applyArt(this.art);
@@ -979,6 +989,7 @@ export class GameRenderer {
     this.time += dt;
     this.frameDt = dt;
     this.vegetation?.update(this.time);
+    this.grass?.update(this.time);
     this.rts.update(dt);
     if (sim) {
       const alpha = sim.alpha;
@@ -1035,7 +1046,7 @@ export class GameRenderer {
       sc.updateProjectionMatrix();
     }
     const dusk = 1 - Math.abs(elev * 2 - 0.4) * 1.2;
-    const sunColor = new THREE.Color(0xfff0d6).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
+    const sunColor = new THREE.Color(0xffe9c8).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
     this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x8ea6e6));
     // The moon is a real key light: at 1.0 the night was a dark green murk where
     // the streets, the units and the horde all had the same value.
@@ -1052,7 +1063,8 @@ export class GameRenderer {
     // Cloud takes from the sun and gives a little back as flat fill.
     this.hemi.intensity = (lerp(1.25, 1.0, daylight) + (this.scene.environment ? 0 : envFill)) * (1 + w.dim * 0.25);
     this.hemi.color.set(daylight > 0.3 ? 0xc6d6e8 : 0x6a84cc);
-    this.hemi.groundColor.set(daylight > 0.3 ? 0x4c4234 : 0x232838);
+    // Daylight bounces off weeds and soil now, not clean paving: an olive fill from below.
+    this.hemi.groundColor.set(daylight > 0.3 ? 0x464530 : 0x232838);
     this.scene.environmentIntensity = envFill;
     this.daylight = daylight;
     this.postFx?.setMood(daylight, w.dim);
@@ -1082,7 +1094,8 @@ export class GameRenderer {
     // the target (past the closest 120 m) keeps the same haze on the ground at
     // every zoom.
     const pull = Math.max(0, this.rts.distance - 120);
-    fog.near = lerp(lerp(150, 220, daylight), 45, w.fog) + pull;
+    // Dust hangs over the empty city: a day haze that starts nearer than clean air would.
+    fog.near = lerp(lerp(150, 185, daylight), 45, w.fog) + pull;
     fog.far = lerp(lerp(520, 620, daylight), 330, w.fog) + pull;
     this.buildings?.setNight(1 - daylight);
     if (this.doorGlow) {
@@ -1405,6 +1418,8 @@ export class GameRenderer {
   dispose(): void {
     this.disposed = true;
     this.vegetation?.dispose();
+    this.grass?.dispose();
+    this.reclamationTex?.dispose();
     this.unitBatch?.dispose();
     this.infectedBatch?.dispose();
     this.motions.clear();

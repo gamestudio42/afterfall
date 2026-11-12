@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateCity } from "@afterfall/world";
 import { distToPolyline } from "@afterfall/shared";
-import { placeVegetation } from "../src/vegetation";
+import { placeVegetation, VEGETATION_CAP } from "../src/vegetation";
 
 describe("vegetation placement", () => {
   it("is deterministic, varied and stays within its instance budget", () => {
@@ -12,7 +12,7 @@ describe("vegetation placement", () => {
     expect(new Set(a.map((p) => p.species)).size).toBe(4);
     const park = city.parks[0];
     park.trees = Array.from({ length: 800 }, () => ({ ...park.trees[0] }));
-    expect(placeVegetation(city).length).toBeLessThanOrEqual(600);
+    expect(placeVegetation(city).length).toBeLessThanOrEqual(VEGETATION_CAP);
   });
 
   it("keeps trunks away from buildings and bent imported roads", () => {
@@ -39,6 +39,21 @@ describe("vegetation placement", () => {
     const plants = placeVegetation(city);
     expect(plants.some((p) => p.x === 75 && p.z === 35)).toBe(true);
     expect(plants.some((p) => p.x === 20 || p.x === 30)).toBe(false);
-    for (const p of plants) expect(distToPolyline(p.x, p.z, path)).toBeGreaterThanOrEqual(5.5);
+    // Trunks keep the road's margin; brush may reach the gutter but never the carriageway.
+    for (const p of plants) expect(distToPolyline(p.x, p.z, path)).toBeGreaterThanOrEqual(p.species === "bush" ? 4.8 : 5.5);
+  });
+
+  it("fills an untended city: more trees than the map's parks list, some of them in the streets", () => {
+    const city = generateCity({ seed: 4242 });
+    const plants = placeVegetation(city);
+    const listed = city.parks.reduce((n, p) => n + p.trees.length, 0);
+    const trees = plants.filter((p) => p.species !== "bush");
+    expect(trees.length).toBeGreaterThan(listed * 1.5);
+    const inAPark = (x: number, z: number) =>
+      city.parks.some((p) => x > p.rect.x && x < p.rect.x + p.rect.w && z > p.rect.y && z < p.rect.y + p.rect.h);
+    const street = trees.filter((p) => !inAPark(p.x, p.z));
+    expect(street.length).toBeGreaterThan(10);
+    for (const t of street)
+      for (const b of city.buildings) expect(Math.hypot(b.entrance.x - t.x, b.entrance.y - t.z)).toBeGreaterThanOrEqual(6);
   });
 });

@@ -8,7 +8,8 @@ type Win = { __afterfall: any };
  * Bloom and grade are forced on, as a GPU draws them.
  *
  * Opt-in: `ATMOS_SHOT=1 pnpm test:e2e tests/e2e/atmosphere-shot.spec.ts`; the captures
- * go to `docs/art/sky_clear.png`, `sky_rain.png`, `sky_fog.png` and `sky_night.png`.
+ * go to `docs/art/sky_clear.png`, `sky_rain.png`, `sky_fog.png`, `sky_night.png` and
+ * `menu_backdrop.png` (the night without the HUD, packed by `tools/pack-menu-backdrop.ts`).
  */
 test.skip(!process.env.ATMOS_SHOT, "set ATMOS_SHOT=1 to capture the sky and the weather");
 
@@ -66,6 +67,17 @@ test("captures the sky and the weather", async ({ page }) => {
   await frame("sky_rain", "rain", 0);
   await frame("sky_fog", "fog", 0);
   await frame("sky_night", "clear", 11);
+
+  // The menu's backdrop: the same night without the HUD, from a little closer.
+  await page.evaluate(() => {
+    const g = (window as unknown as Win).__afterfall;
+    (document.querySelector(".hud") as HTMLElement).style.visibility = "hidden";
+    const rts = g.renderer.rts;
+    rts.goalPitch = rts.pitch = 0.3;
+    rts.goalDistance = rts.distance = 120;
+  });
+  await page.waitForTimeout(2_000);
+  await page.screenshot({ path: "docs/art/menu_backdrop.png" });
 
   const state = await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall.renderer;

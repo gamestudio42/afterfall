@@ -43,6 +43,10 @@ export const ptBR: Record<string, string> = {
   "phase.day": "Dia",
   "phase.dusk": "Anoitecer",
   "phase.night": "Noite",
+  "weather.overcast": "Nublado",
+  "weather.rain": "Chuva",
+  "weather.fog": "Neblina",
+  "weather.clear": "Céu limpo",
 
   "res.food": "Comida",
   "res.water": "Água",

@@ -935,3 +935,230 @@ canvas.world.hidden {
 .ledger tr.low td {
   color: var(--danger);
 }
+
+/* ------------------------------------------------------------ polish pass */
+/*
+ * One layer over the rules above, so the prototype's structure stays and only
+ * the finish changes. No backdrop-filter anywhere: blurring a WebGL canvas
+ * behind the HUD is a full-screen pass per frame, and the bars are opaque
+ * enough to read without it.
+ */
+:root {
+  --bar: rgba(13, 16, 22, 0.94);
+  --bar-edge: rgba(255, 255, 255, 0.07);
+  --well: rgba(255, 255, 255, 0.045);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --focus: rgba(242, 180, 109, 0.75);
+}
+
+button {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    transform 0.06s;
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+button.primary {
+  background: linear-gradient(180deg, #f0a04a, #dd8329);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 6px 18px rgba(232, 145, 58, 0.25);
+}
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f6b266, #e8913a);
+}
+
+/* Top bar: groups in wells, numbers first, and a strip that shows the day running out. */
+.topbar {
+  height: 52px;
+  gap: 10px;
+  padding: 0 12px 3px;
+  background: linear-gradient(180deg, rgba(10, 12, 17, 0.98), var(--bar));
+  border-bottom: 1px solid var(--bar-edge);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+.topbar .clock,
+.topbar .speeds,
+.topbar .audio,
+.topbar .stat,
+.topbar .resources,
+.topbar .panels {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--well);
+  border: 1px solid var(--bar-edge);
+  border-radius: 9px;
+  flex: 0 0 auto;
+}
+.topbar .speeds,
+.topbar .panels {
+  padding: 0 4px;
+  gap: 3px;
+}
+.topbar .audio {
+  gap: 6px;
+  padding: 0 8px 0 4px;
+}
+.topbar .audio input[type="range"] {
+  width: 84px;
+  accent-color: var(--accent);
+}
+.topbar .clock {
+  gap: 8px;
+  align-items: center;
+}
+.topbar .clock .time {
+  font-size: 19px;
+  letter-spacing: 0.01em;
+}
+.topbar .weather {
+  margin-left: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #cfe0f5;
+  background: rgba(111, 180, 255, 0.14);
+  border: 1px solid rgba(111, 180, 255, 0.28);
+}
+.topbar .resources {
+  gap: 0;
+  padding: 0 4px;
+  margin-left: auto;
+}
+.topbar .res {
+  padding: 0 9px;
+  height: 22px;
+  border-right: 1px solid var(--bar-edge);
+}
+.topbar .res:last-child {
+  border-right: 0;
+}
+.topbar .res strong {
+  font-size: 15px;
+  min-width: 2ch;
+  text-align: right;
+}
+.topbar .res.warn {
+  background: rgba(224, 80, 60, 0.14);
+  border-radius: 6px;
+}
+.topbar .chip {
+  box-shadow: none;
+}
+.topbar .panel-open.ready {
+  border-color: var(--accent);
+  color: var(--accent-2);
+  box-shadow: 0 0 0 1px rgba(232, 145, 58, 0.25);
+}
+/* The names are a second cue: the icons carry the bar until there is room for both. */
+@media (max-width: 1680px) {
+  .topbar .res-name {
+    display: none;
+  }
+}
+@media (max-width: 1280px) {
+  .topbar .audio input[type="range"],
+  .topbar .stat .muted {
+    display: none;
+  }
+}
+
+/* 00:00 to 24:00, left to right: night, dawn at 05:20, day, dusk at 17:40, night. */
+.daybar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    #27345f 0%,
+    #27345f 21%,
+    #e8913a 24%,
+    #f3d68a 29%,
+    #f3d68a 71%,
+    #e8913a 76%,
+    #27345f 81%,
+    #27345f 100%
+  );
+  opacity: 0.85;
+}
+.daybar i {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 9px;
+  margin-left: -1px;
+  background: #fff;
+  border-radius: 1px;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+}
+
+/* Bottom bar and floating panels share the bar's surface. */
+.bottombar .bar {
+  height: 56px;
+  background: linear-gradient(0deg, rgba(10, 12, 17, 0.98), var(--bar));
+  border-top: 1px solid var(--bar-edge);
+  box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.4);
+}
+.side-panel,
+.modal,
+.alerts .alert,
+.minimap {
+  box-shadow: var(--shadow);
+}
+.minimap {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* Thin, quiet scrollbars inside panels. */
+.side-panel,
+.modal,
+.menu-card {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* Menu: the city at night behind the card, darkened so the card still leads. */
+.menu {
+  background:
+    linear-gradient(180deg, rgba(8, 10, 15, 0.55), rgba(8, 10, 15, 0.82)),
+    radial-gradient(ellipse at 50% 45%, transparent 30%, rgba(5, 7, 11, 0.75) 100%),
+    var(--menu-bg, none) center / cover no-repeat,
+    #0e1116;
+}
+.menu-card {
+  background: linear-gradient(180deg, rgba(20, 24, 32, 0.94), rgba(14, 17, 23, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow:
+    0 40px 90px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.logo {
+  text-shadow: 0 2px 24px rgba(232, 145, 58, 0.25);
+}
+.menu-buttons > button {
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    transform 0.08s;
+}
+.menu-buttons > button:hover:not(:disabled) {
+  transform: translateX(2px);
+}

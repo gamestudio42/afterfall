@@ -75,8 +75,10 @@ const DAY: Mood = {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** The mood between night (0) and day (1). Pure, so it can be tested without WebGL. */
-export function moodAt(daylight: number): Mood {
+export function moodAt(daylight: number, dim = 0): Mood {
   const t = Math.max(0, Math.min(1, daylight));
+  // Bad weather drains colour: under cloud or rain the grade pulls saturation down.
+  const drain = 1 - 0.28 * Math.max(0, Math.min(1, dim));
   const mix3 = (a: [number, number, number], b: [number, number, number]): [number, number, number] => [
     lerp(a[0], b[0], t),
     lerp(a[1], b[1], t),
@@ -86,7 +88,7 @@ export function moodAt(daylight: number): Mood {
     bloomStrength: lerp(NIGHT.bloomStrength, DAY.bloomStrength, t),
     bloomThreshold: lerp(NIGHT.bloomThreshold, DAY.bloomThreshold, t),
     bloomRadius: lerp(NIGHT.bloomRadius, DAY.bloomRadius, t),
-    saturation: lerp(NIGHT.saturation, DAY.saturation, t),
+    saturation: lerp(NIGHT.saturation, DAY.saturation, t) * drain,
     contrast: lerp(NIGHT.contrast, DAY.contrast, t),
     vignette: lerp(NIGHT.vignette, DAY.vignette, t),
     shadows: mix3(NIGHT.shadows, DAY.shadows),
@@ -168,8 +170,8 @@ export class PostFx {
     this.composer.setSize(width, height);
   }
 
-  setMood(daylight: number): void {
-    const m = moodAt(daylight);
+  setMood(daylight: number, dim = 0): void {
+    const m = moodAt(daylight, dim);
     this.bloom.strength = m.bloomStrength;
     this.bloom.threshold = m.bloomThreshold;
     this.bloom.radius = m.bloomRadius;

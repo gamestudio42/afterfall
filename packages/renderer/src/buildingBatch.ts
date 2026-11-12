@@ -682,7 +682,7 @@ function frustumWalls(
 }
 
 /** Offsets an outline along its corner bisectors (positive grows it). */
-function inflate(poly: { x: number; y: number }[], d: number): { x: number; y: number }[] {
+export function inflate(poly: { x: number; y: number }[], d: number): { x: number; y: number }[] {
   const ccw = isCcw(poly);
   const n = poly.length;
   const res: { x: number; y: number }[] = [];

@@ -13,6 +13,9 @@ import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Vegetation } from "./vegetation";
 import { Doors } from "./doors";
+import { buildContactShadows } from "./contact";
+import { SkyDome, buildOutskirts, placeOutskirts, skyColors } from "./sky";
+import { Rain, WEATHER, easeWeather, weatherFor, type WeatherKind, type WeatherState } from "./weather";
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
 import { VfxSystem, type FxEvent } from "./vfx";
@@ -571,6 +574,10 @@ export class GameRenderer {
     this.gpuName = rendererName(this.renderer.getContext());
     this.rts = new RtsCamera(canvas.clientWidth / Math.max(1, canvas.clientHeight));
     this.setPost(opts.post ?? "auto");
+    this.scene.add(this.skyDome.mesh);
+    // A software rasteriser gets a lighter shower: the streaks are lines, and lines are its slow path.
+    this.rain = new Rain(this.postEnabled ? 2600 : 900);
+    this.scene.add(this.rain.lines);
     this.scene.fog = new THREE.Fog(0x9fb2c0, 220, 620);
     this.scene.add(this.hemi, this.sun, this.sun.target, this.hqLight, this.markers);
     this.sun.castShadow = true;
@@ -741,6 +748,20 @@ export class GameRenderer {
     this.doors = new Doors(city.buildings);
     this.doors.setMap(this.art.door);
     this.scene.add(this.doors.group);
+    if (this.contact) {
+      this.scene.remove(this.contact);
+      this.contact.geometry.dispose();
+      (this.contact.material as THREE.Material).dispose();
+    }
+    this.contact = buildContactShadows(city.buildings);
+    this.scene.add(this.contact);
+    if (this.outskirts) {
+      this.scene.remove(this.outskirts);
+      this.outskirts.geometry.dispose();
+      (this.outskirts.material as THREE.Material).dispose();
+    }
+    this.outskirts = buildOutskirts(placeOutskirts(city, city.seed ?? 1));
+    this.scene.add(this.outskirts);
     this.refreshBuildingColors();
     this.dressStreets(sim);
     this.buildDecals(sim);
@@ -826,8 +847,29 @@ export class GameRenderer {
   readonly gpuName: string;
   private postFx: PostFx | null = null;
   private skyEnv: THREE.Texture | null = null;
+  private contact: THREE.Mesh | null = null;
+  private outskirts: THREE.InstancedMesh | null = null;
+  private skyDome = new SkyDome();
+  private rain: Rain | null = null;
+  private weatherNow: WeatherState = { ...WEATHER.clear };
+  private weatherOverride: WeatherKind | null = null;
+  private frameDt = 0;
+
+  /** The weather being drawn: the day's, from the seed, unless a capture forced one. */
+  get weather(): WeatherKind {
+    const sim = this.sim;
+    return this.weatherOverride ?? (sim ? weatherFor(sim.state.seed, sim.clock.day) : "clear");
+  }
+
+  /** Forces a weather (captures and tests), or null to follow the day again. `instant` skips the front. */
+  setWeather(kind: WeatherKind | null, instant = false): void {
+    this.weatherOverride = kind;
+    if (instant) this.weatherNow = { ...WEATHER[this.weather] };
+  }
   private postMode: PostMode = "auto";
   private daylight = 1;
+  private skyColor = new THREE.Color();
+  private sunDir = new THREE.Vector3();
 
   /** Whether bloom and the grade are being drawn. */
   get postEnabled(): boolean {
@@ -933,6 +975,7 @@ export class GameRenderer {
   render(dt: number): void {
     const sim = this.sim;
     this.time += dt;
+    this.frameDt = dt;
     this.vegetation?.update(this.time);
     this.rts.update(dt);
     if (sim) {
@@ -994,7 +1037,9 @@ export class GameRenderer {
     this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x8ea6e6));
     // The moon is a real key light: at 1.0 the night was a dark green murk where
     // the streets, the units and the horde all had the same value.
-    this.sun.intensity = lerp(2.3, 3.6, daylight);
+    // Weather arrives as a front: the state eases toward the day's kind.
+    const w = (this.weatherNow = easeWeather(this.weatherNow, WEATHER[this.weather], this.frameDt));
+    this.sun.intensity = lerp(2.3, 3.6, daylight) * (1 - w.dim * 0.6);
     // Fill comes from two places: the hemisphere (cheap, flat) and the sky
     // environment (follows the surface normal and gives metal something to
     // reflect). The hemisphere used to carry all of it at 1.6, which filled
@@ -1002,21 +1047,32 @@ export class GameRenderer {
     // bluer than the sun, and the shadows have a colour.
     // Without the environment the hemisphere carries its share of the fill too.
     const envFill = lerp(0.3, 0.5, daylight);
-    this.hemi.intensity = lerp(1.25, 1.0, daylight) + (this.scene.environment ? 0 : envFill);
+    // Cloud takes from the sun and gives a little back as flat fill.
+    this.hemi.intensity = (lerp(1.25, 1.0, daylight) + (this.scene.environment ? 0 : envFill)) * (1 + w.dim * 0.25);
     this.hemi.color.set(daylight > 0.3 ? 0xc6d6e8 : 0x6a84cc);
     this.hemi.groundColor.set(daylight > 0.3 ? 0x4c4234 : 0x232838);
     this.scene.environmentIntensity = envFill;
     this.daylight = daylight;
-    this.postFx?.setMood(daylight);
-    const sky = new THREE.Color(0x141d33).lerp(new THREE.Color(0x9fb2c0), daylight);
-    if (daylight > 0.05 && daylight < 0.7) sky.lerp(new THREE.Color(0xd08a5a), 0.35 * (1 - Math.abs(daylight - 0.35) / 0.35));
+    this.postFx?.setMood(daylight, w.dim);
+    // The fog and the clear colour take the sky's horizon, so the far ground
+    // dissolves into the dome instead of meeting it at a line.
+    const colors = skyColors(daylight, dusk, w.cloud);
+    const sky = this.skyColor.setRGB(colors.horizon[0], colors.horizon[1], colors.horizon[2]);
     this.scene.background = sky;
+    this.sunDir.copy(this.sun.position).sub(tgt).normalize();
+    this.skyDome.update(this.rts.camera.position, colors, this.sunDir, this.sun.color, daylight, w.cloud, this.time);
+    this.rain?.update(this.time, tgt, w.rain, lerp(0.35, 1, daylight));
+    // Rain leaves the asphalt wet: smoother, so it takes a sheen from the sky.
+    const roads = this.groundMats?.roads;
+    if (roads) roads.roughness = lerp(0.9, 0.42, w.rain);
     // Night pulls the fog in: the map edge disappears and the streets read as a
     // place you cannot see the end of, which is the point of the night phase.
     const fog = this.scene.fog as THREE.Fog;
     fog.color.copy(sky);
-    fog.near = lerp(150, 220, daylight);
-    fog.far = lerp(520, 620, daylight);
+    // Fog weather closes in to about a block and a half: the far street is a
+    // guess, the near one is still playable. At 18 to 210 m it was a whiteout.
+    fog.near = lerp(lerp(150, 220, daylight), 45, w.fog);
+    fog.far = lerp(lerp(520, 620, daylight), 330, w.fog);
     this.buildings?.setNight(1 - daylight);
     if (this.doorGlow) {
       const lit = Math.max(0, Math.min(1, (1 - daylight) * 1.2 - 0.1));
@@ -1342,6 +1398,8 @@ export class GameRenderer {
     this.infectedBatch?.dispose();
     this.motions.clear();
     this.postFx?.dispose();
+    this.skyDome.dispose();
+    this.rain?.dispose();
     this.skyEnv?.dispose();
     this.renderer.dispose();
   }

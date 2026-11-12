@@ -1010,6 +1010,15 @@ button.primary:hover:not(:disabled) {
   padding: 0 4px;
   gap: 3px;
 }
+/* A flex row drops the spaces between its children, so the gap puts them back. */
+.topbar .stat {
+  gap: 6px;
+}
+.topbar .stat small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .topbar .audio {
   gap: 6px;
   padding: 0 8px 0 4px;
@@ -1138,8 +1147,8 @@ button.primary:hover:not(:disabled) {
 /* Menu: the city at night behind the card, darkened so the card still leads. */
 .menu {
   background:
-    linear-gradient(180deg, rgba(8, 10, 15, 0.55), rgba(8, 10, 15, 0.82)),
-    radial-gradient(ellipse at 50% 45%, transparent 30%, rgba(5, 7, 11, 0.75) 100%),
+    linear-gradient(180deg, rgba(8, 10, 15, 0.28), rgba(8, 10, 15, 0.66)),
+    radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(5, 7, 11, 0.6) 100%),
     var(--menu-bg, none) center / cover no-repeat,
     #0e1116;
 }

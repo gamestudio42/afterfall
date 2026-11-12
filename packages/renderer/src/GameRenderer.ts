@@ -569,7 +569,6 @@ export class GameRenderer {
     // The post chain draws several passes a frame; count them all as one frame.
     this.renderer.info.autoReset = false;
     this.gpuName = rendererName(this.renderer.getContext());
-    this.scene.environment = skyEnvironment(this.renderer);
     this.rts = new RtsCamera(canvas.clientWidth / Math.max(1, canvas.clientHeight));
     this.setPost(opts.post ?? "auto");
     this.scene.fog = new THREE.Fog(0x9fb2c0, 220, 620);
@@ -826,6 +825,7 @@ export class GameRenderer {
   /** The driver's name, for the dev overlay and for deciding the post chain. */
   readonly gpuName: string;
   private postFx: PostFx | null = null;
+  private skyEnv: THREE.Texture | null = null;
   private postMode: PostMode = "auto";
   private daylight = 1;
 
@@ -842,6 +842,11 @@ export class GameRenderer {
   setPost(mode: PostMode): void {
     this.postMode = mode;
     const want = resolvePost(mode, this.gpuName);
+    // The sky environment is sampled in every lit fragment. On a GPU that is
+    // free; on a software rasteriser it took the e2e job from 8 minutes to 15
+    // and four specs past their timeouts, so it follows the same switch.
+    if (want && !this.scene.environment) this.scene.environment = this.skyEnv ??= skyEnvironment(this.renderer);
+    else if (!want) this.scene.environment = null;
     if (want && !this.postFx) {
       this.postFx = new PostFx(this.renderer, this.scene, this.rts.camera);
       const size = this.renderer.getSize(new THREE.Vector2());
@@ -995,10 +1000,12 @@ export class GameRenderer {
     // reflect). The hemisphere used to carry all of it at 1.6, which filled
     // every shadow and made noon look overcast; it is lower now, the fill is
     // bluer than the sun, and the shadows have a colour.
-    this.hemi.intensity = lerp(1.25, 1.0, daylight);
+    // Without the environment the hemisphere carries its share of the fill too.
+    const envFill = lerp(0.3, 0.5, daylight);
+    this.hemi.intensity = lerp(1.25, 1.0, daylight) + (this.scene.environment ? 0 : envFill);
     this.hemi.color.set(daylight > 0.3 ? 0xc6d6e8 : 0x6a84cc);
     this.hemi.groundColor.set(daylight > 0.3 ? 0x4c4234 : 0x232838);
-    this.scene.environmentIntensity = lerp(0.3, 0.5, daylight);
+    this.scene.environmentIntensity = envFill;
     this.daylight = daylight;
     this.postFx?.setMood(daylight);
     const sky = new THREE.Color(0x141d33).lerp(new THREE.Color(0x9fb2c0), daylight);
@@ -1335,7 +1342,7 @@ export class GameRenderer {
     this.infectedBatch?.dispose();
     this.motions.clear();
     this.postFx?.dispose();
-    this.scene.environment?.dispose();
+    this.skyEnv?.dispose();
     this.renderer.dispose();
   }
 }

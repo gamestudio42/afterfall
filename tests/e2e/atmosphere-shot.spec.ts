@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any };
 
@@ -43,7 +44,7 @@ test("captures the sky and the weather", async ({ page }) => {
     }
     g.command({ type: "setBase", building: best });
   });
-  await expect(page.getByTestId("pop")).not.toHaveText("0", { timeout: 20_000 });
+  await expectPopulation(page, "4");
 
   const frame = async (file: string, weather: string, hours: number) => {
     await page.evaluate(

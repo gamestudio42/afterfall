@@ -1,39 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 /* The game exposes its controller on window for tests and diagnostics. */
-type Win = {
-  __afterfall: any;
-  __afterfallUi: { getState: () => { frame: number; set: (patch: { frame: number }) => void } };
-};
-
-/**
- * The founding group is applied on the next simulation tick, and the counter
- * re-reads it only after a few rendered frames. On a loaded software renderer
- * those frames can land after the assertion has already given up, while the
- * clock is still 07:00. A paused frame drains commands without drawing, so do
- * that and publish one UI frame instead of waiting out the renderer.
- */
-async function expectPopulation(page: Page, count: string) {
-  await expect
-    .poll(
-      async () =>
-        page.evaluate((expected) => {
-          const w = window as unknown as Partial<Win>;
-          const sim = w.__afterfall?.sim;
-          if (!sim) return "";
-          if (String(sim.survivorCount()) !== expected) sim.update(0, 0);
-          const now = String(sim.survivorCount());
-          if (now === expected) {
-            const ui = w.__afterfallUi?.getState();
-            if (ui) ui.set({ frame: ui.frame + 1 });
-          }
-          return now;
-        }, count),
-      { timeout: 20_000 },
-    )
-    .toBe(count);
-  await expect(page.getByTestId("pop")).toHaveText(count);
-}
+type Win = { __afterfall: any };
 
 async function startGame(page: Page, seed = "4242") {
   await page.goto("/");

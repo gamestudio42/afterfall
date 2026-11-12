@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any };
 
@@ -36,7 +37,7 @@ test("renders a survivor portrait", async ({ page }) => {
     return best;
   });
   await page.evaluate((index) => (window as unknown as Win).__afterfall.command({ type: "setBase", building: index }), hq);
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 15_000 });
+  await expectPopulation(page, "4");
 
   // Wait for the model, then select one survivor so the panel opens.
   await page.waitForFunction(() => (window as unknown as Win).__afterfall.renderer.unitParts.length > 0, null, {

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any };
 
@@ -89,7 +90,5 @@ test("missing vegetation and decal assets keep a usable fallback", async ({ page
   });
   expect(state).toEqual({ fallback: true, partialModels: 0, decals: 0 });
   await page.evaluate(() => (window as unknown as Win).__afterfall.command({ type: "setBase", building: 0 }));
-  // The command drains on a simulation tick; match the main-loop test's allowance
-  // for a loaded software-rendering runner, and still require all four founders.
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 20_000 });
+  await expectPopulation(page, "4");
 });

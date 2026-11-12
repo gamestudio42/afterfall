@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any };
 
@@ -23,7 +24,7 @@ test("captures the street wear at two zooms", async ({ page }) => {
   await expect(page.getByTestId("choose-base")).toBeVisible();
 
   await page.evaluate(() => (window as unknown as Win).__afterfall.command({ type: "setBase", building: 0 }));
-  await expect(page.getByTestId("pop")).not.toHaveText("0", { timeout: 20_000 });
+  await expectPopulation(page, "4");
 
   // The wear layer is built with the map and its atlas streams in afterwards.
   await page.waitForFunction(() => (window as unknown as Win).__afterfall.renderer.decals !== null, null, {

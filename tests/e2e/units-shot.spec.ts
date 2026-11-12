@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any };
 
@@ -31,7 +32,7 @@ test("the survivor model replaces the capsule kit", async ({ page }) => {
     return best;
   });
   await page.evaluate((index) => (window as unknown as Win).__afterfall.command({ type: "setBase", building: index }), hq);
-  await expect(page.getByTestId("pop")).toHaveText("4", { timeout: 15_000 });
+  await expectPopulation(page, "4");
 
   // Give the model time to load and the camera time to settle.
   await page.waitForFunction(() => (window as unknown as Win).__afterfall.renderer.unitParts.length > 0, null, { timeout: 15_000 });

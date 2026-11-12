@@ -35,8 +35,11 @@ export function skyColors(daylight: number, dusk: number, cloud: number): { zeni
 
 /**
  * A dome that follows the camera: gradient, sun or moon with a glow, drifting
- * clouds and stars. Drawn first and without depth, so it is always behind the
- * city, and outside the fog, because it is what the fog fades into.
+ * clouds and stars. It sits on the far plane and is drawn after everything
+ * opaque, so its shader only runs on the pixels the city leaves uncovered:
+ * drawn first and without a depth test it shaded the whole screen, which cost
+ * a software rasteriser 40 ms a frame for a sky nobody could see. It is
+ * outside the fog, because it is what the fog fades into.
  */
 export class SkyDome {
   readonly mesh: THREE.Mesh;
@@ -46,7 +49,7 @@ export class SkyDome {
     this.material = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
-      depthTest: false,
+      depthFunc: THREE.LessEqualDepth,
       fog: false,
       uniforms: {
         uZenith: { value: new THREE.Vector3() },
@@ -123,7 +126,7 @@ export class SkyDome {
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), this.material);
     this.mesh.name = "sky";
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = -100;
+    this.mesh.renderOrder = 100;
   }
 
   update(

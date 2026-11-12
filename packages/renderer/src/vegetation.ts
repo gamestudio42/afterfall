@@ -131,8 +131,14 @@ export class Vegetation {
   update(time: number): void {
     this.wind.value = time;
   }
-  async load(city: CityMap, base: string, field?: ReclamationField): Promise<void> {
-    const plants = placeVegetation(city, field);
+  /**
+   * `density` below 1 keeps an even share of the plants, for software rasterisers: every
+   * crown is thousands of triangles drawn twice (colour and shadow), and CI's CPU
+   * renderer took 75 % longer per frame with the full 900 than with the old 600-cap park.
+   */
+  async load(city: CityMap, base: string, field?: ReclamationField, density = 1): Promise<void> {
+    const all = placeVegetation(city, field);
+    const plants = density >= 1 ? all : all.filter((_, i) => hash2(i, 91, 7) < density);
     if (!plants.length) {
       if (this.fallback) this.fallback.visible = false;
       return;

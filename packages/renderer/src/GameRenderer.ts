@@ -736,13 +736,14 @@ export class GameRenderer {
     this.reclamationTex?.dispose();
     this.reclamationTex = ground.reclamationTexture;
     // A CPU rasteriser (CI, a machine without a driver) pays for every alpha-tested
-    // blade; it gets a quarter of the grass, a GPU the whole field.
-    this.grass = new Grass(city, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.25 : 1);
+    // blade; it gets an eighth of the grass, a GPU the whole field.
+    this.grass = new Grass(city, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.12 : 1);
     ground.group.add(this.grass.mesh);
     this.cityGroup = ground.group;
     this.vegetation = new Vegetation(ground.group.getObjectByName("park-tree-fallback"));
     ground.group.add(this.vegetation.group);
-    void this.vegetation.load(city, this.artBase, ground.reclamation);
+    // Crowns and their shadows are the frame on a CPU rasteriser: keep an even sixth.
+    void this.vegetation.load(city, this.artBase, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.16 : 1);
     this.groundMats = ground.materials;
     this.groundImported = ground.imported;
     this.applyArt(this.art);

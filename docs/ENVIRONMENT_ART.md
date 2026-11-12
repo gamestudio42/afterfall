@@ -50,11 +50,16 @@ The same field drives the vegetation scatter, so ground and plants agree:
 - `grass.ts` scatters up to 10,000 tufts of tall grass in one instanced draw. Each
   tuft is four splayed alpha cards with upward normals and wind sway. Tufts are
   cosmetic: they never block movement or building, stay under 1.2 m, and keep 2.8 m
-  clear of doors. A software rasteriser receives a quarter of them.
+  clear of doors.
 - `placeVegetation` keeps the map's park trees. It then fills parks with more and
   larger trees and brush, adds up to 220 self-seeded street trees in lots and
   plazas, and puts brush against walls. Street trunks keep 6 m from doors. The total
   cap is 900 instances.
+
+On a software rasteriser (CI) the renderer keeps an even 16 % of the plants and 12 %
+of the grass. Crowns and their shadows are thousands of triangles each, and the full
+set made a CPU frame 75 % slower, which starved the timing-sensitive e2e specs.
+Measured with a synced frame at 1440 × 900: about 1.05 s on `main`, 1.15 s now.
 
 The day grade is desaturated (0.88), with olive shadows and dusty highlights. The
 sun is a little warmer, the bounce light is olive, and the day haze starts nearer.

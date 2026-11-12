@@ -59,14 +59,18 @@ test("loads the sound kit and plays an effect the simulation emits", async ({ pa
   // that consumes `sim.fx`, and waiting on requestAnimationFrame under a software
   // renderer measures the machine instead of the game.
   await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        const g = (window as unknown as Win).__afterfall;
-        const at = g.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
-        g.sim.emitFx("shot", at.x, at.y);
-        g.step(1 / 60, 3);
-        return (window as unknown as Win).__afterfallAudio!().played.shot ?? 0;
-      }),
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const g = (window as unknown as Win).__afterfall;
+          const at = g.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
+          g.sim.emitFx("shot", at.x, at.y);
+          g.step(1 / 60, 3);
+          return (window as unknown as Win).__afterfallAudio!().played.shot ?? 0;
+        }),
+      // One attempt steps three full frames, about a second each under a software
+      // renderer: the default 5 s allowed barely one try on a loaded CI runner.
+      { timeout: 30_000 },
     )
     .toBeGreaterThanOrEqual(1);
 

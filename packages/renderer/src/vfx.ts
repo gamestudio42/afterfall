@@ -136,7 +136,8 @@ const RING_ROWS = 2;
 const RING_FRAMES = 8;
 const RING_LIFE = 1.0;
 /** The last frame's ring spans 496 of the 512 px it was rendered in. */
-const RING_FILL = 496 / 512;
+/** Share of the ring's cell the drawn wave spans, so a burst can be sized from its radius. */
+export const RING_FILL = 496 / 512;
 const RING_HEIGHT = 0.12;
 const RING_CAP = 3;
 /** A ring is dropped while another one spreads from within this many metres. */
@@ -248,6 +249,8 @@ export class VfxSystem {
    */
   /** Exposed for the capture spec: it counts the visible quads. */
   pool: THREE.Mesh[] = [];
+  /** How much of the ring's cell the wave spans, so a spec can read the radius back. */
+  readonly ringFill = RING_FILL;
   private frameTextures: THREE.Texture[] = [];
   private muzzleFrames: THREE.Texture[] = [];
   private meleeFrames: THREE.Texture[] = [];

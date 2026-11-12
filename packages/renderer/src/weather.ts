@@ -54,14 +54,31 @@ export function easeWeather(current: WeatherState, target: WeatherState, dt: num
   };
 }
 
-/** The box of air around the camera's target that rain falls through, in metres. */
+/** The box of air around the camera's target that rain falls through, in metres, at the closest zoom. */
 const BOX = 150;
 const HEIGHT = 70;
 
 /**
+ * How big the rain box is for a camera this far from its target. A fixed
+ * 150 m box covered the screen at the closest zoom and only its middle when
+ * pulled back, where the view spans 700 m of city: rain fell in a square in
+ * the centre and the sides stayed dry. The box, the fall height, the speed
+ * and the streak length all scale together, so the same drops cover the
+ * screen at every zoom and look the same size and pace on it.
+ */
+export function rainBox(distance: number): { size: number; height: number; scale: number } {
+  const size = Math.max(BOX, distance * 2.6);
+  const scale = size / BOX;
+  // Above about half the camera's height a drop passes right by the lens and draws as a bar.
+  const height = Math.min(HEIGHT * scale, Math.max(HEIGHT, distance * 0.45));
+  return { size, height, scale };
+}
+
+/**
  * Rain as line segments: one draw call, every drop placed and moved in the
- * vertex shader from a seed, wrapping inside a box that follows the camera.
- * Nothing is updated on the CPU per frame but three uniforms.
+ * vertex shader from a seed, wrapping inside a box that follows the camera and
+ * grows with its zoom (`rainBox`). Nothing is updated on the CPU per frame but
+ * a few uniforms.
  */
 export class Rain {
   readonly lines: THREE.LineSegments;
@@ -98,6 +115,9 @@ export class Rain {
       uniforms: {
         uTime: { value: 0 },
         uCenter: { value: new THREE.Vector3() },
+        uBox: { value: BOX },
+        uHeight: { value: HEIGHT },
+        uScale: { value: 1 },
         uAmount: { value: 0 },
         uLight: { value: 1 },
       },
@@ -106,21 +126,24 @@ export class Rain {
         attribute float aEnd;
         uniform float uTime;
         uniform vec3 uCenter;
+        uniform float uBox;
+        uniform float uHeight;
+        uniform float uScale;
         varying float vFade;
         void main() {
-          float speed = 34.0 + aSeed.x * 14.0;
+          float speed = (34.0 + aSeed.x * 14.0) * uScale;
           vec3 p;
-          p.x = (aSeed.x - 0.5) * ${BOX.toFixed(1)};
-          p.z = (aSeed.z - 0.5) * ${BOX.toFixed(1)};
-          p.y = mod(aSeed.y * ${HEIGHT.toFixed(1)} - uTime * speed, ${HEIGHT.toFixed(1)});
+          p.x = (aSeed.x - 0.5) * uBox;
+          p.z = (aSeed.z - 0.5) * uBox;
+          p.y = mod(aSeed.y * uHeight - uTime * speed, uHeight);
           // Wrap around the camera's target, so the box moves without the drops jumping.
           // Both ends wrap by the head's position: wrapped separately, a streak
           // on the box's edge had its ends a box apart and drew a line across the sky.
           vec3 c = uCenter;
-          p.x += floor((c.x - p.x) / ${BOX.toFixed(1)} + 0.5) * ${BOX.toFixed(1)};
-          p.z += floor((c.z - p.z) / ${BOX.toFixed(1)} + 0.5) * ${BOX.toFixed(1)};
+          p.x += floor((c.x - p.x) / uBox + 0.5) * uBox;
+          p.z += floor((c.z - p.z) / uBox + 0.5) * uBox;
           // The streak: its tail sits above the head, leaning with the wind.
-          p += aEnd * vec3(0.35, 1.9, 0.12);
+          p += aEnd * vec3(0.35, 1.9, 0.12) * uScale;
           vFade = 1.0 - aEnd;
           gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
         }`,
@@ -139,13 +162,17 @@ export class Rain {
     this.lines.visible = false;
   }
 
-  /** `amount` 0..1 is how hard it rains; `light` dims the streaks at night. */
-  update(time: number, center: THREE.Vector3, amount: number, light: number): void {
+  /** `amount` 0..1 is how hard it rains; `light` dims the streaks at night; `distance` is the camera's zoom. */
+  update(time: number, center: THREE.Vector3, amount: number, light: number, distance = 0): void {
     this.lines.visible = amount > 0.02;
     if (!this.lines.visible) return;
     const u = this.material.uniforms;
     u.uTime.value = time;
     (u.uCenter.value as THREE.Vector3).copy(center);
+    const box = rainBox(distance);
+    u.uBox.value = box.size;
+    u.uHeight.value = box.height;
+    u.uScale.value = box.scale;
     u.uAmount.value = amount;
     u.uLight.value = light;
   }

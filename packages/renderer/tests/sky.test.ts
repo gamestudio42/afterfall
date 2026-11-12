@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CityMap } from "@afterfall/world";
 import { OUTSKIRTS_FAR, OUTSKIRTS_NEAR, placeOutskirts, skyColors, skyInView } from "../src/sky";
-import { WEATHER, easeWeather, weatherFor } from "../src/weather";
+import { WEATHER, easeWeather, rainBox, weatherFor } from "../src/weather";
 
 function city(): CityMap {
   const blockSize = 40;
@@ -115,5 +115,19 @@ describe("weather", () => {
     for (let i = 0; i < 60 * 40; i++) s = easeWeather(s, WEATHER.rain, 1 / 60);
     expect(s.rain).toBeGreaterThan(0.99);
     expect(easeWeather(WEATHER.clear, WEATHER.fog, 1, 0)).toEqual(WEATHER.fog);
+  });
+
+  it("rains over the whole view at every zoom, not only in the middle", () => {
+    const fov = (42 * Math.PI) / 180;
+    for (const d of [22, 60, 120, 200, 320]) {
+      const box = rainBox(d);
+      // Half-width of the ground the camera sees at its target, widescreen.
+      const halfView = d * Math.tan(fov / 2) * 1.9;
+      expect(box.size / 2).toBeGreaterThan(halfView);
+      // Drops stay below the camera's height (pitch 0.92 puts it at about 0.8 d).
+      expect(box.height).toBeLessThan(Math.max(70.1, d * 0.8));
+    }
+    expect(rainBox(22)).toEqual({ size: 150, height: 70, scale: 1 });
+    expect(rainBox(320).scale).toBeGreaterThan(5);
   });
 });

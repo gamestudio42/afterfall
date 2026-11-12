@@ -576,7 +576,9 @@ export class GameRenderer {
     this.setPost(opts.post ?? "auto");
     this.scene.add(this.skyDome.mesh);
     // A software rasteriser gets a lighter shower: the streaks are lines, and lines are its slow path.
-    this.rain = new Rain(this.postEnabled ? 2600 : 900);
+    // The same drops cover the view at every zoom (rainBox), so this is the
+    // density on screen. Lines are cheap on a GPU; a software rasteriser gets fewer.
+    this.rain = new Rain(this.postEnabled ? 6000 : 1200);
     this.scene.add(this.rain.lines);
     this.scene.fog = new THREE.Fog(0x9fb2c0, 220, 620);
     this.scene.add(this.hemi, this.sun, this.sun.target, this.hqLight, this.markers);
@@ -1064,7 +1066,7 @@ export class GameRenderer {
     if (this.skyDome.mesh.visible) {
       this.skyDome.update(this.rts.camera.position, colors, this.sunDir, this.sun.color, daylight, w.cloud, this.time);
     }
-    this.rain?.update(this.time, tgt, w.rain, lerp(0.35, 1, daylight));
+    this.rain?.update(this.time, tgt, w.rain, lerp(0.35, 1, daylight), this.rts.distance);
     // Rain leaves the asphalt wet: smoother, so it takes a sheen from the sky.
     const roads = this.groundMats?.roads;
     if (roads) roads.roughness = lerp(0.9, 0.42, w.rain);
@@ -1074,8 +1076,14 @@ export class GameRenderer {
     fog.color.copy(sky);
     // Fog weather closes in to about a block and a half: the far street is a
     // guess, the near one is still playable. At 18 to 210 m it was a whiteout.
-    fog.near = lerp(lerp(150, 220, daylight), 45, w.fog);
-    fog.far = lerp(lerp(520, 620, daylight), 330, w.fog);
+    // Fog is measured from the lens, but what the player looks at is the
+    // target: zoomed out to 320 m the whole map sat inside a rain's fog and
+    // read as a white sheet. Pushing it out by how far the camera stands from
+    // the target (past the closest 120 m) keeps the same haze on the ground at
+    // every zoom.
+    const pull = Math.max(0, this.rts.distance - 120);
+    fog.near = lerp(lerp(150, 220, daylight), 45, w.fog) + pull;
+    fog.far = lerp(lerp(520, 620, daylight), 330, w.fog) + pull;
     this.buildings?.setNight(1 - daylight);
     if (this.doorGlow) {
       const lit = Math.max(0, Math.min(1, (1 - daylight) * 1.2 - 0.1));

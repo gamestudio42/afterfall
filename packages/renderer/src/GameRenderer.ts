@@ -16,6 +16,7 @@ import { Doors } from "./doors";
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
 import { VfxSystem, type FxEvent } from "./vfx";
+import { PostFx, rendererName, resolvePost, type PostMode } from "./post";
 
 export type OverlayMode = "none" | "resources" | "danger";
 
@@ -554,7 +555,7 @@ export class GameRenderer {
 
   constructor(
     readonly canvas: HTMLCanvasElement,
-    opts: { baseUrl?: string } = {},
+    opts: { baseUrl?: string; post?: PostMode } = {},
   ) {
     this.artBase = opts.baseUrl ?? "./";
     this.art = loadArtTextures(this.artBase, (art) => this.applyArt(art));
@@ -565,7 +566,12 @@ export class GameRenderer {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
+    // The post chain draws several passes a frame; count them all as one frame.
+    this.renderer.info.autoReset = false;
+    this.gpuName = rendererName(this.renderer.getContext());
+    this.scene.environment = skyEnvironment(this.renderer);
     this.rts = new RtsCamera(canvas.clientWidth / Math.max(1, canvas.clientHeight));
+    this.setPost(opts.post ?? "auto");
     this.scene.fog = new THREE.Fog(0x9fb2c0, 220, 620);
     this.scene.add(this.hemi, this.sun, this.sun.target, this.hqLight, this.markers);
     this.sun.castShadow = true;
@@ -817,8 +823,45 @@ export class GameRenderer {
     this.refreshBuildingArt(sim);
   }
 
+  /** The driver's name, for the dev overlay and for deciding the post chain. */
+  readonly gpuName: string;
+  private postFx: PostFx | null = null;
+  private postMode: PostMode = "auto";
+  private daylight = 1;
+
+  /** Whether bloom and the grade are being drawn. */
+  get postEnabled(): boolean {
+    return this.postFx !== null;
+  }
+
+  get post(): PostMode {
+    return this.postMode;
+  }
+
+  /** Turns the post chain on, off, or leaves it to the driver (off on a software rasteriser). */
+  setPost(mode: PostMode): void {
+    this.postMode = mode;
+    const want = resolvePost(mode, this.gpuName);
+    if (want && !this.postFx) {
+      this.postFx = new PostFx(this.renderer, this.scene, this.rts.camera);
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.postFx.setSize(size.x, size.y, this.renderer.getPixelRatio());
+      this.postFx.setMood(this.daylight);
+    } else if (!want && this.postFx) {
+      this.postFx.dispose();
+      this.postFx = null;
+    }
+  }
+
+  private draw(): void {
+    this.renderer.info.reset();
+    if (this.postFx) this.postFx.render();
+    else this.renderer.render(this.scene, this.rts.camera);
+  }
+
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
+    this.postFx?.setSize(width, height, this.renderer.getPixelRatio());
     this.rts.camera.aspect = width / Math.max(1, height);
     this.rts.camera.updateProjectionMatrix();
   }
@@ -897,7 +940,7 @@ export class GameRenderer {
       this.updateFx(sim, dt);
     }
     this.vfx.update(dt, this.rts.camera);
-    this.renderer.render(this.scene, this.rts.camera);
+    this.draw();
   }
 
   get drawCalls(): number {
@@ -915,7 +958,7 @@ export class GameRenderer {
 
   /** Draws one frame without advancing the simulation, for probes and captures. */
   renderFrame(): void {
-    this.renderer.render(this.scene, this.rts.camera);
+    this.draw();
   }
 
   private updateLighting(sim: Simulation): void {
@@ -942,11 +985,22 @@ export class GameRenderer {
       sc.updateProjectionMatrix();
     }
     const dusk = 1 - Math.abs(elev * 2 - 0.4) * 1.2;
-    const sunColor = new THREE.Color(0xfff2dd).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
-    this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x7d93c9));
-    this.sun.intensity = lerp(1.0, 3.4, daylight);
-    this.hemi.intensity = lerp(1.25, 1.6, daylight);
-    this.hemi.color.set(daylight > 0.3 ? 0xbfd4e6 : 0x6a80bb);
+    const sunColor = new THREE.Color(0xfff0d6).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
+    this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x8ea6e6));
+    // The moon is a real key light: at 1.0 the night was a dark green murk where
+    // the streets, the units and the horde all had the same value.
+    this.sun.intensity = lerp(2.3, 3.6, daylight);
+    // Fill comes from two places: the hemisphere (cheap, flat) and the sky
+    // environment (follows the surface normal and gives metal something to
+    // reflect). The hemisphere used to carry all of it at 1.6, which filled
+    // every shadow and made noon look overcast; it is lower now, the fill is
+    // bluer than the sun, and the shadows have a colour.
+    this.hemi.intensity = lerp(1.25, 1.0, daylight);
+    this.hemi.color.set(daylight > 0.3 ? 0xc6d6e8 : 0x6a84cc);
+    this.hemi.groundColor.set(daylight > 0.3 ? 0x4c4234 : 0x232838);
+    this.scene.environmentIntensity = lerp(0.3, 0.5, daylight);
+    this.daylight = daylight;
+    this.postFx?.setMood(daylight);
     const sky = new THREE.Color(0x141d33).lerp(new THREE.Color(0x9fb2c0), daylight);
     if (daylight > 0.05 && daylight < 0.7) sky.lerp(new THREE.Color(0xd08a5a), 0.35 * (1 - Math.abs(daylight - 0.35) / 0.35));
     this.scene.background = sky;
@@ -1280,6 +1334,42 @@ export class GameRenderer {
     this.unitBatch?.dispose();
     this.infectedBatch?.dispose();
     this.motions.clear();
+    this.postFx?.dispose();
+    this.scene.environment?.dispose();
     this.renderer.dispose();
   }
+}
+
+/**
+ * A prefiltered sky for image-based light: pale at the horizon, blue overhead
+ * and a warm dark ground. It is neutral on purpose, because its intensity
+ * follows the hour and the sun carries the colour of the moment. Without an
+ * environment every metal in the scene reflected black.
+ */
+function skyEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
+  const sky = new THREE.Scene();
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(10, 32, 16),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      vertexShader:
+        "varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+      fragmentShader: `varying vec3 vDir;
+        void main() {
+          float h = normalize(vDir).y;
+          vec3 zenith = vec3(0.5, 0.6, 0.78);
+          vec3 horizon = vec3(0.86, 0.9, 0.95);
+          vec3 ground = vec3(0.2, 0.17, 0.14);
+          vec3 c = h > 0.0 ? mix(horizon, zenith, pow(h, 0.55)) : mix(horizon * 0.55, ground, pow(-h, 0.35));
+          gl_FragColor = vec4(c, 1.0);
+        }`,
+    }),
+  );
+  sky.add(dome);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const env = pmrem.fromScene(sky, 0.04).texture;
+  pmrem.dispose();
+  dome.geometry.dispose();
+  (dome.material as THREE.Material).dispose();
+  return env;
 }

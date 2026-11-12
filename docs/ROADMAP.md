@@ -88,7 +88,7 @@ Done so far: facades, roofs, parapets, sidewalks, curbs, doors and the rooftop k
 - **Facade maps at 1024 px**, if the closest zoom shows the 40 px/m bake.
 
 1. **Measure on a real GPU.** Every frame number so far comes from SwiftShader. The 60 fps budget below has not been checked on hardware, nor with a night horde on screen.
-2. **Bloom on emissive materials** (windows, halos, infected eyes), only if the GPU measurement leaves room for it.
+2. **Bloom, grade and a sky environment: shipped, unmeasured on hardware.** `packages/renderer/src/post.ts` draws the scene into a half-float MSAA target, blooms what is over the moment's threshold (lamps and lit windows at night, only highlights by day), tone maps, then grades (split tone, saturation, contrast, vignette) by the hour. It is off under a software rasteriser, so CI and the probes cost what they did, and F4 or `?post=on|off` override it (decision 46). The light changed with it: a prefiltered sky lights by the normal, the hemisphere fill dropped from 1.6 to 1.0 by day so shadows have depth, and the moon rose from 1.0 to 2.3 so the night reads. Its cost on a real GPU is the open number, with item 1.
 3. **A facade texture** and a single atlas for the surface maps; today each map is its own file.
 4. **Billboard atlas at distance versus GLB up close** for survivors and infected, decided by draw calls and frame time with forty units on screen.
 5. **See the effects in a real fight.** Muzzle flash, strike, noise ring, death cloud, collapse and dust were reviewed only with events fired by script in daylight; a night horde against a walled base is the review that counts. The work-tick dust also shows on farms and workshops, which suits building and repair better.

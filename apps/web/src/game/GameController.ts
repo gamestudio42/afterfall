@@ -1,7 +1,7 @@
 import { STRUCTURES, type StructureKind } from "@afterfall/content";
 import { Simulation, deserialize, serialize, type Command, type EntityId } from "@afterfall/core";
 import type { CityMap } from "@afterfall/world";
-import { GameRenderer } from "@afterfall/renderer";
+import { GameRenderer, type PostMode } from "@afterfall/renderer";
 import { CellKind } from "@afterfall/world";
 import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
@@ -36,7 +36,7 @@ export class GameController {
   private disposed = false;
 
   constructor(readonly canvas: HTMLCanvasElement) {
-    this.renderer = new GameRenderer(canvas, { baseUrl: import.meta.env.BASE_URL });
+    this.renderer = new GameRenderer(canvas, { baseUrl: import.meta.env.BASE_URL, post: initialPost() });
     this.bindInput();
     this.resize();
     // The browser only unlocks audio after a gesture: create the context on the first one.
@@ -323,6 +323,16 @@ export class GameController {
       else if (ui.showEcon) ui.set({ showEcon: false });
       else ui.set({ selectedUnits: [], selectedBuilding: -1, selectedStructure: -1 });
       this.renderer.buildPreview = null;
+    } else if (key === "f4") {
+      // Bloom and grade: auto follows the driver, and F4 overrides it either way.
+      e.preventDefault();
+      const next = this.renderer.postEnabled ? "off" : "on";
+      this.renderer.setPost(next);
+      try {
+        localStorage.setItem("afterfall.post", next);
+      } catch {
+        /* storage unavailable */
+      }
     } else if (key === "f3") {
       e.preventDefault();
       ui.set({ showDev: !ui.showDev });
@@ -570,4 +580,18 @@ export class GameController {
     this.renderer.buildPreview = null;
     if (!keep && kind !== "wall") ui.set({ buildMode: null });
   }
+}
+
+/** `?post=on|off` wins (captures use it), then the player's last F4 choice, then the driver. */
+function initialPost(): PostMode {
+  const valid = (v: string | null): v is PostMode => v === "on" || v === "off" || v === "auto";
+  try {
+    const q = new URLSearchParams(window.location.search).get("post");
+    if (valid(q)) return q;
+    const saved = localStorage.getItem("afterfall.post");
+    if (valid(saved)) return saved;
+  } catch {
+    /* storage unavailable */
+  }
+  return "auto";
 }

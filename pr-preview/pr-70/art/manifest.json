@@ -543,6 +543,16 @@
       "bytes": 66232,
       "sha256": "cd7bd2273530acfb2248ba64abbeb31e3fc60bdb08738c4b0cf98925fbb8849e",
       "generator": "tools/blender/structures.py"
+    },
+    {
+      "name": "menu_bg",
+      "file": "menu_bg.jpg",
+      "kind": "jpg",
+      "width": 1600,
+      "height": 1000,
+      "bytes": 130973,
+      "sha256": "56aa969a6c47c31ebde5bee3f3b702b889442edb2838df761825ff3c10793e6c",
+      "generator": "tests/e2e/atmosphere-shot.spec.ts + tools/pack-menu-backdrop.ts"
     }
   ]
 }

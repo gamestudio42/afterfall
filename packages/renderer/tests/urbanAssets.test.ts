@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { PROP_KINDS, ROOF_KINDS } from "../src/props";
+import { LITTER_KINDS } from "../src/litter";
 
 async function load(asset: string) {
   const bytes = await readFile(new URL(`../../../apps/web/public/art/${asset}.glb`, import.meta.url));
@@ -27,7 +28,7 @@ function release(scene: THREE.Object3D) {
 describe("shipped urban kit", () => {
   it("preserves authored colours within the download and draw budgets", async () => {
     for (const asset of [
-      ...[...PROP_KINDS, ...ROOF_KINDS].map((name) => `props/${name}`),
+      ...[...PROP_KINDS, ...ROOF_KINDS, ...LITTER_KINDS].map((name) => `props/${name}`),
       ...["wall", "wall_junction", "wall_patch", "gate", "tower", "farm", "well"].map((name) => `structures/${name}`),
     ]) {
       const { scene, bytes } = await load(asset);

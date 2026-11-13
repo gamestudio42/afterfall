@@ -13,6 +13,8 @@ import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Vegetation } from "./vegetation";
 import { Grass } from "./grass";
+import { placeLitter, type LitterKind } from "./litter";
+import type { ReclamationField } from "./reclamation";
 import { Doors } from "./doors";
 import { buildContactShadows } from "./contact";
 import { SkyDome, buildOutskirts, placeOutskirts, skyColors, skyInView } from "./sky";
@@ -489,9 +491,15 @@ export class GameRenderer {
     for (const m of this.propScene?.meshes ?? []) this.scene.remove(m);
     this.propScene = null;
     const token = ++this.propToken;
-    const placements = new Map<PropKind | RoofKind, PropPlacement[]>([
-      ...placeProps(sim.city, this.sim!.grid, sim.city.seed ?? 1),
+    const street = placeProps(sim.city, this.sim!.grid, sim.city.seed ?? 1);
+    // Litter keeps off the street furniture; a CPU rasteriser gets a third of it.
+    const litter = this.reclamation
+      ? placeLitter(sim.city, this.reclamation, [...street.values()].flat(), isSoftwareRenderer(this.gpuName) ? 0.35 : 1)
+      : new Map<LitterKind, PropPlacement[]>();
+    const placements = new Map<PropKind | RoofKind | LitterKind, PropPlacement[]>([
+      ...street,
       ...placeRoofProps(sim.city.buildings, sim.city.seed ?? 1),
+      ...litter,
     ]);
     void loadProps(this.artBase, placements, (kit) => {
       if (token !== this.propToken) {
@@ -549,6 +557,7 @@ export class GameRenderer {
   private groundImported = false;
   private vegetation: Vegetation | null = null;
   private reclamationTex: THREE.DataTexture | null = null;
+  private reclamation: ReclamationField | null = null;
   private grass: Grass | null = null;
   private art: ArtTextures;
   private propScene: PropScene | null = null;
@@ -750,6 +759,7 @@ export class GameRenderer {
     this.grass?.dispose();
     this.reclamationTex?.dispose();
     this.reclamationTex = ground.reclamationTexture;
+    this.reclamation = ground.reclamation;
     // A CPU rasteriser (CI, a machine without a driver) pays for every alpha-tested
     // blade; it gets an eighth of the grass, a GPU the whole field.
     this.grass = new Grass(city, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.12 : 1);

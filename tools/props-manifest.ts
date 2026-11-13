@@ -41,7 +41,11 @@ const entries = files.map((file) => {
     kind: "glb",
     bytes: buf.length,
     sha256: createHash("sha256").update(buf).digest("hex"),
-    generator: file.includes("/roof_") ? "tools/blender/roof_props.py" : GENERATORS[file.split("/")[0]],
+    generator: file.includes("/roof_")
+      ? "tools/blender/roof_props.py"
+      : file.includes("/litter_")
+        ? "tools/blender/debris.py"
+        : GENERATORS[file.split("/")[0]],
   };
 });
 

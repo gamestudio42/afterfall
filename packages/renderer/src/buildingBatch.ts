@@ -106,6 +106,20 @@ const MAP_GAIN: Record<Group, number> = {
 const WINDOW_GLOW = new THREE.Color(0xffa94d);
 
 /**
+ * How far gone a building is, 0 (shut up and sound) to 1 (burnt out, overgrown).
+ * Most are in between and a few are wrecks, so a street reads as abandoned without
+ * every facade shouting it. Deterministic per building; the litter scatter reads it
+ * too, so the worst buildings have the most rubble at their feet.
+ */
+export function buildingDecay(b: Pick<BuildingDef, "index">): number {
+  let h = Math.imul(b.index + 1, 2654435761) ^ 0x5bd1e995;
+  h = Math.imul(h ^ (h >>> 15), 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  const r = ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  return 0.12 + 0.88 * Math.pow(r, 1.6);
+}
+
+/**
  * All buildings as extruded outlines in one merged mesh: facades by style,
  * a shop front on the ground floor of shops, a cornice and parapet around a
  * textured roof. Vertex colours carry the per-building tint (type, explored,
@@ -211,6 +225,12 @@ export class BuildingBatch {
     geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
     geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pos.length).fill(1), 3));
     geo.setAttribute("glow", new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3), 1));
+    const decay = new Float32Array(pos.length / 3);
+    buildings.forEach((b, i) => {
+      const d = buildingDecay(b);
+      for (const r of this.ranges[i] ?? []) decay.fill(d, r.start, r.start + r.count);
+    });
+    geo.setAttribute("decay", new THREE.Float32BufferAttribute(decay, 1));
     geo.computeBoundingSphere();
 
     this.materials = Object.fromEntries(GROUPS.map((g) => [g, facadeMaterial(g)])) as Record<Group, THREE.MeshStandardMaterial>;
@@ -296,6 +316,94 @@ export class BuildingBatch {
 
 const tmp = new THREE.Color();
 
+/**
+ * Where each style's windows sit inside a 3.2 m bay and floor, as `tools/blender/facades.py`
+ * bakes them: centre across, half width, sill and head heights. Fire damage starts there.
+ * Industrial walls only glaze every other floor; the storefront is left to its shutters.
+ */
+const WINDOWS: Partial<Record<Group, { cx: number; hw: number; sill: number; head: number; alternate: boolean }>> = {
+  residential: { cx: 1.6, hw: 0.65, sill: 0.9, head: 2.5, alternate: false },
+  office: { cx: 1.6, hw: 1.5, sill: 0.85, head: 2.75, alternate: false },
+  industrial: { cx: 1.6, hw: 1.3, sill: 1.9, head: 2.7, alternate: true },
+};
+
+const f = (v: number) => v.toFixed(3);
+
+/** Value noise and a hash, shared by the decay terms. */
+const DECAY_COMMON = /* glsl */ `
+  float dHash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+  }
+  float dNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(dHash(i), dHash(i + vec2(1.0, 0.0)), f.x), mix(dHash(i + vec2(0.0, 1.0)), dHash(i + 1.0), f.x), f.y);
+  }
+`;
+
+/**
+ * The wear of years on a wall, from the building's decay: soot plumes over burnt-out
+ * windows (never on a building the settlement uses), plaster spalled off in patches,
+ * creepers climbing from the ground, and a moss and grime that thickens with decay.
+ */
+function wallDecay(group: Group): string {
+  const w = WINDOWS[group];
+  const burn = w
+    ? `
+        // Fire: a share of the windows burnt out, black inside, soot fanning up the wall.
+        float burnt = 0.0;
+        float fireChance = smoothstep(0.3, 0.9, vDecay) * 0.6 * (1.0 - step(0.5, vGlow));
+        for (int k = 0; k < 3; k++) {
+          vec2 src = vec2(cell.x, cell.y - float(k));
+          ${w.alternate ? "if (mod(src.y, 2.0) < 0.5) continue;" : ""}
+          // Salted by the building, rounded: an interpolated varying differs in its last
+          // bits from pixel to pixel, and a hash turns that into speckle.
+          if (dHash(src + floor(vDecay * 997.0 + 0.5) * 0.731) >= fireChance) continue;
+          float x = inCell.x - ${f(w.cx)};
+          float up = inCell.y + float(k) * 3.2;
+          // Inside the opening: charred black.
+          float opening = step(abs(x), ${f(w.hw)}) * step(${f(w.sill)}, up) * step(up, ${f(w.head)});
+          // Above it: a plume that widens and fades as it climbs, ragged at the edges.
+          float rise = up - ${f(w.head)};
+          float width = ${f(w.hw)} * 1.05 + rise * 0.45;
+          float plume = step(0.0, rise) * exp(-rise / 3.4) * smoothstep(width, width * 0.35, abs(x) + (dNoise(facadeMetres * 2.3) - 0.5) * 0.5);
+          burnt = max(burnt, max(opening, plume * 0.92));
+        }
+        diffuseColor.rgb *= 1.0 - burnt * 0.9;
+        burntWindow = burnt;`
+    : "";
+  return /* glsl */ `
+        vec2 cell = floor(facadeMetres / 3.2);
+        vec2 inCell = facadeMetres - cell * 3.2;
+        float rot = smoothstep(0.2, 1.0, vDecay);
+        // Plaster spalled off in patches: paler, flatter render underneath.
+        float spall = smoothstep(0.66, 0.74, dNoise(facadeMetres * vec2(0.55, 0.8) + vDecay * 37.0)) * rot;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.18, 1.12, 1.02) + 0.035, spall * 0.7);
+        // Creepers from the ground: columns of uneven height, thinning as they climb.
+        float column = dNoise(vec2(facadeMetres.x * 0.9, 3.7));
+        float reach = vDecay * (2.0 + 12.0 * column * column);
+        float vine = smoothstep(0.42, 0.6, dNoise(facadeMetres * vec2(1.6, 0.45))) * (1.0 - smoothstep(reach * 0.55, reach, facadePosition.y));
+        vine *= smoothstep(0.25, 0.5, column) * smoothstep(0.12, 0.45, vDecay);
+        float leaf = dNoise(facadeMetres * 7.0);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.11, 0.15, 0.06) + leaf * vec3(0.06, 0.08, 0.02), vine * 0.9);
+        // Grime climbing from the street, higher on the worse buildings.
+        diffuseColor.rgb *= 1.0 - (1.0 - smoothstep(0.0, 1.0 + 3.0 * vDecay, facadePosition.y)) * 0.18 * vDecay;
+        ${burn}
+      `;
+}
+
+/** A flat roof left to rain: moss in the low corners, tar bleached, puddle stains. */
+const ROOF_DECAY = /* glsl */ `
+        float rot = smoothstep(0.15, 1.0, vDecay);
+        vec2 p = facadePosition.xz;
+        float moss = smoothstep(0.55, 0.75, dNoise(p * 0.22 + vDecay * 13.0) * 0.7 + dNoise(p * 0.9) * 0.3) * rot;
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.19, 0.08) * (0.8 + dNoise(p * 4.0) * 0.4), moss * 0.85);
+        float stain = smoothstep(0.62, 0.7, dNoise(p * 0.4 + 7.0)) * rot;
+        diffuseColor.rgb *= 1.0 - stain * 0.22;
+`;
+
 function facadeMaterial(group: Group): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -305,13 +413,20 @@ function facadeMaterial(group: Group): THREE.MeshStandardMaterial {
   });
   // The lit-window mask is shared by every building of a style; the per-vertex
   // `glow` decides which buildings use it (settlement buildings only).
+  const varyings = "varying float vGlow;\nvarying vec3 facadePosition;\nvarying float vDecay;\nvarying vec2 facadeMetres;";
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float glow;\nvarying float vGlow;\nvarying vec3 facadePosition;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;\nfacadePosition = position;");
+      .replace("#include <common>", `#include <common>\nattribute float glow;\nattribute float decay;\n${varyings}`)
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>\nvGlow = glow;\nfacadePosition = position;\nvDecay = decay;\nfacadeMetres = uv * ${f(MODULE)};`,
+      );
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vGlow;\nvarying vec3 facadePosition;")
-      .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vGlow;");
+      .replace(
+        "#include <common>",
+        `#include <common>\n${varyings}\n// How much of this fragment is a burnt-out window, so it never glows at night.\nfloat burntWindow = 0.0;\n${DECAY_COMMON}`,
+      )
+      .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vGlow * (1.0 - burntWindow);");
     if (group !== "roof") {
       shader.fragmentShader = shader.fragmentShader.replace(
         "#include <color_fragment>",
@@ -321,11 +436,14 @@ function facadeMaterial(group: Group): THREE.MeshStandardMaterial {
         float damp = 1.0 - smoothstep(0.2, 2.6, facadePosition.y);
         float rain = smoothstep(0.68, 0.98, streak) * 0.12;
         diffuseColor.rgb *= 1.0 - damp * 0.23 - rain;
+        ${group === "trim" ? "" : `{${wallDecay(group)}}`}
       `,
       );
+    } else {
+      shader.fragmentShader = shader.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>\n{${ROOF_DECAY}}`);
     }
   };
-  mat.customProgramCacheKey = () => `facade-weather-${group}`;
+  mat.customProgramCacheKey = () => `facade-decay-${group}`;
   return mat;
 }
 

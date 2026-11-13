@@ -13,6 +13,8 @@ import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
 import { Vegetation } from "./vegetation";
 import { Grass } from "./grass";
+import { placeLitter, type LitterKind } from "./litter";
+import type { ReclamationField } from "./reclamation";
 import { Doors } from "./doors";
 import { buildContactShadows } from "./contact";
 import { SkyDome, buildOutskirts, placeOutskirts, skyColors, skyInView } from "./sky";
@@ -22,6 +24,7 @@ import { structureMaterial } from "./structureMaterial";
 import { VfxSystem, type FxEvent } from "./vfx";
 import { isSoftwareRenderer, PostFx, rendererName, resolvePost, type PostMode } from "./post";
 import { ResolutionGovernor } from "./governor";
+import { ShadowCadence, snapToTexels } from "./shadowCadence";
 
 export type OverlayMode = "none" | "resources" | "danger";
 
@@ -63,6 +66,9 @@ const tmpV = new THREE.Vector3();
 const tmpS = new THREE.Vector3();
 const tmpC = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
+const lightBasis = new THREE.Matrix4();
+const lightRight = new THREE.Vector3();
+const lightUp = new THREE.Vector3();
 
 /**
  * Draws a Simulation with Three.js. Reads simulation state but never
@@ -485,9 +491,15 @@ export class GameRenderer {
     for (const m of this.propScene?.meshes ?? []) this.scene.remove(m);
     this.propScene = null;
     const token = ++this.propToken;
-    const placements = new Map<PropKind | RoofKind, PropPlacement[]>([
-      ...placeProps(sim.city, this.sim!.grid, sim.city.seed ?? 1),
+    const street = placeProps(sim.city, this.sim!.grid, sim.city.seed ?? 1);
+    // Litter keeps off the street furniture; a CPU rasteriser gets a third of it.
+    const litter = this.reclamation
+      ? placeLitter(sim.city, this.reclamation, [...street.values()].flat(), isSoftwareRenderer(this.gpuName) ? 0.35 : 1)
+      : new Map<LitterKind, PropPlacement[]>();
+    const placements = new Map<PropKind | RoofKind | LitterKind, PropPlacement[]>([
+      ...street,
       ...placeRoofProps(sim.city.buildings, sim.city.seed ?? 1),
+      ...litter,
     ]);
     void loadProps(this.artBase, placements, (kit) => {
       if (token !== this.propToken) {
@@ -545,6 +557,7 @@ export class GameRenderer {
   private groundImported = false;
   private vegetation: Vegetation | null = null;
   private reclamationTex: THREE.DataTexture | null = null;
+  private reclamation: ReclamationField | null = null;
   private grass: Grass | null = null;
   private art: ArtTextures;
   private propScene: PropScene | null = null;
@@ -566,10 +579,19 @@ export class GameRenderer {
   ) {
     this.artBase = opts.baseUrl ?? "./";
     this.art = loadArtTextures(this.artBase, (art) => this.applyArt(art));
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: false });
+    // The post chain draws the scene into its own 4x MSAA target and only a full-screen
+    // quad reaches the canvas, so a multisampled canvas would be memory and a resolve per
+    // frame for nothing. The canvas keeps MSAA only when the game starts without the chain.
+    // Turning the chain off with F4 leaves the edges aliased until the next load, which
+    // reads the saved choice.
+    const mode = opts.post ?? "auto";
+    const antialias = !resolvePost(mode, mode === "auto" ? probeRendererName() : "");
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias, powerPreference: "high-performance", preserveDrawingBuffer: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Redrawn on a cadence (shadowCadence.ts), not every frame.
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -577,7 +599,7 @@ export class GameRenderer {
     this.renderer.info.autoReset = false;
     this.gpuName = rendererName(this.renderer.getContext());
     this.rts = new RtsCamera(canvas.clientWidth / Math.max(1, canvas.clientHeight));
-    this.setPost(opts.post ?? "auto");
+    this.setPost(mode);
     this.scene.add(this.skyDome.mesh);
     // A software rasteriser gets a lighter shower: the streaks are lines, and lines are its slow path.
     // The same drops cover the view at every zoom (rainBox), so this is the
@@ -730,12 +752,14 @@ export class GameRenderer {
       this.buildings.dispose();
     }
     const city = sim.city;
+    this.shadowCadence.invalidate();
     this.selectionOutlineOf = -1;
     const ground = buildCityGround(city);
     this.vegetation?.dispose();
     this.grass?.dispose();
     this.reclamationTex?.dispose();
     this.reclamationTex = ground.reclamationTexture;
+    this.reclamation = ground.reclamation;
     // A CPU rasteriser (CI, a machine without a driver) pays for every alpha-tested
     // blade; it gets an eighth of the grass, a GPU the whole field.
     this.grass = new Grass(city, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.12 : 1);
@@ -914,8 +938,15 @@ export class GameRenderer {
     }
   }
 
+  private shadowCadence = new ShadowCadence();
+  private shadowDue = true;
+
   private draw(): void {
     this.renderer.info.reset();
+    // Set here, not where the cadence is asked: any other render on this renderer
+    // (the portrait) would otherwise spend the flag.
+    this.renderer.shadowMap.needsUpdate = this.shadowDue;
+    this.shadowDue = false;
     if (this.postFx) this.postFx.render();
     else this.renderer.render(this.scene, this.rts.camera);
   }
@@ -1043,6 +1074,9 @@ export class GameRenderer {
 
   /** Draws one frame without advancing the simulation, for probes and captures. */
   renderFrame(): void {
+    // Probes and captures measure or show a whole frame, shadow pass included.
+    this.shadowDue = true;
+    this.shadowCadence.invalidate();
     this.draw();
   }
 
@@ -1054,8 +1088,6 @@ export class GameRenderer {
     const daylight = Math.min(1, Math.max(0, Math.min(h - 5.3, 19.2 - h) / 1.6));
     const az = Math.PI * dayT;
     const tgt = this.rts.target;
-    this.sun.position.set(tgt.x + Math.cos(az) * 160, 30 + elev * 200, tgt.z + 70);
-    this.sun.target.position.copy(tgt);
     // The shadow camera has to cover what the camera can see, and an RTS camera sees more
     // as it pulls back. A fixed box left the far half of the screen unlit — buildings with
     // a shadow on one side and none on the other, the sixth playtest report.
@@ -1069,6 +1101,14 @@ export class GameRenderer {
       sc.far = 600 + half;
       sc.updateProjectionMatrix();
     }
+    // The sun follows the view, and a centre that slides by fractions of a texel makes
+    // every shadow edge crawl while the camera pans. Whole texels keep them still.
+    this.sun.position.set(tgt.x + Math.cos(az) * 160, 30 + elev * 200, tgt.z + 70);
+    lightBasis.lookAt(this.sun.position, tgt, UP).extractBasis(lightRight, lightUp, tmpV);
+    const snapped = snapToTexels(tgt, lightRight, lightUp, (2 * sc.right) / this.sun.shadow.mapSize.x);
+    this.sun.position.add(tmpV.set(snapped.x - tgt.x, snapped.y - tgt.y, snapped.z - tgt.z));
+    this.sun.target.position.set(snapped.x, snapped.y, snapped.z);
+    this.shadowDue = this.shadowCadence.due(snapped.x, snapped.z, sc.right);
     const dusk = 1 - Math.abs(elev * 2 - 0.4) * 1.2;
     const sunColor = new THREE.Color(0xffe9c8).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
     this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x8ea6e6));
@@ -1487,4 +1527,18 @@ function skyEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
   dome.geometry.dispose();
   (dome.material as THREE.Material).dispose();
   return env;
+}
+
+/** The driver's name from a throwaway context, before the real one picks its antialiasing. */
+function probeRendererName(): string {
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    if (!gl) return "";
+    const name = rendererName(gl);
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return name;
+  } catch {
+    return "";
+  }
 }

@@ -50,7 +50,9 @@ The same field drives the vegetation scatter, so ground and plants agree:
 - `grass.ts` scatters up to 10,000 tufts of tall grass in one instanced draw. Each
   tuft is four splayed alpha cards with upward normals and wind sway. Tufts are
   cosmetic: they never block movement or building, stay under 1.2 m, and keep 2.8 m
-  clear of doors.
+  clear of doors. Every root sits at the sidewalk's height (`ROOT_Y`, 0.07 m). A root
+  below the surface buries the foot of each outward-leaning card, and the clump shows a
+  square of bare ground at its heart.
 - `placeVegetation` keeps the map's park trees. It then fills parks with more and
   larger trees and brush, adds up to 220 self-seeded street trees in lots and
   plazas, and puts brush against walls. Street trunks keep 6 m from doors. The total
@@ -87,7 +89,9 @@ The sun's shadow map is redrawn every other frame, and at once when its camera m
 so a stale map lags a frame but never slides. The shadow camera's centre snaps to whole
 texels along the light's axes, which stops shadow edges crawling while the camera pans.
 With the post chain on, the canvas no longer asks for MSAA: the chain draws into its own
-4x target. Turning the chain off with F4 leaves edges aliased until the next load.
+4x target. Turned off with F4, the frame still goes through that target with only the
+output pass, so the edges stay antialiased; the next load reads the saved choice and
+gives the canvas its own MSAA instead.
 
 ### Litter and decay
 

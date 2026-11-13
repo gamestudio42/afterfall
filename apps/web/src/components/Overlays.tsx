@@ -153,6 +153,7 @@ tick       ${sim.tickMs.toFixed(3)} ms
 entities   ${sim.state.entities.size} (infected ${infected})
 draw calls ${game.renderer.drawCalls}
 post       ${game.renderer.postEnabled ? "on" : "off"} (${game.renderer.post}, F4)
+render     ${Math.round(game.renderer.resolutionScale * 100)} %
 gpu        ${game.renderer.gpuName.slice(0, 44) || "hidden"}
 nav fails  ${sim.state.stats.navFailures}
 tasks      ${sim.state.tasks.size}

@@ -21,6 +21,7 @@ import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
 import { VfxSystem, type FxEvent } from "./vfx";
 import { isSoftwareRenderer, PostFx, rendererName, resolvePost, type PostMode } from "./post";
+import { ResolutionGovernor } from "./governor";
 
 export type OverlayMode = "none" | "resources" | "danger";
 
@@ -919,7 +920,29 @@ export class GameRenderer {
     else this.renderer.render(this.scene, this.rts.camera);
   }
 
+  private governor = new ResolutionGovernor();
+  private cssSize = { width: 0, height: 0 };
+  /** Render scale the governor has settled on, 1 being the display's pixel ratio (capped at 2). */
+  get resolutionScale(): number {
+    return this.governor.scale;
+  }
+
+  /**
+   * Feeds the real interval between two frames to the resolution governor. A software
+   * rasteriser is slow by nature and its frames say nothing about fill rate, so it
+   * keeps its resolution.
+   */
+  observeFrame(ms: number): void {
+    if (isSoftwareRenderer(this.gpuName)) return;
+    const scale = this.governor.sample(ms);
+    if (scale === null) return;
+    // Never below 0.75 device pixels per CSS pixel: under that the HUD text turns to mush.
+    this.renderer.setPixelRatio(Math.max(0.75, Math.min(window.devicePixelRatio, 2) * scale));
+    this.resize(this.cssSize.width, this.cssSize.height);
+  }
+
   resize(width: number, height: number): void {
+    this.cssSize = { width, height };
     this.renderer.setSize(width, height, false);
     this.postFx?.setSize(width, height, this.renderer.getPixelRatio());
     this.rts.camera.aspect = width / Math.max(1, height);
@@ -989,7 +1012,7 @@ export class GameRenderer {
     const sim = this.sim;
     this.time += dt;
     this.frameDt = dt;
-    this.vegetation?.update(this.time);
+    this.vegetation?.update(this.time, this.rts.camera);
     this.grass?.update(this.time);
     this.rts.update(dt);
     if (sim) {

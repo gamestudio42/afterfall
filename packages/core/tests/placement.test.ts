@@ -4,7 +4,7 @@ import { CellKind, cityFromOverpass } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
 import { createSimulation, deserialize, serialize, type Simulation } from "../src";
 import { destroyStructure } from "../src/systems/infected";
-import { foldYaw, placementAt, placementYaw } from "../src/systems/placement";
+import { foldYaw, placementAt, placementYaw, structureCells } from "../src/systems/placement";
 import { cancelTask, finishStructure, placeStructures } from "../src/systems/tasks";
 import { pickBase } from "./autoplay";
 
@@ -68,7 +68,7 @@ describe("placing a single wall or gate", () => {
     const line = lineCells([x, y], [x + 6, y + 2]);
     placeStructures(sim, "wall", line);
     const yaw = at(sim, x, y)!.structure!.line!.yaw;
-    expect(placementYaw(sim, x + 7, y + 2)).toBeCloseTo(yaw);
+    expect(placementYaw(sim, "wall", x + 7, y + 2)).toBeCloseTo(yaw);
     // Along an axis, the run's own axis.
     const axis = started();
     const [a, b] = freeSpot(axis);
@@ -76,7 +76,7 @@ describe("placing a single wall or gate", () => {
       [a, b],
       [a, b + 1],
     ]);
-    expect(placementYaw(axis, a, b + 2)).toBeCloseTo(Math.PI / 2);
+    expect(placementYaw(axis, "wall", a, b + 2)).toBeCloseTo(Math.PI / 2);
   });
 
   it("lines up with the nearest street on an imported map", () => {
@@ -100,7 +100,7 @@ describe("placing a single wall or gate", () => {
         const py = (a.y + b.y) / 2 + (dx / len) * (half + 2);
         const c = g.cellOf(px, py);
         if (g.kind[c] !== CellKind.Free) continue;
-        const yaw = placementYaw(sim, c % g.cols, Math.floor(c / g.cols));
+        const yaw = placementYaw(sim, "wall", c % g.cols, Math.floor(c / g.cols));
         expect(yaw).toBeCloseTo(foldYaw(Math.atan2(-dy, dx)), 1);
         checked++;
       }
@@ -194,5 +194,83 @@ describe("where a piece may go", () => {
     const y = Math.floor(c / sim.grid.cols);
     expect(placementAt(sim, "wall", x, y)).toBeNull();
     expect(placeStructures(sim, "wall", [[x, y]])).toBeNull();
+  });
+});
+
+describe("turning a tower, farm or well", () => {
+  it("covers its own square on the grid, and the cells a turned square reaches into", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 8);
+    const square = structureCells(sim, "tower", x + 2, y, 0)!;
+    expect(square).toHaveLength(4);
+    // A quarter turn is the same square.
+    expect(new Set(structureCells(sim, "tower", x + 2, y, Math.PI / 2))).toEqual(new Set(square));
+    const turned = structureCells(sim, "tower", x + 2, y, Math.PI / 6)!;
+    for (const i of square) expect(turned).toContain(i);
+    expect(turned.length).toBeGreaterThan(4);
+    // Every cell it claims is one the turned square really overlaps: none farther than
+    // the square's half-diagonal from its centre.
+    const g = sim.grid;
+    for (const i of turned) {
+      const cx = (i % g.cols) + 0.5 - (x + 3);
+      const cy = Math.floor(i / g.cols) + 0.5 - (y + 1);
+      expect(Math.hypot(cx, cy)).toBeLessThan(Math.SQRT2 + Math.SQRT1_2);
+    }
+  });
+
+  it("keeps the turn and stamps every covered cell when built", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 8);
+    placeStructures(sim, "tower", [[x + 2, y]], Math.PI / 6);
+    const tower = [...sim.structures()].find((e) => e.structure.kind === "tower")!;
+    expect(tower.structure.line?.yaw).toBeCloseTo(Math.PI / 6);
+    expect(tower.structure.cells).toEqual(structureCells(sim, "tower", x + 2, y, Math.PI / 6));
+    finishStructure(sim, tower);
+    for (const i of tower.structure.cells) expect(sim.grid.kind[i]).toBe(CellKind.Solid);
+    // Square to the grid: nothing stored, the old footprint.
+    placeStructures(sim, "well", [[x + 5, y]], 0);
+    const well = [...sim.structures()].find((e) => e.structure.kind === "well")!;
+    expect(well.structure.line).toBeUndefined();
+    expect(well.structure.cells).toHaveLength(4);
+  });
+
+  it("does not fit where a corner of the turned square would hit a wall", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 8);
+    placeStructures(sim, "wall", [[x + 1, y]]);
+    // Square to the grid the tower fits right beside the wall; turned, a corner reaches in.
+    expect(placementAt(sim, "tower", x + 2, y, 0)).not.toBeNull();
+    expect(placementAt(sim, "tower", x + 2, y, Math.PI / 4)).toBeNull();
+  });
+
+  it("squares up to the nearest street by the smallest turn", () => {
+    const map = cityFromOverpass(syntheticOverpass(), { ...FIXTURE_CENTER, size: 480, label: "Test" });
+    const sim = createSimulation({ seed: map.seed, map });
+    const g = sim.grid;
+    let checked = 0;
+    for (const r of sim.city.roads) {
+      if (!r.path || checked > 4) continue;
+      for (let i = 1; i < r.path.length; i++) {
+        const a = r.path[i - 1];
+        const b = r.path[i];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        const slant = Math.abs(Math.sin(2 * Math.atan2(dy, dx)));
+        if (len < 30 || slant < 0.3) continue;
+        const half = (r.width ?? 8) / 2;
+        const px = (a.x + b.x) / 2 - (dy / len) * (half + 3);
+        const py = (a.y + b.y) / 2 + (dx / len) * (half + 3);
+        const c = g.cellOf(px, py);
+        // The cell is the tower's top-left; its centre is one cell further on.
+        const yaw = placementYaw(sim, "tower", (c % g.cols) - 1, Math.floor(c / g.cols) - 1);
+        expect(Math.abs(yaw)).toBeLessThanOrEqual(Math.PI / 4 + 1e-9);
+        // Lined up: the street's angle and the tower's differ by a whole quarter turn.
+        const off = (Math.atan2(-dy, dx) - yaw) / (Math.PI / 2);
+        expect(Math.abs(off - Math.round(off))).toBeLessThan(0.05);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
   });
 });

@@ -1,7 +1,7 @@
 import { BALANCE, BUILDING_FUNCTIONS, RESOURCE_IDS, STRUCTURES, WEAPONS, addToBag, bagTotal, type ResourceBag } from "@afterfall/content";
 import { lineFrame, type Vec2 } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
-import { isAxial, isDrawnLine, placementAt, singleFrame } from "./placement";
+import { isAxial, isDrawnLine, placementAt, singleFrame, turnFrame } from "./placement";
 import { TOWER_RANGE_BONUS } from "./combat";
 import type { Entity, EntityId, SurvivorComp, Task, TaskType } from "../state";
 import {
@@ -212,8 +212,10 @@ export function taskSite(sim: Simulation, task: Task): Vec2 | null {
   // Find a free cell touching the footprint.
   let best: Vec2 | null = null;
   let bestD = Infinity;
-  for (let y = s.cy - 1; y <= s.cy + def.size; y++) {
-    for (let x = s.cx - 1; x <= s.cx + def.size; x++) {
+  // A turned tower or well can cover cells of the first ring: look one further out.
+  const reach = s.line && s.kind !== "wall" && s.kind !== "gate" ? 2 : 1;
+  for (let y = s.cy - reach; y < s.cy + def.size + reach; y++) {
+    for (let x = s.cx - reach; x < s.cx + def.size + reach; x++) {
       if (!sim.grid.inBounds(x, y)) continue;
       const i = sim.grid.index(x, y);
       if (s.cells.includes(i) || !sim.grid.passableIndex(i, "survivor")) continue;
@@ -576,7 +578,7 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
   const used = new Set<number>();
   const drawn = isAxial(kind) && isDrawnLine(cells);
   for (const [cx, cy] of cells) {
-    const at = placementAt(sim, kind, cx, cy);
+    const at = placementAt(sim, kind, cx, cy, !isAxial(kind) ? (yaw ?? 0) : 0);
     if (!at || at.cells.some((i) => used.has(i))) continue;
     for (const i of at.cells) used.add(i);
     const id = sim.newId();
@@ -599,9 +601,11 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
       ? (replaced.structure!.line ?? null)
       : drawn
         ? lineFrame(cells[0], cells[cells.length - 1], [cx, cy])
-        : isAxial(kind) && yaw !== undefined
-          ? singleFrame(sim, cx, cy, yaw)
-          : null;
+        : yaw === undefined
+          ? null
+          : isAxial(kind)
+            ? singleFrame(sim, cx, cy, yaw)
+            : turnFrame(yaw);
     if (line) e.structure!.line = { ...line };
     if (at.replaces >= 0) e.structure!.replaces = at.replaces;
     e.transform!.px = e.transform!.x;

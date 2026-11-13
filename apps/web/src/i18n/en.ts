@@ -200,7 +200,7 @@ export const en: Record<string, string> = {
   "banner.chooseBase": "Choose a building to become your community's headquarters.",
   "banner.chooseBaseHint": "Large central buildings hold more, but are harder to wall in.",
   "banner.build": "Click to place · drag to draw · Shift keeps the mode · right-click or Esc to exit",
-  "banner.buildRotate": "R / Shift+R: turn the piece",
+  "banner.buildRotate": "R / Shift+R: turn",
 
   "outcome.victory": "You survived",
   "outcome.victoryText": "Twelve nights have passed and the community still stands. Rebuilding can begin.",

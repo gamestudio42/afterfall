@@ -108,8 +108,9 @@ export interface StructureComp {
   /** For farms and wells: produced resources waiting for pickup. */
   output: ResourceBag;
   /**
-   * For a wall drawn at an angle off the grid axes: how this piece sits on the line the
-   * player drew. Absent on axis-aligned walls and older saves, which orient by neighbours.
+   * For a wall or gate at an angle off the grid axes: how this piece sits on the line the
+   * player drew, or the angle it was turned to. For a tower, farm or well: its turn.
+   * Absent when square to the grid, and on older saves (walls then orient by neighbours).
    */
   line?: LineFrame;
   /** A blueprint gate set into a built wall: that wall, which it replaces when it is done. */

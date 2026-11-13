@@ -38,7 +38,7 @@ export interface BuildPreview {
   kind: StructureKind;
   cells: [number, number][];
   valid: boolean[];
-  /** The angle a single wall or gate will take. */
+  /** The angle a single piece will take. */
   yaw?: number;
 }
 
@@ -1361,7 +1361,7 @@ export class GameRenderer {
         // The ghost wears the same footprint and the same orientation as the finished
         // piece: a wall under construction is a thin slab along its line, not a cube.
         const axial = s.kind === "wall" || s.kind === "gate";
-        const frameB = axial ? wallMeasure(s) : { yaw: 0, stretch: 1 };
+        const frameB = axial ? wallMeasure(s) : { yaw: s.line?.yaw ?? 0, stretch: 1 };
         tmpQ2.setFromAxisAngle(up, frameB.yaw);
         tmpM.compose(
           tmpV.set(cx, 0, cz),
@@ -1388,7 +1388,8 @@ export class GameRenderer {
         continue;
       }
       const axial = s.kind === "wall" || s.kind === "gate";
-      const frame = axial ? wallMeasure(s) : { yaw: 0, stretch: 1 };
+      // A tower, farm or well turns as placed; it never stretches.
+      const frame = axial ? wallMeasure(s) : { yaw: s.line?.yaw ?? 0, stretch: 1 };
       const yaw = frame.yaw;
       // A dedicated masonry pier joins runs without stretching timber or rubble.
       const placements = [{ yaw: yaw + (s.kind === "wall" && variation % 2 ? Math.PI : 0) }];
@@ -1464,6 +1465,7 @@ export class GameRenderer {
       const length = def.size * cell * (line?.stretch ?? 1);
       tmpQ.identity();
       if (axial) tmpQ.setFromAxisAngle(UP, yaw);
+      else if (p.yaw) tmpQ.setFromAxisAngle(UP, p.yaw);
       tmpM.compose(
         tmpV.set((cx + def.size / 2 + (line?.ox ?? 0)) * cell, 0, (cy + def.size / 2 + (line?.oy ?? 0)) * cell),
         tmpQ,

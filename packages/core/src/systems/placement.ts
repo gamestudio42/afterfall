@@ -20,11 +20,57 @@ export function isAxial(kind: StructureKind): boolean {
   return kind === "wall" || kind === "gate";
 }
 
-export function placementAt(sim: Simulation, kind: StructureKind, cx: number, cy: number): Placement | null {
+/**
+ * The cells a structure covers. A wall or gate keeps its one cell at any angle (it is a
+ * thin panel); a turned tower, farm or well covers every cell its turned square reaches
+ * into, so it cannot be set with a corner inside a wall or a house.
+ */
+export function structureCells(sim: Simulation, kind: StructureKind, cx: number, cy: number, yaw = 0): number[] | null {
   const def = STRUCTURES[kind];
   const g = sim.grid;
-  const cells = g.footprint(cx, cy, def.size);
-  if (cells.length !== def.size * def.size) return null;
+  const turned = !isAxial(kind) && Math.abs(Math.sin(2 * yaw)) > 1e-6;
+  if (!turned) {
+    const cells = g.footprint(cx, cy, def.size);
+    return cells.length === def.size * def.size ? cells : null;
+  }
+  const h = def.size / 2;
+  const ox = cx + h;
+  const oy = cy + h;
+  const cos = Math.cos(yaw);
+  const sin = Math.sin(yaw);
+  const r = h * Math.SQRT2;
+  const cells: number[] = [];
+  for (let y = Math.floor(oy - r); y < Math.ceil(oy + r); y++)
+    for (let x = Math.floor(ox - r); x < Math.ceil(ox + r); x++) {
+      let inside = 0;
+      for (let sy = 0; sy < SAMPLES; sy++)
+        for (let sx = 0; sx < SAMPLES; sx++) {
+          const px = x + (sx + 0.5) / SAMPLES - ox;
+          const py = y + (sy + 0.5) / SAMPLES - oy;
+          // Into the square's own frame (render yaw turns +x towards -y on the grid).
+          const u = px * cos - py * sin;
+          const v = px * sin + py * cos;
+          if (Math.abs(u) <= h && Math.abs(v) <= h) inside++;
+        }
+      if (inside < COVERED) continue;
+      if (!g.inBounds(x, y)) return null;
+      cells.push(g.index(x, y));
+    }
+  return cells;
+}
+
+/**
+ * Sub-samples per cell side, and how many of the 16 must fall inside to claim the cell.
+ * One: a tower turned 45° reaches 0.8 m into the next cell, through any wall standing
+ * there. What can slip between samples is under a quarter of a metre deep.
+ */
+const SAMPLES = 4;
+const COVERED = 1;
+
+export function placementAt(sim: Simulation, kind: StructureKind, cx: number, cy: number, yaw = 0): Placement | null {
+  const g = sim.grid;
+  const cells = structureCells(sim, kind, cx, cy, yaw);
+  if (!cells) return null;
   let replaces = -1;
   for (const i of cells) {
     const owner = g.structureAt[i];
@@ -64,6 +110,23 @@ export function isDrawnLine(cells: [number, number][]): boolean {
   return line.length === cells.length && line.every(([x, y], i) => cells[i][0] === x && cells[i][1] === y);
 }
 
+/** A yaw folded into (-π/4, π/4]: the smallest turn that lines a square up with an angle. */
+export function foldQuarter(yaw: number): number {
+  const q = Math.PI / 2;
+  let y = yaw % q;
+  if (y <= -q / 2) y += q;
+  if (y > q / 2) y -= q;
+  return y;
+}
+
+/** A yaw folded into (-π, π]. */
+export function foldTurn(yaw: number): number {
+  let y = yaw % (2 * Math.PI);
+  if (y <= -Math.PI) y += 2 * Math.PI;
+  if (y > Math.PI) y -= 2 * Math.PI;
+  return y;
+}
+
 /** A yaw folded into (-π/2, π/2]: a wall panel looks the same turned half a turn. */
 export function foldYaw(yaw: number): number {
   let y = yaw % Math.PI;
@@ -88,7 +151,14 @@ const ROAD_REACH = 14;
  * streets run at any angle, and a lone piece stuck east-west across them looked dropped
  * rather than built.
  */
-export function placementYaw(sim: Simulation, cx: number, cy: number): number {
+export function placementYaw(sim: Simulation, kind: StructureKind, cx: number, cy: number): number {
+  if (!isAxial(kind)) {
+    // A tower, farm or well squares up to the street it stands by. A square looks the
+    // same a quarter turn on, so the smallest turn that lines it up is the one taken.
+    const h = STRUCTURES[kind].size / 2;
+    const road = nearestRoadYaw(sim, (cx + h) * sim.grid.cell, (cy + h) * sim.grid.cell);
+    return road === null ? 0 : foldQuarter(road);
+  }
   const self = axialAt(sim, cx, cy);
   if (self?.structure!.line) return self.structure!.line.yaw;
   for (const [dx, dy] of [
@@ -152,4 +222,10 @@ export function singleFrame(sim: Simulation, cx: number, cy: number, yaw: number
     if (joined) return null;
   }
   return { yaw: y, stretch: 1, ox: 0, oy: 0 };
+}
+
+/** The turn of a tower, farm or well, or null when it stands square to the grid. */
+export function turnFrame(yaw: number): LineFrame | null {
+  const y = foldTurn(yaw);
+  return Math.abs(y) < 1e-6 ? null : { yaw: y, stretch: 1, ox: 0, oy: 0 };
 }

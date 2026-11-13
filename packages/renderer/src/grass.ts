@@ -75,11 +75,16 @@ function bladeMask(): THREE.DataTexture {
   let s = 7;
   const rand = () => (s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 4294967296;
   for (let b = 0; b < 26; b++) {
-    const base = 4 + rand() * (W - 8);
-    const lean = (rand() - 0.5) * 22;
+    // A tuft springs from its middle and fans out. Bases spread over the whole card left
+    // an almost solid bottom row, which the mipmaps turned into a dark stroke along the
+    // foot of every card at close zoom.
+    const base = W / 2 + (rand() - 0.5) * W * 0.4;
+    const lean = (base - W / 2) * 1.1 + (rand() - 0.5) * 18;
     const top = 0.45 + rand() * 0.55;
     const width = 2.2 + rand() * 2.2;
-    for (let y = 0; y < H; y++) {
+    // The bottom rows stay clear (the root sits in the ground): at a distance the mipmaps
+    // still average them into a solid stroke.
+    for (let y = 6; y < H; y++) {
       const v = y / (H - 1);
       if (v > top) break;
       const k = v / top;
@@ -185,7 +190,7 @@ export class Grass {
       straw = new THREE.Color(0x8a7c48);
     tufts.forEach((t, i) => {
       const width = 0.9 + t.height * 0.8;
-      m.compose(v.set(t.x, 0.06, t.z), q.setFromAxisAngle(up, t.yaw), s.set(width, t.height, width));
+      m.compose(v.set(t.x, -0.03, t.z), q.setFromAxisAngle(up, t.yaw), s.set(width, t.height, width));
       this.mesh.setMatrixAt(i, m);
       this.mesh.setColorAt(i, color.copy(green).lerp(straw, t.dry).multiplyScalar(t.shade));
     });

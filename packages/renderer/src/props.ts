@@ -342,9 +342,9 @@ export async function loadProps(
         });
         const inst = new THREE.InstancedMesh(geo, mat, list.length);
         inst.name = `prop-${kind}-${src.name}`;
-        // Keep shadows on large silhouettes. The packed palette limits each
-        // roof piece to one batch, including the shadow pass.
-        inst.castShadow = ["car", "ambulance", "barrier", "dumpster", "roof_tank", "roof_stairs"].includes(kind);
+        // Keep shadows on large silhouettes (a rubble heap without one floats). The
+        // packed palette limits each roof piece to one batch, including the shadow pass.
+        inst.castShadow = ["car", "ambulance", "barrier", "dumpster", "roof_tank", "roof_stairs", "litter_rubble"].includes(kind);
         inst.receiveShadow = true;
         inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         list.forEach((p, i) => {

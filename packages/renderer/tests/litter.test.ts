@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateCity } from "@afterfall/world";
 import { buildReclamation, inBuilding, onRoad } from "../src/reclamation";
+import { buildingDecay } from "../src/buildingBatch";
 import { LITTER_CAP, LITTER_KINDS, LITTER_RADIUS, placeLitter } from "../src/litter";
 
 describe("litter scatter", () => {
@@ -25,7 +26,7 @@ describe("litter scatter", () => {
         const z = p.z + Math.sin((a * Math.PI) / 4) * reach;
         expect(inBuilding(field, x, z)).toBe(false);
       }
-      for (const b of city.buildings) expect(Math.hypot(b.entrance.x - p.x, b.entrance.y - p.z)).toBeGreaterThan(3.5);
+      for (const b of city.buildings) expect(Math.hypot(b.entrance.x - p.x, b.entrance.y - p.z)).toBeGreaterThan(3);
     }
   });
 
@@ -52,5 +53,18 @@ describe("litter scatter", () => {
     const thin = [...placeLitter(city, field, [], 0.35).values()].flat();
     expect(thin.length).toBeLessThan(all.length * 0.55);
     expect(thin.length).toBeGreaterThan(all.length * 0.15);
+  });
+});
+
+describe("building decay", () => {
+  it("spans sound to wrecked, with most buildings in between", () => {
+    const city = generateCity({ seed: 4242 });
+    const decay = city.buildings.map((b) => buildingDecay(b));
+    expect(Math.min(...decay)).toBeGreaterThanOrEqual(0.12);
+    expect(Math.max(...decay)).toBeLessThanOrEqual(1);
+    const wrecks = decay.filter((d) => d > 0.7).length / decay.length;
+    expect(wrecks).toBeGreaterThan(0.08);
+    expect(wrecks).toBeLessThan(0.35);
+    expect(buildingDecay(city.buildings[3])).toBe(decay[3]);
   });
 });

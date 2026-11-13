@@ -41,10 +41,10 @@ def rubble():
     """Concrete fallen from a facade: slabs, blocks, brick, dust and bent rebar."""
     reset()
     rng = random.Random(11)
-    concrete = mat("Broken concrete", (.42, .41, .37), category="masonry")
-    pale = mat("Fresh fracture", (.55, .53, .47), category="masonry")
-    brick = mat("Brick", (.37, .18, .11), category="masonry")
-    dust = mat("Dust and grit", (.33, .31, .27), category="masonry")
+    concrete = mat("Broken concrete", (.13, .125, .11), category="masonry")
+    pale = mat("Fresh fracture", (.2, .19, .165), category="masonry")
+    brick = mat("Brick", (.22, .085, .05), category="masonry")
+    dust = mat("Dust and grit", (.095, .088, .07), category="masonry")
     rebar = mat("Rusted rebar", (.21, .11, .06), category="hardware")
     # The heap's body, low and spread, so the pieces sit on something.
     lump(1, (0, 0, .05), (1.05, .8, .3), dust, rng, subdivisions=2, jitter=.18, flat=.55)
@@ -72,9 +72,9 @@ def bags():
     rng = random.Random(23)
     black = mat("Black bin bag", (.035, .04, .04))
     blue = mat("Blue bag", (.07, .14, .23))
-    grey = mat("Grey sack", (.29, .29, .26))
-    spill = mat("Spilled waste", (.25, .22, .15))
-    paper = mat("Paper", (.58, .56, .49))
+    grey = mat("Grey sack", (.17, .17, .15))
+    spill = mat("Spilled waste", (.11, .095, .06))
+    paper = mat("Paper", (.36, .34, .29))
     spots = [(-.45, -.05, .9), (.1, .12, 1.0), (.55, -.1, .85), (-.1, -.38, .8), (.42, .36, .75), (-.55, .4, .7)]
     for k, (x, y, s) in enumerate(spots):
         material = black if k % 3 != 2 else (blue if k == 2 else grey)
@@ -114,9 +114,9 @@ def planks():
     """A broken pallet, loose boards and a sheet of corrugated roofing."""
     reset()
     rng = random.Random(37)
-    timber = mat("Grey timber", (.31, .27, .21), category="timber")
-    pale = mat("Split boards", (.44, .37, .26), category="timber")
-    zinc = mat("Corrugated zinc", (.36, .37, .35), category="hardware")
+    timber = mat("Grey timber", (.17, .145, .11), category="timber")
+    pale = mat("Split boards", (.25, .2, .13), category="timber")
+    zinc = mat("Corrugated zinc", (.22, .225, .21), category="hardware")
     rust = mat("Rust bloom", (.29, .15, .07), category="hardware")
     # Pallet, one end collapsed.
     for y in (-.45, 0, .45):
@@ -143,13 +143,13 @@ def mattress():
     """A mattress dragged out and left in the rain, and a chair with a leg gone."""
     reset()
     rng = random.Random(41)
-    cloth = mat("Stained ticking", (.5, .47, .4))
-    stain = mat("Water stain", (.31, .27, .19))
+    cloth = mat("Stained ticking", (.27, .25, .2))
+    stain = mat("Water stain", (.12, .1, .06))
     seam = mat("Piping", (.27, .29, .3))
     wood = mat("Chair wood", (.27, .17, .1), category="timber")
     box((1.9, .95, .2), (0, 0, .13), rot=(0, .05, .03), material=cloth, bevel=.07)
-    for _ in range(4):
-        box((.3 + rng.random() * .4, .2 + rng.random() * .3, .01), ((rng.random() - .5) * 1.3, (rng.random() - .5) * .5, .24),
+    for _ in range(6):
+        box((.35 + rng.random() * .5, .25 + rng.random() * .35, .01), ((rng.random() - .5) * 1.3, (rng.random() - .5) * .5, .24),
             rot=(0, .05, rng.random()), material=stain, bevel=0)
     for y in (-.47, .47):
         box((1.92, .03, .03), (0, y, .23), rot=(0, .05, .03), material=seam, bevel=0)

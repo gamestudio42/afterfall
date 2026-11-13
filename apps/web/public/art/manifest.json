@@ -510,16 +510,16 @@
       "name": "props_litter_bags",
       "file": "props/litter_bags.glb",
       "kind": "glb",
-      "bytes": 87076,
-      "sha256": "2dc4c332f489a1279c2355a0b5012e27482bbcf9973958511012df63b1a7e0e5",
+      "bytes": 86824,
+      "sha256": "cf6377610410cda8bb5950cc975def606dc6f1171dfbd4f4763b00ae230a2450",
       "generator": "tools/blender/debris.py"
     },
     {
       "name": "props_litter_mattress",
       "file": "props/litter_mattress.glb",
       "kind": "glb",
-      "bytes": 34068,
-      "sha256": "c6177eb671055bc41c020f93bcc8f3267b8f823e57e175927a91abc195beb566",
+      "bytes": 35940,
+      "sha256": "a884c6ace29c8d6818e35b110a9cf385305533a74e1e66538bd593d7c140dc95",
       "generator": "tools/blender/debris.py"
     },
     {
@@ -527,15 +527,15 @@
       "file": "props/litter_planks.glb",
       "kind": "glb",
       "bytes": 31088,
-      "sha256": "2336d977de11cb57b1553817372469d45be08ac59db71f1b379693539e03fab0",
+      "sha256": "196cb872ee1ea061a1219296339d6b44adfd4aef7af961dd69a2664d7f0e8909",
       "generator": "tools/blender/debris.py"
     },
     {
       "name": "props_litter_rubble",
       "file": "props/litter_rubble.glb",
       "kind": "glb",
-      "bytes": 77972,
-      "sha256": "0402613145bcee84fb05af8b568e84e2eae0458f4469bd516da3533a33dc03cb",
+      "bytes": 78116,
+      "sha256": "c2a65b323458a0e588c4c017338994ebcb672f7e293749e2668471516d27a51f",
       "generator": "tools/blender/debris.py"
     },
     {

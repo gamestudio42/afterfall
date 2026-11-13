@@ -82,6 +82,36 @@ frames. Under 40 fps for 1.5 s the render scale drops by 0.1, down to 0.6, never
 the last drop, it climbs back by 0.05. It is off on a software rasteriser. The debug
 overlay shows the current scale.
 
+The sun's shadow map is redrawn every other frame, and at once when its camera moves
+6 m or resizes (`shadowCadence.ts`). Three.js keeps the shadow matrix of the last draw,
+so a stale map lags a frame but never slides. The shadow camera's centre snaps to whole
+texels along the light's axes, which stops shadow edges crawling while the camera pans.
+With the post chain on, the canvas no longer asks for MSAA: the chain draws into its own
+4x target. Turning the chain off with F4 leaves edges aliased until the next load.
+
+### Litter and decay
+
+`tools/blender/debris.py` authors five low pieces into `public/art/props/`: concrete
+rubble with brick and rebar, bin bags, tyres, a broken pallet with roofing sheet, and a
+mattress with a chair. Each is 360 to 880 triangles in one or two batches. `litter.ts`
+scatters up to 600 at the foot of walls, more where the reclamation field is high and
+by the worst buildings. They stay off carriageways, 3 m from doors and away from street
+furniture. Litter is cosmetic: it has no collision and only rubble casts a shadow. A
+software rasteriser keeps about a third.
+
+```sh
+blender --background --factory-startup --python tools/blender/debris.py
+pnpm assets:props props
+pnpm exec prettier --write apps/web/public/art/manifest.json
+```
+
+Every building has a decay from 0.12 to 1 (`buildingDecay`), most in between and about
+a quarter past 0.7, which read as wrecks. The facade shaders read it. Burnt-out windows are black, with a
+soot plume fanning up the wall over them; the window positions follow the facade bake.
+Plaster spalls in patches, creepers climb from the ground in uneven columns, and grime
+rises higher on worse buildings. Roofs gather moss and water stains. A building the
+settlement uses shows no fire damage, and a burnt window never lights at night.
+
 The day grade is desaturated (0.88), with olive shadows and dusty highlights. The
 sun is a little warmer, the bounce light is olive, and the day haze starts nearer.
 The post chain stays off on software renderers, so CI captures do not show the

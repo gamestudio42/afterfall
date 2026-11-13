@@ -1,5 +1,5 @@
 import { BALANCE, BUILDING_FUNCTIONS, RESOURCE_IDS, STRUCTURES, WEAPONS, addToBag, bagTotal, type ResourceBag } from "@afterfall/content";
-import type { Vec2 } from "@afterfall/shared";
+import { lineCells, lineFrame, type Vec2 } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
 import type { Simulation } from "../simulation";
 import { TOWER_RANGE_BONUS } from "./combat";
@@ -566,6 +566,7 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
   const hq = sim.hqBuilding;
   if (!hq) return null;
   const used = new Set<number>();
+  const drawn = kind === "wall" && isDrawnLine(cells);
   for (const [cx, cy] of cells) {
     const fp = sim.grid.footprint(cx, cy, def.size);
     if (fp.length !== def.size * def.size) continue;
@@ -586,6 +587,10 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
       },
       structure: { kind, cx, cy, cells: fp, built: false, progress: 0, task: -1, output: {} },
     };
+    // A wall comes in as a drawn line, first cell to last: each piece remembers the
+    // line's angle so it is drawn along it rather than along the grid's staircase.
+    const line = drawn ? lineFrame(cells[0], cells[cells.length - 1], [cx, cy]) : null;
+    if (line) e.structure!.line = line;
     e.transform!.px = e.transform!.x;
     e.transform!.py = e.transform!.y;
     sim.state.entities.set(id, e);
@@ -598,6 +603,13 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
   const task = createTask(sim, "build", { structures: ids, cost, work, maxWorkers: Math.min(4, 1 + Math.ceil(ids.length / 4)) });
   for (const id of ids) sim.state.entities.get(id)!.structure!.task = task.id;
   return task;
+}
+
+/** True when the cells are exactly the straight line from the first to the last one. */
+function isDrawnLine(cells: [number, number][]): boolean {
+  if (cells.length < 2) return false;
+  const line = lineCells(cells[0], cells[cells.length - 1]);
+  return line.length === cells.length && line.every(([x, y], i) => cells[i][0] === x && cells[i][1] === y);
 }
 
 function touchesEntrance(sim: Simulation, cells: number[]): boolean {

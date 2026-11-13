@@ -1,5 +1,5 @@
 import type { BuildingFunction, InfectedKind, ResourceBag, ResourceId, StructureKind, TechId, WeaponId } from "@afterfall/content";
-import type { Vec2 } from "@afterfall/shared";
+import type { LineFrame, Vec2 } from "@afterfall/shared";
 
 export type EntityId = number;
 
@@ -107,6 +107,11 @@ export interface StructureComp {
   task: number;
   /** For farms and wells: produced resources waiting for pickup. */
   output: ResourceBag;
+  /**
+   * For a wall drawn at an angle off the grid axes: how this piece sits on the line the
+   * player drew. Absent on axis-aligned walls and older saves, which orient by neighbours.
+   */
+  line?: LineFrame;
 }
 
 export interface Entity {

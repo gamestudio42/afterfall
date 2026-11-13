@@ -135,6 +135,8 @@ export class GameController {
     const frameStart = performance.now();
     const now = frameStart;
     const dt = Math.min(0.1, (fixedDtMs ?? now - this.last) / 1000);
+    // The real interval, not the clamped one: the resolution governor judges the display.
+    if (fixedDtMs === undefined && this.renderer) this.renderer.observeFrame(now - this.last);
     this.last = now;
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
     const ui = useUi.getState();

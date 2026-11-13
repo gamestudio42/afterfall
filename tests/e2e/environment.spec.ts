@@ -35,7 +35,10 @@ test("urban surfaces and Refloreste vegetation load and render without shader er
   expect(result.fallback).toBe(false);
   expect(result.plants.length).toBeGreaterThanOrEqual(4);
   expect(result.plants.every((p: any) => p.instanced)).toBe(true);
-  expect(result.plants.find((p: any) => p.name === "vegetation-manaca-leaves")?.count).toBeGreaterThan(0);
+  // Each plant is drawn at one of three levels of detail, so the crowns are counted across them.
+  const crowns = result.plants.filter((p: any) => p.name.startsWith("vegetation-manaca-leaves"));
+  expect(crowns.length).toBe(3);
+  expect(crowns.reduce((n: number, p: any) => n + p.count, 0)).toBeGreaterThan(0);
   expect(result.roughness).toBe(true);
   expect(result.atlas).toEqual([512, 384]);
   if (process.env.ENVIRONMENT_SHOT) {

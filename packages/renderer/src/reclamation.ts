@@ -179,10 +179,15 @@ export function buildReclamation(city: CityMap): ReclamationField {
       if (road[i]) {
         // Asphalt holds out longest in the middle; the gutter fills first.
         const fromEdge = intoRoad[i] * cell;
-        g = g * 0.4 + 0.5 * Math.exp(-fromEdge / 1.1) + Math.max(0, fbm(x, z, 1 / 4, seed + 5) - 0.62) * 0.9;
+        // The gutter silts up in drifts, not in an even stripe the length of the street.
+        const drift = 0.45 + 1.1 * fbm(x, z, 1 / 7, seed + 9);
+        g = g * 0.4 + 0.5 * drift * Math.exp(-fromEdge / 1.1) + Math.max(0, fbm(x, z, 1 / 4, seed + 5) - 0.62) * 0.9;
       } else {
         // Weeds come up first along the curb and in the joints beside it.
         g += 0.22 * Math.exp(-(toRoad[i] * cell) / 1.4);
+        // Open paving far from any wall is not clean either: weeds seed in the cracks
+        // of a plaza in patches a few metres across.
+        if (!park[i]) g += Math.max(0, fbm(x, z, 1 / 9, seed + 13) - 0.52) * 1.5;
       }
       growth[i] = Math.max(0, Math.min(1, g));
       wear[i] = fbm(x, z, 1 / 37, seed + 11);

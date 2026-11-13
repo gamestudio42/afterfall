@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { CityMap } from "@afterfall/world";
 import { deriveSeed, distToPolyline, pointInPolygon } from "@afterfall/shared";
 import { buildReclamation, growthAt, hash2, type ReclamationField } from "./reclamation";
+import { assignLods, CULLED, decimateQuads, LEAF_KEEP, type LodPlant } from "./vegetationLod";
 
 type Species = "manaca" | "pequi" | "dead" | "bush";
 export interface Plant {
@@ -118,18 +119,71 @@ export function placeVegetation(city: CityMap, field: ReclamationField = buildRe
   return out;
 }
 
+interface SpeciesLod {
+  list: Plant[];
+  matrices: Float32Array;
+  colors: Float32Array;
+  /** Level each plant was last drawn at, or CULLED; null before the first frame. */
+  levels: Uint8Array | null;
+  scratch: Uint8Array;
+  /** Per part (crown, trunk), one mesh per level of detail. */
+  parts: THREE.InstancedMesh[][];
+}
+
 /** Async replacement of the primitive park kit; every species stays instanced. */
 export class Vegetation {
   readonly group = new THREE.Group();
   private disposed = false;
   private resources: { dispose(): void }[] = [];
   private wind = { value: 0 };
+  /** One entry per species: its plants, their per-instance data, and one mesh per level and part. */
+  private species: SpeciesLod[] = [];
+  private frustum = new THREE.Frustum();
+  private viewProjection = new THREE.Matrix4();
+  private sphere = new THREE.Sphere();
   constructor(private readonly fallback: THREE.Object3D | undefined) {
     this.group.name = "refloreste-vegetation";
     this.group.visible = false;
   }
-  update(time: number): void {
+  /** `camera` lets each plant pick its level of detail and drop out when off screen. */
+  update(time: number, camera?: THREE.Camera): void {
     this.wind.value = time;
+    if (camera && this.species.length) this.updateLods(camera);
+  }
+  private updateLods(camera: THREE.Camera): void {
+    // The renderer refreshes this later in the frame; the first frame and a moved camera need it now.
+    camera.updateMatrixWorld();
+    this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.viewProjection);
+    const visible = (x: number, y: number, z: number, r: number) => {
+      this.sphere.center.set(x, y, z);
+      this.sphere.radius = r;
+      return this.frustum.intersectsSphere(this.sphere);
+    };
+    const position = camera.position;
+    for (const sp of this.species) {
+      assignLods(sp.list as LodPlant[], position, visible, sp.levels, sp.scratch);
+      if (sp.levels && sp.levels.every((v, i) => v === sp.scratch[i])) continue;
+      [sp.levels, sp.scratch] = [sp.scratch, sp.levels ?? new Uint8Array(sp.list.length)];
+      const levels = sp.levels as Uint8Array;
+      for (const part of sp.parts) {
+        const slot = [0, 0, 0];
+        for (let i = 0; i < levels.length; i++) {
+          const level = levels[i];
+          if (level === CULLED) continue;
+          const mesh = part[level];
+          const at = slot[level]++;
+          (mesh.instanceMatrix.array as Float32Array).set(sp.matrices.subarray(i * 16, i * 16 + 16), at * 16);
+          (mesh.instanceColor!.array as Float32Array).set(sp.colors.subarray(i * 3, i * 3 + 3), at * 3);
+        }
+        part.forEach((mesh, level) => {
+          mesh.count = slot[level];
+          mesh.visible = slot[level] > 0;
+          mesh.instanceMatrix.needsUpdate = true;
+          mesh.instanceColor!.needsUpdate = true;
+        });
+      }
+    }
   }
   /**
    * `density` below 1 keeps an even share of the plants, for software rasterisers: every
@@ -167,44 +221,55 @@ export class Vegetation {
           const target = species === "bush" ? 1.05 : species === "pequi" ? 5 : 6.5;
           const unit = target / height;
           const list = plants.filter((p) => p.species === species);
-          for (const child of chosen) {
-            const geo = child.geometry.clone();
-            geo.applyMatrix4(child.matrixWorld);
+          // The kit's other levels, keyed by part: "..._tronco_LOD1" is level 1 of "..._tronco".
+          const kit = new Map<string, THREE.Mesh>();
+          gltf.scene.traverse((o) => {
+            const m = o instanceof THREE.Mesh ? /^(.*)_LOD(\d)$/.exec(o.name) : null;
+            if (m) kit.set(`${m[1]}#${m[2]}`, o as THREE.Mesh);
+          });
+          const prepare = (mesh: THREE.Mesh) => {
+            const geo = mesh.geometry.clone();
+            geo.applyMatrix4(mesh.matrixWorld);
             geo.translate(0, -bounds.min.y, 0);
             geo.scale(unit, unit, unit);
+            return geo;
+          };
+          // Per-instance data is shared by every part and level of the species.
+          const matrices = new Float32Array(list.length * 16);
+          const colors = new Float32Array(list.length * 3);
+          {
+            const matrix = new THREE.Matrix4(),
+              q = new THREE.Quaternion(),
+              v = new THREE.Vector3(),
+              s = new THREE.Vector3(),
+              up = new THREE.Vector3(0, 1, 0);
+            list.forEach((p, i) => {
+              q.setFromAxisAngle(up, p.yaw);
+              matrix.compose(v.set(p.x, 0.08, p.z), q, s.setScalar(p.scale)).toArray(matrices, i * 16);
+              colors.fill(p.shade, i * 3, i * 3 + 3);
+            });
+          }
+          const sp: SpeciesLod = { list, matrices, colors, levels: null, scratch: new Uint8Array(list.length), parts: [] };
+          for (const child of chosen) {
             const leaves = child.name.includes("folhagem");
+            const key = child.name.replace(/_LOD0$/, "");
             const mat = new THREE.MeshStandardMaterial({
-              color: leaves ? (species === "bush" ? 0x667741 : species === "pequi" ? 0x7a814a : 0x758a42) : 0x73614b,
+              color: leaves ? (species === "bush" ? 0x5f6f3c : species === "pequi" ? 0x707645 : 0x6a7c3e) : 0x73614b,
               vertexColors: true,
               roughness: 1,
               side: leaves ? THREE.DoubleSide : THREE.FrontSide,
               alphaMap: leaves ? alpha : null,
               alphaTest: leaves ? 0.5 : 0,
             });
-            const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-            mesh.name = `vegetation-${species}-${leaves ? "leaves" : "trunk"}`;
-            const matrix = new THREE.Matrix4(),
-              q = new THREE.Quaternion(),
-              v = new THREE.Vector3(),
-              s = new THREE.Vector3(),
-              color = new THREE.Color();
-            list.forEach((p, i) => {
-              q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.yaw);
-              matrix.compose(v.set(p.x, 0.08, p.z), q, s.setScalar(p.scale));
-              mesh.setMatrixAt(i, matrix);
-              mesh.setColorAt(i, color.setScalar(p.shade));
-            });
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            this.resources.push(geo, mat, mesh);
+            this.resources.push(mat);
+            let depth: THREE.MeshDepthMaterial | null = null;
             if (leaves) {
-              const depth = new THREE.MeshDepthMaterial({
+              depth = new THREE.MeshDepthMaterial({
                 depthPacking: THREE.RGBADepthPacking,
                 alphaMap: alpha,
                 alphaTest: 0.5,
                 side: THREE.DoubleSide,
               });
-              mesh.customDepthMaterial = depth;
               this.resources.push(depth);
               // Shared deformation in color and shadow passes; roots remain planted.
               for (const material of [mat, depth]) {
@@ -223,8 +288,40 @@ export class Vegetation {
                 material.customProgramCacheKey = () => "refloreste-wind-v1";
               }
             }
-            this.group.add(mesh);
+            // Level 0 as authored; each further level from the kit when it has one, else
+            // (the crowns of the manacá and the pequi) a thinned copy of level 0.
+            const geos: THREE.BufferGeometry[] = [prepare(child)];
+            for (let level = 1; level < LEAF_KEEP.length; level++) {
+              const other = kit.get(`${key}#${level}`);
+              geos.push(other ? prepare(other) : leaves ? decimateQuads(geos[0], LEAF_KEEP[level]) : geos[level - 1]);
+            }
+            const meshes = geos.map((geo, level) => {
+              if (!this.resources.includes(geo)) this.resources.push(geo);
+              const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+              mesh.name = `vegetation-${species}-${leaves ? "leaves" : "trunk"}${level ? `-lod${level}` : ""}`;
+              mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+              mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(list.length * 3), 3);
+              mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+              if (level === 0) {
+                // Everything starts at full detail, until the first frame picks a level.
+                (mesh.instanceMatrix.array as Float32Array).set(matrices);
+                (mesh.instanceColor.array as Float32Array).set(colors);
+              } else {
+                mesh.count = 0;
+                mesh.visible = false;
+              }
+              // Culled per instance by `update`, not as one box around every plant.
+              mesh.frustumCulled = false;
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+              if (depth) mesh.customDepthMaterial = depth;
+              this.resources.push(mesh);
+              this.group.add(mesh);
+              return mesh;
+            });
+            sp.parts.push(meshes);
           }
+          this.species.push(sp);
           gltf.scene.traverse((o) => {
             if (o instanceof THREE.Mesh) {
               o.geometry.dispose();
@@ -286,6 +383,7 @@ export class Vegetation {
   }
   dispose(): void {
     this.disposed = true;
+    this.species = [];
     this.group.clear();
     for (const r of this.resources) r.dispose();
     this.resources = [];

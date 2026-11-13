@@ -61,6 +61,27 @@ of the grass. Crowns and their shadows are thousands of triangles each, and the 
 set made a CPU frame 75 % slower, which starved the timing-sensitive e2e specs.
 Measured with a synced frame at 1440 × 900: about 1.05 s on `main`, 1.15 s now.
 
+### Level of detail and resolution
+
+The crowns of the manacá and the pequi are 3,556 and 1,080 triangles of leaf cards, drawn
+twice (colour and shadow), and they were more than half of a frame. The kit ships LOD1 and
+LOD2 for trunks and bushes but not for those crowns, so `vegetationLod.ts` makes them: it
+keeps 40 % and 14 % of the cards and grows the survivors about their own centres to keep
+the cover. Every species has one instanced mesh per level. `Vegetation.update` gives each
+plant a level from its distance to the camera (85 m and 160 m, with an 8 m hysteresis so
+nothing flickers) and drops it from every draw when its crown is 40 m or more outside the
+view. The margin keeps the shadow of a tree just off screen.
+
+Measured at 1440 × 900, with the GPU path forced under SwiftShader: triangles per frame
+fell from 2.08 M to 0.72 M with the camera 80 m out, 0.68 M at 40 m and 0.81 M at 280 m.
+Draw calls rose from 86 to 110, one mesh per level.
+
+`governor.ts` trades resolution for frame rate. It watches the real interval between
+frames. Under 40 fps for 1.5 s the render scale drops by 0.1, down to 0.6, never below
+0.75 device pixels per CSS pixel. After 6 s at the display's own refresh, and 10 s after
+the last drop, it climbs back by 0.05. It is off on a software rasteriser. The debug
+overlay shows the current scale.
+
 The day grade is desaturated (0.88), with olive shadows and dusty highlights. The
 sun is a little warmer, the bounce light is olive, and the day haze starts nearer.
 The post chain stays off on software renderers, so CI captures do not show the

@@ -204,7 +204,8 @@ export class CharacterBatch {
         throw new Error("Incomplete character");
       for (const mesh of batch.meshes) scene.add(mesh);
       return batch;
-    } catch {
+    } catch (err) {
+      console.error(`[CharacterBatch] Failed to load ${url}:`, err);
       batch.dispose();
       return null;
     }

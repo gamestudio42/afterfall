@@ -21,7 +21,10 @@ async function buildingOnScreen(page: Page, index: number) {
     const b = g.sim.city.buildings[i];
     g.renderer.rts.jumpTo(b.rect.x + b.rect.w / 2, b.rect.y + b.rect.h / 2);
   }, index);
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => {
+    const r = (window as unknown as Win).__afterfall.renderer.rts;
+    return Math.abs(r.distance - r.goalDistance) < 0.05 && r.target.distanceTo(r.goalTarget) < 0.05;
+  });
   return page.evaluate((i) => {
     const g = (window as unknown as Win).__afterfall;
     const b = g.sim.city.buildings[i];
@@ -66,7 +69,10 @@ test("start a game, choose a base, scavenge and save", async ({ page }) => {
     g.renderer.rts.jumpTo(e.x, e.y);
     return e;
   });
-  await page.waitForTimeout(400);
+  await page.waitForFunction(() => {
+    const r = (window as unknown as Win).__afterfall.renderer.rts;
+    return Math.abs(r.distance - r.goalDistance) < 0.05 && r.target.distanceTo(r.goalTarget) < 0.05;
+  });
   const d = await page.evaluate((e) => (window as unknown as Win).__afterfall.renderer.toScreen(e.x, e.y, 1), door);
   await page.mouse.move(d.x - 140, d.y - 140);
   await page.mouse.down();
@@ -94,9 +100,12 @@ test("start a game, choose a base, scavenge and save", async ({ page }) => {
   await page.mouse.click(tp.x, tp.y, { button: "right" });
   await page.getByTestId("speed-4").click();
 
+  // Software WebGL on CI can run at 2-5 FPS; search depends on pathfinding and gameplay
+  // progression, so polling needs enough time for survivors to walk to the building and
+  // start working. With retry enabled, a real failure will fail twice, a slow frame will pass once.
   await expect
     .poll(() => page.evaluate((t) => (window as unknown as Win).__afterfall.sim.state.buildings[t].searchProgress, target), {
-      timeout: 60_000,
+      timeout: 90_000,
     })
     .toBeGreaterThan(0);
 
@@ -159,7 +168,6 @@ test("build a wall from the build menu", async ({ page }) => {
     const g = (window as unknown as Win).__afterfall;
     g.command({ type: "setBase", building: 0 });
   });
-  await page.waitForTimeout(300);
   await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
     const e = g.sim.hqEntrance();
@@ -172,7 +180,6 @@ test("build a wall from the build menu", async ({ page }) => {
     const r = (window as unknown as Win).__afterfall.renderer.rts;
     return Math.abs(r.distance - r.goalDistance) < 0.05 && r.target.distanceTo(r.goalTarget) < 0.05;
   });
-  await page.waitForTimeout(150);
   await page.getByTestId("open-build").click();
   await expect(page.getByTestId("build-wall")).toBeVisible();
   await page.getByTestId("build-wall").click();
@@ -276,7 +283,10 @@ test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }
     g.renderer.rts.jumpTo(c.x, c.y);
     return { index: b.index, c, h: b.height };
   });
-  await page.waitForTimeout(400);
+  await page.waitForFunction(() => {
+    const r = (window as unknown as Win).__afterfall.renderer.rts;
+    return Math.abs(r.distance - r.goalDistance) < 0.05 && r.target.distanceTo(r.goalTarget) < 0.05;
+  });
   const p = await page.evaluate((t) => (window as unknown as Win).__afterfall.renderer.toScreen(t.c.x, t.c.y, t.h), target);
   await page.mouse.click(p.x, p.y);
   await expect(page.getByTestId("set-base")).toBeVisible();

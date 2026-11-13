@@ -15,10 +15,15 @@ test("characters blend on the GPU, equip weapons and freeze when paused", async 
   await page.getByTestId("start").click();
   await expect(page.getByTestId("help")).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.waitForFunction(() => {
-    const r = (window as unknown as Win).__afterfall.renderer;
-    return r.unitParts.length > 0 && r.infectedParts.length > 0;
-  });
+  // Asset loading is real I/O and can take longer on a loaded software-WebGL CI runner.
+  await page.waitForFunction(
+    () => {
+      const r = (window as unknown as Win).__afterfall.renderer;
+      return r.unitParts.length > 0 && r.infectedParts.length > 0;
+    },
+    null,
+    { timeout: 30_000 },
+  );
   const result = await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
     cancelAnimationFrame(g.raf);

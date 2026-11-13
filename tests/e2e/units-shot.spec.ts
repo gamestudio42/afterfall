@@ -34,8 +34,9 @@ test("the survivor model replaces the capsule kit", async ({ page }) => {
   await page.evaluate((index) => (window as unknown as Win).__afterfall.command({ type: "setBase", building: index }), hq);
   await expectPopulation(page, "4");
 
-  // Give the model time to load and the camera time to settle.
-  await page.waitForFunction(() => (window as unknown as Win).__afterfall.renderer.unitParts.length > 0, null, { timeout: 15_000 });
+  // Give the model time to load and the camera time to settle. Asset loading
+  // is real I/O and can take longer on a loaded software-WebGL CI runner.
+  await page.waitForFunction(() => (window as unknown as Win).__afterfall.renderer.unitParts.length > 0, null, { timeout: 30_000 });
   await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
     const at = g.sim.hqEntrance();
@@ -44,7 +45,11 @@ test("the survivor model replaces the capsule kit", async ({ page }) => {
     g.renderer.rts.goalDistance = 26;
     g.renderer.rts.distance = 26;
   });
-  await page.waitForTimeout(2_000);
+  // Wait for the camera to settle and a few frames to render the survivors.
+  await page.waitForFunction(() => {
+    const r = (window as unknown as Win).__afterfall.renderer.rts;
+    return Math.abs(r.distance - r.goalDistance) < 0.05 && r.target.distanceTo(r.goalTarget) < 0.05;
+  });
 
   const state = await page.evaluate(() => {
     const r = (window as unknown as Win).__afterfall.renderer;

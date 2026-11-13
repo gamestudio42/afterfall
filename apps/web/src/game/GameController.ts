@@ -7,6 +7,7 @@ import {
   isAxial,
   placementAt,
   placementYaw,
+  previewFrame,
   serialize,
   type Command,
   type EntityId,
@@ -619,6 +620,8 @@ export class GameController {
       cells,
       valid: cells.map(([x, y]) => this.cellValid(kind, x, y, yaw ?? 0)),
       yaw,
+      // A single wall or gate shows where it will really sit: on the line it joins.
+      frame: yaw !== undefined && isAxial(kind) ? previewFrame(this.sim!, cells[0][0], cells[0][1], yaw) : undefined,
     };
   }
 

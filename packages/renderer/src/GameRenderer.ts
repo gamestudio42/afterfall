@@ -40,6 +40,8 @@ export interface BuildPreview {
   valid: boolean[];
   /** The angle a single piece will take. */
   yaw?: number;
+  /** Where a single wall or gate will sit, when it joins a slanted line. */
+  frame?: LineFrame;
 }
 
 const MAX_UNITS = 64;
@@ -1460,7 +1462,7 @@ export class GameRenderer {
     const axisYaw = p.cells.length > 1 ? (first[1] === last[1] ? 0 : Math.PI / 2) : (p.yaw ?? 0);
     p.cells.forEach(([cx, cy], i) => {
       if (n >= 400) return;
-      const line = axial && p.cells.length > 1 ? lineFrame(first, last, [cx, cy]) : null;
+      const line = !axial ? null : p.cells.length > 1 ? lineFrame(first, last, [cx, cy]) : (p.frame ?? null);
       const yaw = line ? line.yaw : axisYaw;
       const length = def.size * cell * (line?.stretch ?? 1);
       tmpQ.identity();

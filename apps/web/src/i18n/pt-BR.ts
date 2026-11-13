@@ -259,6 +259,7 @@ export const ptBR: Record<string, string> = {
   "alert.hqUnderAttack": "A sede está sob ataque!",
   "alert.wallUnderAttack": "As defesas estão sob ataque!",
   "alert.structureDestroyed": "{kind} destruída.",
+  "alert.structureDemolished": "{kind}: demolição concluída, parte do material recuperada.",
   "alert.hordeDetected": "Horda de {count} infectados vindo do {dir}!",
   "alert.foodLow": "Comida acabando.",
   "alert.waterLow": "Água acabando.",

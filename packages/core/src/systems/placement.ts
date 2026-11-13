@@ -216,6 +216,8 @@ function nearestRoadYaw(sim: Simulation, x: number, y: number): number | null {
  */
 export function singleFrame(sim: Simulation, cx: number, cy: number, yaw: number): LineFrame | null {
   const y = foldYaw(yaw);
+  const joined = joinFrame(sim, cx, cy, y);
+  if (joined) return joined;
   const onAxis = Math.abs(Math.sin(2 * y)) < 1e-6;
   if (onAxis) {
     const joined = axialAt(sim, cx + 1, cy) || axialAt(sim, cx - 1, cy) || axialAt(sim, cx, cy + 1) || axialAt(sim, cx, cy - 1);
@@ -228,4 +230,38 @@ export function singleFrame(sim: Simulation, cx: number, cy: number, yaw: number
 export function turnFrame(yaw: number): LineFrame | null {
   const y = foldTurn(yaw);
   return Math.abs(y) < 1e-6 ? null : { yaw: y, stretch: 1, ox: 0, oy: 0 };
+}
+
+/**
+ * The frame of a piece set onto the line of a slanted wall next to it: a gate in a gap,
+ * or one more panel at the end. Taking only the neighbour's angle left the piece on its
+ * cell centre and unstretched, a step out of a line whose pieces sit up to half a cell
+ * off their centres. Null when no neighbour's line at this angle passes through the cell.
+ */
+function joinFrame(sim: Simulation, cx: number, cy: number, yaw: number): LineFrame | null {
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const line = axialAt(sim, cx + dx, cy + dy)?.structure!.line;
+      if (!line || Math.abs(Math.sin(line.yaw - yaw)) > 1e-3) continue;
+      // The neighbour's point on the line, and the line's direction on the grid.
+      const px = cx + dx + line.ox;
+      const py = cy + dy + line.oy;
+      const ux = Math.cos(line.yaw);
+      const uy = -Math.sin(line.yaw);
+      let ox = 0;
+      let oy = 0;
+      if (Math.abs(ux) >= Math.abs(uy)) oy = py + ((cx - px) * uy) / ux - cy;
+      else ox = px + ((cy - py) * ux) / uy - cx;
+      // Further than that, the line runs through another cell: this piece is beside it.
+      if (Math.abs(ox) + Math.abs(oy) > 0.5 + 1e-6) continue;
+      return { yaw: line.yaw, stretch: line.stretch, ox, oy };
+    }
+  return null;
+}
+
+/** The frame a single wall or gate will be drawn with, for the preview. */
+export function previewFrame(sim: Simulation, cx: number, cy: number, yaw: number): LineFrame {
+  const self = axialAt(sim, cx, cy)?.structure!.line;
+  return self ?? singleFrame(sim, cx, cy, yaw) ?? { yaw: foldYaw(yaw), stretch: 1, ox: 0, oy: 0 };
 }

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { lineCells } from "@afterfall/shared";
+import { lineCells, lineFrame } from "@afterfall/shared";
 import { CellKind, cityFromOverpass } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
 import { createSimulation, deserialize, serialize, type Simulation } from "../src";
 import { destroyStructure } from "../src/systems/infected";
 import { foldYaw, placementAt, placementYaw, structureCells } from "../src/systems/placement";
-import { cancelTask, finishStructure, placeStructures } from "../src/systems/tasks";
+import { cancelTask, finishStructure, placeStructures, taskSystem } from "../src/systems/tasks";
 import { pickBase } from "./autoplay";
 
 function started(seed = 3): Simulation {
@@ -272,5 +272,116 @@ describe("turning a tower, farm or well", () => {
       }
     }
     expect(checked).toBeGreaterThan(0);
+  });
+});
+
+describe("defects found auditing the build system", () => {
+  it("a loaded game leaves the wall its cells while a gate waits inside it", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim);
+    placeStructures(sim, "wall", [[x, y]]);
+    finishAll(sim);
+    const wall = at(sim, x, y)!;
+    const task = placeStructures(sim, "gate", [[x, y]])!;
+    const back = deserialize(JSON.stringify(serialize(sim)));
+    const i = back.grid.index(x, y);
+    expect(back.grid.structureAt[i]).toBe(wall.id);
+    // Cancelled after the load, the wall is still a wall somebody owns.
+    cancelTask(back, back.state.tasks.get(task.id)!);
+    expect(back.grid.structureAt[i]).toBe(wall.id);
+    expect(back.grid.kind[i]).toBe(CellKind.Solid);
+  });
+
+  it("cancelling one blueprint leaves the rest of the line, and its task, in place", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 8);
+    const task = placeStructures(sim, "wall", lineCells([x, y], [x + 5, y]))!;
+    const cost = { ...task.cost };
+    const work = task.work;
+    sim.enqueue({ type: "demolish", structure: at(sim, x + 2, y)!.id });
+    sim.tick();
+    expect([...sim.structures()]).toHaveLength(5);
+    expect(sim.grid.structureAt[sim.grid.index(x + 2, y)]).toBe(-1);
+    const left = sim.state.tasks.get(task.id)!;
+    expect(left.structures).toHaveLength(5);
+    expect(left.cost.wood).toBeCloseTo((cost.wood! * 5) / 6);
+    expect(left.work).toBeCloseTo((work * 5) / 6);
+    // The last one standing takes the task with it.
+    for (const e of [...sim.structures()]) sim.enqueue({ type: "demolish", structure: e.id });
+    sim.tick();
+    expect([...sim.structures()]).toHaveLength(0);
+    expect(sim.state.tasks.has(task.id)).toBe(false);
+  });
+
+  it("cancelling a blueprint gives back what was delivered for it", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 8);
+    const task = placeStructures(sim, "wall", lineCells([x, y], [x + 2, y]))!;
+    // Everything delivered, the first piece built.
+    task.delivered = { ...task.cost };
+    task.progress = task.work / 3;
+    finishStructure(sim, at(sim, x, y)!);
+    const wood = sim.totals().wood;
+    sim.enqueue({ type: "demolish", structure: at(sim, x + 2, y)!.id });
+    sim.tick();
+    expect(sim.totals().wood).toBe(wood + 2);
+    const left = sim.state.tasks.get(task.id)!;
+    expect(left.delivered.wood).toBe(left.cost.wood);
+  });
+
+  it("demolishing salvages half the cost and raises no alarm", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim);
+    placeStructures(sim, "tower", [[x, y]]);
+    finishAll(sim);
+    const before = sim.totals();
+    const seen = sim.state.alerts.length;
+    sim.enqueue({ type: "demolish", structure: at(sim, x, y)!.id });
+    sim.tick();
+    expect(sim.totals().wood).toBe(before.wood + 6);
+    expect(sim.totals().metal).toBe(before.metal + 2);
+    const alerts = sim.state.alerts.slice(seen);
+    expect(alerts.map((a) => a.key)).toContain("alert.structureDemolished");
+    expect(alerts.some((a) => a.severity === "danger")).toBe(false);
+  });
+
+  it("a single piece set onto a slanted line sits on that line", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 10);
+    const from: [number, number] = [x, y];
+    const to: [number, number] = [x + 8, y + 3];
+    const cells = lineCells(from, to);
+    const gap = cells[3];
+    placeStructures(
+      sim,
+      "wall",
+      cells.filter((c) => c !== gap),
+    );
+    // Not one drawn line any more (a cell is missing), so lay the frames as a drag would.
+    for (const c of cells) if (c !== gap) at(sim, c[0], c[1])!.structure!.line = lineFrame(from, to, c)!;
+    const want = lineFrame(from, to, gap)!;
+    placeStructures(sim, "gate", [gap], placementYaw(sim, "gate", gap[0], gap[1]));
+    const got = at(sim, gap[0], gap[1])!.structure!.line!;
+    expect(got.yaw).toBeCloseTo(want.yaw);
+    expect(got.stretch).toBeCloseTo(want.stretch);
+    expect(got.ox).toBeCloseTo(want.ox);
+    expect(got.oy).toBeCloseTo(want.oy);
+    // A piece beside the line, not on it, keeps to its own cell.
+    placeStructures(sim, "wall", [[gap[0], gap[1] - 2]], want.yaw);
+    expect(at(sim, gap[0], gap[1] - 2)!.structure!.line).toEqual({ yaw: want.yaw, stretch: 1, ox: 0, oy: 0 });
+  });
+
+  it("a repair on a wall ends when a gate takes that wall's place", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim);
+    placeStructures(sim, "wall", [[x, y]]);
+    finishAll(sim);
+    at(sim, x, y)!.health!.hp = 10;
+    while (sim.state.tick % 10 !== 0) sim.state.tick++;
+    taskSystem(sim);
+    expect([...sim.state.tasks.values()].some((t) => t.type === "repair")).toBe(true);
+    placeStructures(sim, "gate", [[x, y]]);
+    finishAll(sim);
+    expect([...sim.state.tasks.values()].some((t) => t.type === "repair")).toBe(false);
   });
 });

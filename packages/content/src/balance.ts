@@ -31,6 +31,8 @@ export const BALANCE = {
   },
   /** Logistics: how much one haul task moves, and how much a carrier takes. */
   logistics: { haulBatch: 40 },
+  /** Share of a structure's cost salvaged when the player demolishes it at full health. */
+  demolishRefund: 0.5,
   /** Infected roaming the city at the start, per 1000 m² of road. */
   wanderersAtStart: 22,
   /** Night horde schedule, indexed by night number (1-based). */

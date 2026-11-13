@@ -3,7 +3,7 @@ import type { Simulation } from "./simulation";
 import type { EntityId, Policies, Stance } from "./state";
 import { resolveEvent } from "./systems/events";
 import { killSurvivor, returnToBase } from "./systems/survivors";
-import { cancelTask, placeStructures, releaseFromTask, startConversion } from "./systems/tasks";
+import { cancelBlueprint, cancelTask, placeStructures, releaseFromTask, startConversion } from "./systems/tasks";
 import { destroyStructure } from "./systems/infected";
 import { exitBuilding } from "./systems/util";
 
@@ -155,11 +155,10 @@ export function applyCommand(sim: Simulation, cmd: Command): void {
       const e = st.entities.get(cmd.structure);
       if (!e?.structure) return;
       if (!e.structure.built) {
-        const t = st.tasks.get(e.structure.task);
-        if (t) cancelTask(sim, t);
+        cancelBlueprint(sim, e);
         return;
       }
-      destroyStructure(sim, e);
+      destroyStructure(sim, e, true);
       return;
     }
     case "createSquad": {

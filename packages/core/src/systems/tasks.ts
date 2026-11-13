@@ -433,7 +433,18 @@ export function finishStructure(sim: Simulation, e: Entity): void {
   s.built = true;
   // The wall a gate was set into gives way only now, so the line was never open.
   if (s.replaces !== undefined) {
-    if (sim.state.entities.get(s.replaces)?.structure) sim.removeEntity(s.replaces);
+    if (sim.state.entities.get(s.replaces)?.structure) {
+      sim.removeEntity(s.replaces);
+      // A repair under way on that wall has nothing left to repair.
+      const gone = s.replaces;
+      for (const [id, t] of sim.state.tasks) {
+        if (!t.structures.includes(gone)) continue;
+        t.structures = t.structures.filter((x) => x !== gone);
+        if (t.structures.length > 0 || t.building >= 0) continue;
+        for (const w of [...t.assigned]) releaseWorker(sim, w);
+        sim.state.tasks.delete(id);
+      }
+    }
     delete s.replaces;
   }
   e.health = { hp: STRUCTURES[s.kind].maxHp, max: STRUCTURES[s.kind].maxHp };
@@ -529,6 +540,46 @@ export function cancelTask(sim: Simulation, task: Task): void {
   }
   if (task.type === "convert") sim.state.buildings[task.building].task = -1;
   sim.state.tasks.delete(task.id);
+}
+
+/**
+ * Takes one blueprint out of its build task and leaves the rest of the line standing.
+ * Cancelling a piece used to cancel the whole task, so one wrong cell cost the player the
+ * entire wall they had drawn.
+ */
+export function cancelBlueprint(sim: Simulation, e: Entity): void {
+  const s = e.structure!;
+  const task = sim.state.tasks.get(s.task);
+  if (!task || task.type !== "build") return;
+  const others = task.structures.filter((id) => id !== e.id && sim.state.entities.has(id));
+  if (!others.some((id) => !sim.state.entities.get(id)!.structure!.built)) {
+    // The last piece still to build: nothing of the task is left.
+    cancelTask(sim, task);
+    return;
+  }
+  const def = STRUCTURES[s.kind];
+  // What was delivered for this piece and not yet built into it comes back.
+  const unbuilt = 1 - Math.min(1, s.progress / Math.max(1e-6, def.work));
+  const refund: ResourceBag = {};
+  for (const id of RESOURCE_IDS) {
+    const share = def.cost[id] ?? 0;
+    if (share <= 0) continue;
+    task.cost[id] = Math.max(0, (task.cost[id] ?? 0) - share);
+    const over = Math.max(0, (task.delivered[id] ?? 0) - (task.cost[id] ?? 0));
+    if (over <= 0) continue;
+    task.delivered[id] = (task.delivered[id] ?? 0) - over;
+    const back = Math.floor(Math.min(over, share) * unbuilt);
+    if (back > 0) refund[id] = back;
+  }
+  sim.deposit(refund, e.transform!.x, e.transform!.y);
+  task.work -= def.work;
+  task.progress = Math.max(0, task.progress - s.progress);
+  task.structures = task.structures.filter((id) => id !== e.id);
+  task.maxWorkers = Math.min(4, 1 + Math.ceil(task.structures.length / 4));
+  sim.grid.releaseStructure(s.cells, e.id);
+  sim.removeEntity(e.id);
+  advanceBuild(sim, task);
+  if (task.progress >= task.work - 1e-6) completeTask(sim, task);
 }
 
 function releaseWorker(sim: Simulation, id: EntityId): void {

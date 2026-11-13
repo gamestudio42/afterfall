@@ -43,6 +43,7 @@ day produced and consumed, and how many days of each resource remain.
 - **Adaptations:** shelter (beds), storage (capacity), workshop (metal → ammo, with a "keep ammo at N" policy).
 - **Structures:** wall, gate (survivors pass, infected do not; can be set into a finished wall, which stands until the gate is done), watchtower (+7 m range, guard is unreachable while it stands), garden (food), well (water).
 - **Placing walls and gates:** drag to draw a straight run at any angle; every piece keeps the drawn angle, so walls follow the streets of imported real places. A single wall or gate lines up with the wall it joins, else the nearest street; a tower, garden or well squares up to the nearest street. R / Shift+R turns any of them by 15°; a turned tower, garden or well claims every grid cell its square reaches into. A click that wobbles a few pixels is still one piece, not a two-piece line.
+- **Cancelling and demolishing:** cancelling one blueprint removes that piece only and returns what was delivered for it; the rest of the line keeps building. Demolishing a finished structure salvages half its cost, scaled by its condition (`BALANCE.demolishRefund`).
 - **Infected:** walker, runner, brute. States: idle, wander, investigate (noise), chase, assault, retreat.
 - **Events:** refugees at the gate, wandering trader, radio cache, storm, accident. All data-driven.
 

@@ -259,6 +259,7 @@ export const en: Record<string, string> = {
   "alert.hqUnderAttack": "The headquarters is under attack!",
   "alert.wallUnderAttack": "The defenses are under attack!",
   "alert.structureDestroyed": "{kind} destroyed.",
+  "alert.structureDemolished": "{kind} demolished, some materials salvaged.",
   "alert.hordeDetected": "Horde of {count} infected coming from the {dir}!",
   "alert.foodLow": "Food is running low.",
   "alert.waterLow": "Water is running low.",

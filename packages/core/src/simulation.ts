@@ -82,7 +82,10 @@ export class Simulation {
         if (!s) continue;
         // Built structures change passability; blueprints only reserve their cells.
         if (s.built) this.stampStructure(e);
-        else this.grid.reserveStructure(s.cells, e.id);
+        // A gate waiting inside a wall leaves the cells to that wall, as when it was placed:
+        // taking them here left a wall nobody could select or demolish once the gate was
+        // cancelled.
+        else if (s.replaces === undefined || !restored.entities.get(s.replaces)?.structure) this.grid.reserveStructure(s.cells, e.id);
       }
       const cars = abandonedVehicles(this.city);
       for (const e of restored.entities.values()) {

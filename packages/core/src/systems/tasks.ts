@@ -1,7 +1,7 @@
 import { BALANCE, BUILDING_FUNCTIONS, RESOURCE_IDS, STRUCTURES, WEAPONS, addToBag, bagTotal, type ResourceBag } from "@afterfall/content";
-import { lineCells, lineFrame, type Vec2 } from "@afterfall/shared";
-import { CellKind } from "@afterfall/world";
+import { lineFrame, type Vec2 } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
+import { isAxial, isDrawnLine, joinCorner, placementAt, singleFrame, turnFrame } from "./placement";
 import { TOWER_RANGE_BONUS } from "./combat";
 import type { Entity, EntityId, SurvivorComp, Task, TaskType } from "../state";
 import {
@@ -212,8 +212,10 @@ export function taskSite(sim: Simulation, task: Task): Vec2 | null {
   // Find a free cell touching the footprint.
   let best: Vec2 | null = null;
   let bestD = Infinity;
-  for (let y = s.cy - 1; y <= s.cy + def.size; y++) {
-    for (let x = s.cx - 1; x <= s.cx + def.size; x++) {
+  // A turned tower or well can cover cells of the first ring: look one further out.
+  const reach = s.line && s.kind !== "wall" && s.kind !== "gate" ? 2 : 1;
+  for (let y = s.cy - reach; y < s.cy + def.size + reach; y++) {
+    for (let x = s.cx - reach; x < s.cx + def.size + reach; x++) {
       if (!sim.grid.inBounds(x, y)) continue;
       const i = sim.grid.index(x, y);
       if (s.cells.includes(i) || !sim.grid.passableIndex(i, "survivor")) continue;
@@ -429,6 +431,22 @@ function advanceBuild(sim: Simulation, task: Task): void {
 export function finishStructure(sim: Simulation, e: Entity): void {
   const s = e.structure!;
   s.built = true;
+  // The wall a gate was set into gives way only now, so the line was never open.
+  if (s.replaces !== undefined) {
+    if (sim.state.entities.get(s.replaces)?.structure) {
+      sim.removeEntity(s.replaces);
+      // A repair under way on that wall has nothing left to repair.
+      const gone = s.replaces;
+      for (const [id, t] of sim.state.tasks) {
+        if (!t.structures.includes(gone)) continue;
+        t.structures = t.structures.filter((x) => x !== gone);
+        if (t.structures.length > 0 || t.building >= 0) continue;
+        for (const w of [...t.assigned]) releaseWorker(sim, w);
+        sim.state.tasks.delete(id);
+      }
+    }
+    delete s.replaces;
+  }
   e.health = { hp: STRUCTURES[s.kind].maxHp, max: STRUCTURES[s.kind].maxHp };
   sim.stampStructure(e);
   sim.state.stats.structuresBuilt++;
@@ -524,6 +542,46 @@ export function cancelTask(sim: Simulation, task: Task): void {
   sim.state.tasks.delete(task.id);
 }
 
+/**
+ * Takes one blueprint out of its build task and leaves the rest of the line standing.
+ * Cancelling a piece used to cancel the whole task, so one wrong cell cost the player the
+ * entire wall they had drawn.
+ */
+export function cancelBlueprint(sim: Simulation, e: Entity): void {
+  const s = e.structure!;
+  const task = sim.state.tasks.get(s.task);
+  if (!task || task.type !== "build") return;
+  const others = task.structures.filter((id) => id !== e.id && sim.state.entities.has(id));
+  if (!others.some((id) => !sim.state.entities.get(id)!.structure!.built)) {
+    // The last piece still to build: nothing of the task is left.
+    cancelTask(sim, task);
+    return;
+  }
+  const def = STRUCTURES[s.kind];
+  // What was delivered for this piece and not yet built into it comes back.
+  const unbuilt = 1 - Math.min(1, s.progress / Math.max(1e-6, def.work));
+  const refund: ResourceBag = {};
+  for (const id of RESOURCE_IDS) {
+    const share = def.cost[id] ?? 0;
+    if (share <= 0) continue;
+    task.cost[id] = Math.max(0, (task.cost[id] ?? 0) - share);
+    const over = Math.max(0, (task.delivered[id] ?? 0) - (task.cost[id] ?? 0));
+    if (over <= 0) continue;
+    task.delivered[id] = (task.delivered[id] ?? 0) - over;
+    const back = Math.floor(Math.min(over, share) * unbuilt);
+    if (back > 0) refund[id] = back;
+  }
+  sim.deposit(refund, e.transform!.x, e.transform!.y);
+  task.work -= def.work;
+  task.progress = Math.max(0, task.progress - s.progress);
+  task.structures = task.structures.filter((id) => id !== e.id);
+  task.maxWorkers = Math.min(4, 1 + Math.ceil(task.structures.length / 4));
+  sim.grid.releaseStructure(s.cells, e.id);
+  sim.removeEntity(e.id);
+  advanceBuild(sim, task);
+  if (task.progress >= task.work - 1e-6) completeTask(sim, task);
+}
+
 function releaseWorker(sim: Simulation, id: EntityId): void {
   const e = sim.state.entities.get(id);
   if (e?.survivor) releaseFromTask(sim, e as SurvivorEntity);
@@ -557,8 +615,11 @@ export function releaseFromTask(sim: Simulation, e: Entity): void {
   sim.stop(e);
 }
 
-/** Validates and creates blueprints for new structures. */
-export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, cells: [number, number][]): Task | null {
+/**
+ * Validates and creates blueprints for new structures. `yaw` is the angle the player
+ * gave a single wall or gate; a drawn line takes the line's own angle instead.
+ */
+export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, cells: [number, number][], yaw?: number): Task | null {
   const def = STRUCTURES[kind];
   const ids: EntityId[] = [];
   const cost: ResourceBag = {};
@@ -566,15 +627,11 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
   const hq = sim.hqBuilding;
   if (!hq) return null;
   const used = new Set<number>();
-  const drawn = kind === "wall" && isDrawnLine(cells);
+  const drawn = isAxial(kind) && isDrawnLine(cells);
   for (const [cx, cy] of cells) {
-    const fp = sim.grid.footprint(cx, cy, def.size);
-    if (fp.length !== def.size * def.size) continue;
-    const ok = fp.every((i) => !used.has(i) && sim.grid.kind[i] === CellKind.Free && sim.grid.structureAt[i] === -1);
-    if (!ok) continue;
-    // Do not seal off building doors.
-    if (kind !== "farm" && touchesEntrance(sim, fp)) continue;
-    for (const i of fp) used.add(i);
+    const at = placementAt(sim, kind, cx, cy, !isAxial(kind) ? (yaw ?? 0) : 0);
+    if (!at || at.cells.some((i) => used.has(i))) continue;
+    for (const i of at.cells) used.add(i);
     const id = sim.newId();
     const e: Entity = {
       id,
@@ -585,39 +642,49 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
         py: 0,
         heading: 0,
       },
-      structure: { kind, cx, cy, cells: fp, built: false, progress: 0, task: -1, output: {} },
+      structure: { kind, cx, cy, cells: at.cells, built: false, progress: 0, task: -1, output: {} },
     };
-    // A wall comes in as a drawn line, first cell to last: each piece remembers the
-    // line's angle so it is drawn along it rather than along the grid's staircase.
-    const line = drawn ? lineFrame(cells[0], cells[cells.length - 1], [cx, cy]) : null;
-    if (line) e.structure!.line = line;
+    // A gate set into a wall sits exactly where that wall piece sits, offset included.
+    // A drawn line remembers its angle so each piece is drawn along it rather than along
+    // the grid's staircase; a single piece keeps the angle it was given.
+    const replaced = at.replaces >= 0 ? sim.state.entities.get(at.replaces) : undefined;
+    const line = replaced
+      ? (replaced.structure!.line ?? null)
+      : drawn
+        ? lineFrame(cells[0], cells[cells.length - 1], [cx, cy])
+        : yaw === undefined
+          ? null
+          : isAxial(kind)
+            ? singleFrame(sim, cx, cy, yaw)
+            : turnFrame(yaw);
+    if (line) e.structure!.line = { ...line };
+    if (at.replaces >= 0) e.structure!.replaces = at.replaces;
     e.transform!.px = e.transform!.x;
     e.transform!.py = e.transform!.y;
     sim.state.entities.set(id, e);
-    sim.grid.reserveStructure(fp, id);
+    // A replacement leaves the wall's claim on the cells until it takes them over.
+    if (at.replaces < 0) sim.grid.reserveStructure(at.cells, id);
     ids.push(id);
     for (const r of RESOURCE_IDS) if (def.cost[r]) addToBag(cost, r, def.cost[r]!);
     work += def.work;
   }
   if (ids.length === 0) return null;
+  // Where a drawn line starts, ends or crosses a standing piece, its own pieces on either
+  // side reach that cell's centre instead of stopping half a step short of it.
+  if (drawn) {
+    const g = sim.grid;
+    const mine = (c: [number, number] | undefined) => {
+      const e = c && g.inBounds(c[0], c[1]) ? sim.state.entities.get(g.structureAt[g.index(c[0], c[1])]) : undefined;
+      return e && ids.includes(e.id) ? e : null;
+    };
+    cells.forEach((c, n) => {
+      if (mine(c)) return;
+      for (const beside of [mine(cells[n - 1]), mine(cells[n + 1])]) if (beside) joinCorner(sim, c, beside);
+    });
+  }
   const task = createTask(sim, "build", { structures: ids, cost, work, maxWorkers: Math.min(4, 1 + Math.ceil(ids.length / 4)) });
   for (const id of ids) sim.state.entities.get(id)!.structure!.task = task.id;
   return task;
-}
-
-/** True when the cells are exactly the straight line from the first to the last one. */
-function isDrawnLine(cells: [number, number][]): boolean {
-  if (cells.length < 2) return false;
-  const line = lineCells(cells[0], cells[cells.length - 1]);
-  return line.length === cells.length && line.every(([x, y], i) => cells[i][0] === x && cells[i][1] === y);
-}
-
-function touchesEntrance(sim: Simulation, cells: number[]): boolean {
-  for (const b of sim.city.buildings) {
-    const ei = sim.grid.cellOf(b.entrance.x, b.entrance.y);
-    if (cells.includes(ei)) return true;
-  }
-  return false;
 }
 
 export function startConversion(sim: Simulation, index: number, fn: keyof typeof BUILDING_FUNCTIONS): Task | null {

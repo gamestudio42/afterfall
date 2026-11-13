@@ -1,4 +1,4 @@
-import { BALANCE, INFECTED, STRUCTURES, hordeForNight } from "@afterfall/content";
+import { BALANCE, INFECTED, RESOURCE_IDS, STRUCTURES, hordeForNight } from "@afterfall/content";
 import { TICK_SECONDS, type Vec2 } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
 import type { Simulation } from "../simulation";
@@ -349,7 +349,11 @@ function hitStructure(sim: Simulation, e: InfectedEntity, s: Entity): void {
   if (h.hp <= 0) destroyStructure(sim, s);
 }
 
-export function destroyStructure(sim: Simulation, s: Entity): void {
+/**
+ * Removes a structure. `demolished` is the player taking it down on purpose: no alarm,
+ * and part of the materials come back.
+ */
+export function destroyStructure(sim: Simulation, s: Entity, demolished = false): void {
   const st = s.structure!;
   for (const id of sim.state.entities.keys()) {
     const o = sim.state.entities.get(id)!;
@@ -372,8 +376,28 @@ export function destroyStructure(sim: Simulation, s: Entity): void {
   for (const [id, task] of sim.state.tasks) if (task.structures.length === 0 && task.building < 0) sim.state.tasks.delete(id);
   sim.grid.setStructure(st.cells, CellKind.Free, -1);
   sim.removeEntity(s.id);
+  // A gate waiting to take this wall's place now holds the cells on its own.
+  for (const o of sim.structures()) {
+    if (o.structure.replaces !== s.id) continue;
+    delete o.structure.replaces;
+    sim.grid.reserveStructure(o.structure.cells, o.id);
+  }
   sim.emitFx("collapse", s.transform!.x, s.transform!.y);
-  sim.alert("alert.structureDestroyed", { kind: st.kind }, "danger", { x: s.transform!.x, y: s.transform!.y });
+  const at = { x: s.transform!.x, y: s.transform!.y };
+  if (!demolished) {
+    sim.alert("alert.structureDestroyed", { kind: st.kind }, "danger", at);
+    return;
+  }
+  // Salvage: half of what it cost, less for a structure already battered.
+  const whole = s.health ? Math.max(0, s.health.hp / s.health.max) : 1;
+  const def = STRUCTURES[st.kind];
+  const refund: Partial<Record<(typeof RESOURCE_IDS)[number], number>> = {};
+  for (const id of RESOURCE_IDS) {
+    const back = Math.floor((def.cost[id] ?? 0) * BALANCE.demolishRefund * whole);
+    if (back > 0) refund[id] = back;
+  }
+  sim.deposit(refund, at.x, at.y);
+  sim.alert("alert.structureDemolished", { kind: st.kind }, "info", at);
 }
 
 function retreat(sim: Simulation, e: InfectedEntity): void {

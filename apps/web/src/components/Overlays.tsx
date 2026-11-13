@@ -1,9 +1,10 @@
-import { EVENTS } from "@afterfall/content";
+import { EVENTS, RESOURCE_IDS, STRUCTURES, type ResourceBag } from "@afterfall/content";
 import { getReport } from "@afterfall/core";
 import { TICKS_PER_GAME_MINUTE } from "@afterfall/shared";
 import { useFrame, useGame, useT } from "../app/hooks";
 import { useUi } from "../app/store";
 import { alertKey } from "../i18n";
+import { Bag } from "./common";
 
 export function Alerts() {
   useFrame();
@@ -115,13 +116,30 @@ export function Banner() {
         <small>{t("banner.chooseBaseHint")}</small>
       </div>
     );
-  if (buildMode)
+  if (buildMode) {
+    const info = game.buildInfo;
+    const def = STRUCTURES[buildMode];
+    const count = info?.count ?? 0;
+    const cost: ResourceBag = {};
+    for (const id of RESOURCE_IDS) if (def.cost[id]) cost[id] = def.cost[id]! * Math.max(1, count);
+    const totals = sim.totals();
+    const short = RESOURCE_IDS.some((id) => (cost[id] ?? 0) > totals[id]);
     return (
       <div className="banner">
         <strong>{t(`struct.${buildMode}`)}</strong>
         <small>{t("banner.build")}</small>
+        <small data-testid="build-rotate">
+          {t("banner.buildRotate")} · {t(info?.manual ? "banner.angleManual" : "banner.angleAuto")}
+        </small>
+        <div data-testid="build-cost" className={`banner-cost ${short ? "short" : ""}`}>
+          <small>{t("banner.buildCount", { count })}</small>
+          <Bag bag={cost} />
+          {short && <small>{t("banner.buildShort")}</small>}
+          {info?.capped && <small>{t("banner.buildCapped")}</small>}
+        </div>
       </div>
     );
+  }
   if (speed === 0) return <div className="banner subtle">{t("hud.paused")}</div>;
   return null;
 }

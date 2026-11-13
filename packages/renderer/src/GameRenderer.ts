@@ -38,6 +38,10 @@ export interface BuildPreview {
   kind: StructureKind;
   cells: [number, number][];
   valid: boolean[];
+  /** The angle a single piece will take. */
+  yaw?: number;
+  /** Where a single wall or gate will sit, when it joins a slanted line. */
+  frame?: LineFrame;
 }
 
 const MAX_UNITS = 64;
@@ -685,12 +689,15 @@ export class GameRenderer {
       MAX_STRUCTURES,
       false,
     );
+    // The placement ghost draws over everything: a gate set into a wall was otherwise
+    // hidden inside that wall, exactly where the player needs to see green or red.
     this.preview = this.instanced(
       box,
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false, depthTest: false }),
       400,
       false,
     );
+    this.preview.renderOrder = 10;
 
     this.selectionBox = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd34d }));
     this.selectionBox.visible = false;
@@ -1356,12 +1363,15 @@ export class GameRenderer {
         // The ghost wears the same footprint and the same orientation as the finished
         // piece: a wall under construction is a thin slab along its line, not a cube.
         const axial = s.kind === "wall" || s.kind === "gate";
-        const frameB = axial ? wallMeasure(s) : { yaw: 0, stretch: 1 };
+        const frameB = axial ? wallMeasure(s) : { yaw: s.line?.yaw ?? 0, stretch: 1 };
         tmpQ2.setFromAxisAngle(up, frameB.yaw);
         tmpM.compose(
           tmpV.set(cx, 0, cz),
           tmpQ2,
-          tmpS.set(axial ? (size - 0.1) * frameB.stretch : size - 0.1, Math.max(0.2, def.height * frac), axial ? 0.5 : size - 0.1),
+          // A gate going into a wall is drawn around that wall, or it would hide inside it.
+          s.replaces !== undefined
+            ? tmpS.set(size * frameB.stretch + 0.1, STRUCTURES.wall.height + 0.25, 1.1)
+            : tmpS.set(axial ? (size - 0.1) * frameB.stretch : size - 0.1, Math.max(0.2, def.height * frac), axial ? 0.5 : size - 0.1),
         );
         this.blueprints.setMatrixAt(b, tmpM);
         this.blueprints.setColorAt(b, tmpC.setHex(e.id === this.selection.structure ? 0xffd34d : 0x6fd0ff));
@@ -1383,7 +1393,8 @@ export class GameRenderer {
         continue;
       }
       const axial = s.kind === "wall" || s.kind === "gate";
-      const frame = axial ? wallMeasure(s) : { yaw: 0, stretch: 1 };
+      // A tower, farm or well turns as placed; it never stretches.
+      const frame = axial ? wallMeasure(s) : { yaw: s.line?.yaw ?? 0, stretch: 1 };
       const yaw = frame.yaw;
       // A dedicated masonry pier joins runs without stretching timber or rubble.
       const placements = [{ yaw: yaw + (s.kind === "wall" && variation % 2 ? Math.PI : 0) }];
@@ -1448,16 +1459,24 @@ export class GameRenderer {
     let n = 0;
     const first = p.cells[0];
     const last = p.cells[p.cells.length - 1];
+    const axial = p.kind === "wall" || p.kind === "gate";
+    // A wall or gate previews as the slab it will be, turned the way it will stand: a
+    // cube gave no hint of the angle, and from above it read as a hexagon.
+    const axisYaw = p.cells.length > 1 ? (first[1] === last[1] ? 0 : Math.PI / 2) : (p.yaw ?? 0);
     p.cells.forEach(([cx, cy], i) => {
       if (n >= 400) return;
-      // A wall line at an angle previews along that angle, as it will be built.
-      const line = p.kind === "wall" && p.cells.length > 1 ? lineFrame(first, last, [cx, cy]) : null;
+      const line = !axial ? null : p.cells.length > 1 ? lineFrame(first, last, [cx, cy]) : (p.frame ?? null);
+      const yaw = line ? line.yaw : axisYaw;
+      const length = def.size * cell * (line?.stretch ?? 1);
       tmpQ.identity();
-      if (line) tmpQ.setFromAxisAngle(UP, line.yaw);
+      if (axial) tmpQ.setFromAxisAngle(UP, yaw);
+      else if (p.yaw) tmpQ.setFromAxisAngle(UP, p.yaw);
       tmpM.compose(
         tmpV.set((cx + def.size / 2 + (line?.ox ?? 0)) * cell, 0, (cy + def.size / 2 + (line?.oy ?? 0)) * cell),
         tmpQ,
-        tmpS.set((def.size * cell - 0.1) * (line?.stretch ?? 1), Math.max(0.4, def.height), line ? 0.5 : def.size * cell - 0.1),
+        axial
+          ? tmpS.set(length - 0.05, Math.max(0.4, def.height), 0.5)
+          : tmpS.set(def.size * cell - 0.1, Math.max(0.4, def.height), def.size * cell - 0.1),
       );
       this.preview.setMatrixAt(n, tmpM);
       this.preview.setColorAt(n, tmpC.setHex(p.valid[i] ? 0x7dff9a : 0xff5040));

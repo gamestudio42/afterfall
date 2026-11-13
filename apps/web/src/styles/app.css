@@ -350,6 +350,20 @@ canvas.world.hidden {
 .banner small {
   color: var(--muted);
 }
+.banner-cost {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 10px;
+}
+.banner-cost .bag {
+  margin-top: 0;
+}
+.banner-cost.short small,
+.banner-cost.short .bag {
+  color: #ff8a7a;
+}
 .banner.subtle {
   border-color: var(--line);
   color: var(--muted);

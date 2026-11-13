@@ -148,22 +148,35 @@ const GradeShader = {
  * threshold, tone mapping, then the grade. The scene is drawn into a
  * half-float target with MSAA, so highlights keep their range for the bloom
  * and the edges keep the antialiasing the canvas had.
+ *
+ * With `effects` false only the MSAA target and the output pass are kept: the
+ * plain frame, antialiased. That is what a canvas created without MSAA (because
+ * the chain was on at load) draws through once the player turns the chain off.
  */
 export class PostFx {
   private composer: EffectComposer;
-  private bloom: UnrealBloomPass;
-  private grade: ShaderPass;
+  private bloom: UnrealBloomPass | null = null;
+  private grade: ShaderPass | null = null;
 
-  constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
+  constructor(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+    readonly effects = true,
+  ) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), DAY.bloomStrength, DAY.bloomRadius, DAY.bloomThreshold);
-    this.composer.addPass(this.bloom);
+    if (effects) {
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), DAY.bloomStrength, DAY.bloomRadius, DAY.bloomThreshold);
+      this.composer.addPass(this.bloom);
+    }
     this.composer.addPass(new OutputPass());
-    this.grade = new ShaderPass(GradeShader);
-    this.composer.addPass(this.grade);
+    if (effects) {
+      this.grade = new ShaderPass(GradeShader);
+      this.composer.addPass(this.grade);
+    }
     this.setMood(1);
   }
 
@@ -173,6 +186,7 @@ export class PostFx {
   }
 
   setMood(daylight: number, dim = 0): void {
+    if (!this.bloom || !this.grade) return;
     const m = moodAt(daylight, dim);
     this.bloom.strength = m.bloomStrength;
     this.bloom.threshold = m.bloomThreshold;
@@ -191,7 +205,7 @@ export class PostFx {
 
   dispose(): void {
     this.composer.dispose();
-    this.bloom.dispose();
-    this.grade.dispose();
+    this.bloom?.dispose();
+    this.grade?.dispose();
   }
 }

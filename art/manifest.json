@@ -272,16 +272,16 @@
       "name": "survivors_walker",
       "file": "survivors/walker.glb",
       "kind": "glb",
-      "bytes": 463536,
-      "sha256": "56ad99d654bc6f26980cfa59cc2c7ba370ab7051330a4cc2e2256c0d42cef7d4",
+      "bytes": 486276,
+      "sha256": "3df54ec7d1abd00b8487a5e150c3c303c23fab43334e4f76308d3226914ba8b1",
       "generator": "tools/blender/survivors.py"
     },
     {
       "name": "infected_infected",
       "file": "infected/infected.glb",
       "kind": "glb",
-      "bytes": 324192,
-      "sha256": "f0a1e939d2c8ee8fb9b5d0d39657dc019bc2b8455c890014872ad962cc40ae22",
+      "bytes": 401176,
+      "sha256": "8c4c3bf30a465db5019114b7e31c4bdd35418a41d37cdb3e88d447e9c3c9e458",
       "generator": "tools/blender/infected.py"
     },
     {

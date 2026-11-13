@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CityMap } from "@afterfall/world";
+import { buildReclamation, reclaimSurface, reclaimUniforms, reclamationTexture, type ReclamationField } from "./reclamation";
 
 function plane(x: number, z: number, w: number, d: number, y: number): THREE.BufferGeometry {
   const g = new THREE.PlaneGeometry(w, d);
@@ -180,14 +181,21 @@ export function buildCityGround(city: CityMap): {
   materials: GroundMaterials;
   /** True for an imported map: streets and footprints, no blocks. */
   imported: boolean;
+  /** How overgrown each spot is; the vegetation scatter reads the same field. */
+  reclamation: ReclamationField;
+  reclamationTexture: THREE.DataTexture;
 } {
   const group = new THREE.Group();
   group.name = "ground";
+  const field = buildReclamation(city);
+  const fieldTex = reclamationTexture(field);
+  const reclaim = reclaimUniforms(field, fieldTex);
 
   const imported = city.blocksX === 0 || city.blockSize <= 0;
   const margin = 400;
   const groundMat = new THREE.MeshStandardMaterial({ color: imported ? 0x6f6d66 : 0x4a4d40, roughness: 1 });
   layeredSurface(groundMat);
+  reclaimSurface(groundMat, "ground", reclaim);
   const materials: GroundMaterials = { ground: groundMat, blocks: null, curbs: null, roads: null, parks: null };
   const groundGeo = plane(-margin, -margin, city.width + margin * 2, city.height + margin * 2, -0.05);
   worldUv(groundGeo, 12);
@@ -211,6 +219,7 @@ export function buildCityGround(city: CityMap): {
     const blockGeo = mergeGeometries(blocks.map((g) => (g.index ? g.toNonIndexed() : g)));
     worldUv(blockGeo, SIDEWALK_TILE);
     materials.blocks = new THREE.MeshStandardMaterial({ color: 0x8d897e, roughness: 0.95 });
+    reclaimSurface(materials.blocks, "sidewalk", reclaim);
     const blockMesh = new THREE.Mesh(blockGeo, materials.blocks);
     blockMesh.receiveShadow = true;
     group.add(blockMesh);
@@ -225,6 +234,7 @@ export function buildCityGround(city: CityMap): {
     const curbGeo = mergeGeometries(curbs);
     worldUv(curbGeo, 3);
     materials.curbs = new THREE.MeshStandardMaterial({ color: 0xb3afa5, roughness: 0.9 });
+    reclaimSurface(materials.curbs, "curb", reclaim);
     const curbMesh = new THREE.Mesh(curbGeo, materials.curbs);
     curbMesh.receiveShadow = true;
     group.add(curbMesh);
@@ -249,6 +259,7 @@ export function buildCityGround(city: CityMap): {
     });
     const roadMesh = new THREE.Mesh(roadGeo, materials.roads);
     layeredSurface(materials.roads);
+    reclaimSurface(materials.roads, "road", reclaim);
     roadMesh.receiveShadow = true;
     group.add(roadMesh);
   }
@@ -326,6 +337,7 @@ export function buildCityGround(city: CityMap): {
     worldUv(parkGeo, 8);
     materials.parks = new THREE.MeshStandardMaterial({ color: 0x4d6b35, roughness: 1 });
     layeredSurface(materials.parks);
+    reclaimSurface(materials.parks, "park", reclaim);
     const parkMesh = new THREE.Mesh(parkGeo, materials.parks);
     parkMesh.receiveShadow = true;
     group.add(parkMesh);
@@ -351,5 +363,5 @@ export function buildCityGround(city: CityMap): {
     fallback.add(trunks, crowns);
     group.add(fallback);
   }
-  return { group, materials, imported };
+  return { group, materials, imported, reclamation: field, reclamationTexture: fieldTex };
 }

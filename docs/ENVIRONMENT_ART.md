@@ -30,6 +30,42 @@ The old `sidewalk.jpg` and `roof.jpg` remain archived source assets; the rendere
 uses the new PNG slabs and roofing rolls. Roof felt also carries packed height
 and roughness, with staggered overlaps, repairs and mineral grit.
 
+## Reclamation: nature taking the city back
+
+`packages/renderer/src/reclamation.ts` builds one field per map that measures how
+overgrown each square metre is. The field is a texel per metre on a generated city,
+and at most 512 texels a side. It rises against walls, in the gutter and at the
+curb, around parks, and in broad noise patches. The middle of a carriageway stays
+the clearest surface, so streets remain readable. Distances come from a chamfer
+transform over building, road and park masks, so imported maps work the same way.
+
+The ground shaders sample that field. Soil, then moss or straw, cover the paving.
+Sidewalks also break into 0.8 m slabs, each with its own shade, and heavy growth
+removes some of them. Regional wear makes one stretch of paving greyer than the
+next. Park lawns turn rank and dry in patches. Growth is matte, so rain sheen stops
+where moss starts.
+
+The same field drives the vegetation scatter, so ground and plants agree:
+
+- `grass.ts` scatters up to 10,000 tufts of tall grass in one instanced draw. Each
+  tuft is four splayed alpha cards with upward normals and wind sway. Tufts are
+  cosmetic: they never block movement or building, stay under 1.2 m, and keep 2.8 m
+  clear of doors.
+- `placeVegetation` keeps the map's park trees. It then fills parks with more and
+  larger trees and brush, adds up to 220 self-seeded street trees in lots and
+  plazas, and puts brush against walls. Street trunks keep 6 m from doors. The total
+  cap is 900 instances.
+
+On a software rasteriser (CI) the renderer keeps an even 16 % of the plants and 12 %
+of the grass. Crowns and their shadows are thousands of triangles each, and the full
+set made a CPU frame 75 % slower, which starved the timing-sensitive e2e specs.
+Measured with a synced frame at 1440 × 900: about 1.05 s on `main`, 1.15 s now.
+
+The day grade is desaturated (0.88), with olive shadows and dusty highlights. The
+sun is a little warmer, the bounce light is olive, and the day haze starts nearer.
+The post chain stays off on software renderers, so CI captures do not show the
+grade. Force it with `renderer.setPost("on")`.
+
 ## Buildings and urban objects
 
 The street kit now has shaped car bodies, sloped glass, wheel rims, emergency

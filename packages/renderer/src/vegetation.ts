@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { CityMap } from "@afterfall/world";
-import { distToPolyline, pointInPolygon } from "@afterfall/shared";
+import { deriveSeed, distToPolyline, pointInPolygon } from "@afterfall/shared";
+import { buildReclamation, growthAt, hash2, type ReclamationField } from "./reclamation";
 
 type Species = "manaca" | "pequi" | "dead" | "bush";
 export interface Plant {
@@ -12,38 +13,108 @@ export interface Plant {
   yaw: number;
   shade: number;
 }
-export function placeVegetation(city: CityMap): Plant[] {
+/** Instances across every species. Trees cast shadows, so this is the real budget. */
+export const VEGETATION_CAP = 900;
+/** Street trees outside the parks, within the cap. */
+const URBAN_TREE_CAP = 220;
+
+/**
+ * Park trees from the map, then the growth that years without a gardener add: parks
+ * filled in with more and bigger trees and brush, and trees that seeded themselves
+ * in lots, against walls and through the paving, where the reclamation field is thick.
+ * Trunks keep clear of roads, buildings and doors; crowns may overhang them.
+ */
+export function placeVegetation(city: CityMap, field: ReclamationField = buildReclamation(city)): Plant[] {
   const out: Plant[] = [];
+  const seed = deriveSeed(city.seed >>> 0, "flora");
   let index = 0;
-  const clear = (x: number, z: number) =>
-    !city.buildings.some((b) => x > b.rect.x - 2 && x < b.rect.x + b.rect.w + 2 && z > b.rect.y - 2 && z < b.rect.y + b.rect.h + 2) &&
-    !city.roads.some((r) =>
+  const nearRoad = (x: number, z: number, m: number) =>
+    city.roads.some((r) =>
       r.path
-        ? distToPolyline(x, z, r.path) < (r.width ?? 8) / 2 + 1.5
-        : x > r.rect.x - 1.5 && x < r.rect.x + r.rect.w + 1.5 && z > r.rect.y - 1.5 && z < r.rect.y + r.rect.h + 1.5,
+        ? distToPolyline(x, z, r.path) < (r.width ?? 8) / 2 + m
+        : x > r.rect.x - m && x < r.rect.x + r.rect.w + m && z > r.rect.y - m && z < r.rect.y + r.rect.h + m,
     );
+  const nearBuilding = (x: number, z: number, m: number) =>
+    city.buildings.some((b) => x > b.rect.x - m && x < b.rect.x + b.rect.w + m && z > b.rect.y - m && z < b.rect.y + b.rect.h + m);
+  const nearDoor = (x: number, z: number, m: number) => city.buildings.some((b) => Math.hypot(b.entrance.x - x, b.entrance.y - z) < m);
+  const clear = (x: number, z: number) => !nearBuilding(x, z, 2) && !nearRoad(x, z, 1.5);
+  const inPark = (park: CityMap["parks"][number], x: number, z: number) =>
+    park.polygon
+      ? pointInPolygon(x, z, park.polygon)
+      : x > park.rect.x && x < park.rect.x + park.rect.w && z > park.rect.y && z < park.rect.y + park.rect.h;
+  const tree = (n: number, x: number, z: number, big: number): Plant => ({
+    species: n % 7 === 0 ? "dead" : n % 3 === 0 ? "pequi" : "manaca",
+    x,
+    z,
+    // Untended for years: most crowns well past the nursery size, a few giants.
+    scale: (0.95 + ((n * 37) % 13) / 22) * big,
+    yaw: n * 2.399,
+    shade: 0.72 + (n % 5) * 0.06,
+  });
+
   for (const park of city.parks) {
     for (const t of park.trees) {
-      if (out.length >= 600) return out;
+      if (out.length >= VEGETATION_CAP) return out;
       const n = ++index;
       if (!clear(t.x, t.y)) continue;
-      out.push({
-        species: n % 9 === 0 ? "dead" : n % 3 === 0 ? "pequi" : "manaca",
-        x: t.x,
-        z: t.y,
-        scale: 0.82 + ((n * 37) % 13) / 35,
-        yaw: n * 2.399,
-        shade: 0.8 + (n % 5) * 0.05,
-      });
+      out.push(tree(n, t.x, t.y, 1.05));
       const x = t.x + Math.sin(n) * 1.8,
         z = t.y + Math.cos(n) * 1.8;
-      const inPark = park.polygon
-        ? pointInPolygon(x, z, park.polygon)
-        : x > park.rect.x && x < park.rect.x + park.rect.w && z > park.rect.y && z < park.rect.y + park.rect.h;
-      if (out.length < 600 && n % 2 === 0 && inPark && clear(x, z))
-        out.push({ species: "bush", x, z, scale: 0.7 + (n % 3) * 0.15, yaw: n, shade: 0.85 });
+      if (out.length < VEGETATION_CAP && n % 2 === 0 && inPark(park, x, z) && clear(x, z))
+        out.push({ species: "bush", x, z, scale: 0.8 + (n % 3) * 0.2, yaw: n, shade: 0.85 });
     }
   }
+
+  // Parks closing in: a jittered grid of saplings grown up, and brush between them.
+  city.parks.forEach((park, pi) => {
+    const step = 6.5;
+    for (let gz = park.rect.y; gz < park.rect.y + park.rect.h; gz += step)
+      for (let gx = park.rect.x; gx < park.rect.x + park.rect.w; gx += step) {
+        if (out.length >= VEGETATION_CAP) return;
+        const cx = Math.floor(gx / step),
+          cz = Math.floor(gz / step);
+        const x = gx + hash2(cx, cz, seed + pi) * step,
+          z = gz + hash2(cx, cz, seed + pi + 101) * step;
+        if (!inPark(park, x, z)) continue;
+        const roll = hash2(cx, cz, seed + 7);
+        if (roll < 0.5 && clear(x, z)) out.push(tree(++index, x, z, 1.0));
+        else if (roll < 0.85 && !nearBuilding(x, z, 1) && !nearRoad(x, z, 0.8))
+          out.push({ species: "bush", x, z, scale: 0.9 + hash2(cx, cz, seed + 9) * 0.9, yaw: roll * 40, shade: 0.75 + roll * 0.2 });
+      }
+  });
+
+  // Trees that seeded themselves outside the parks, wherever the field is thick.
+  let urban = 0;
+  const step = 9;
+  for (let gz = 0; gz < city.height; gz += step)
+    for (let gx = 0; gx < city.width; gx += step) {
+      if (out.length >= VEGETATION_CAP || urban >= URBAN_TREE_CAP) return out;
+      const cx = gx / step,
+        cz = gz / step;
+      const x = gx + hash2(cx, cz, seed + 13) * step,
+        z = gz + hash2(cx, cz, seed + 17) * step;
+      const g = growthAt(field, x, z);
+      if (g < 0.35 || hash2(cx, cz, seed + 19) > (g - 0.35) * 1.8) continue;
+      if (city.parks.some((p) => inPark(p, x, z))) continue;
+      if (nearBuilding(x, z, 2.5) || nearRoad(x, z, 1.5) || nearDoor(x, z, 6)) continue;
+      urban++;
+      out.push(tree(++index, x, z, 1.25));
+    }
+
+  // Brush against the walls, where the field is thickest.
+  for (let gz = 0; gz < city.height; gz += 4)
+    for (let gx = 0; gx < city.width; gx += 4) {
+      if (out.length >= VEGETATION_CAP) return out;
+      const cx = gx / 4,
+        cz = gz / 4;
+      const x = gx + hash2(cx, cz, seed + 23) * 4,
+        z = gz + hash2(cx, cz, seed + 29) * 4;
+      const g = growthAt(field, x, z);
+      if (g < 0.72 || hash2(cx, cz, seed + 31) > 0.35) continue;
+      if (city.parks.some((p) => inPark(p, x, z))) continue;
+      if (nearBuilding(x, z, 0.7) || nearRoad(x, z, 0.8) || nearDoor(x, z, 4)) continue;
+      out.push({ species: "bush", x, z, scale: 0.8 + g * 0.7, yaw: x * 0.7 + z, shade: 0.72 + hash2(cx, cz, seed + 37) * 0.25 });
+    }
   return out;
 }
 
@@ -60,8 +131,14 @@ export class Vegetation {
   update(time: number): void {
     this.wind.value = time;
   }
-  async load(city: CityMap, base: string): Promise<void> {
-    const plants = placeVegetation(city);
+  /**
+   * `density` below 1 keeps an even share of the plants, for software rasterisers: every
+   * crown is thousands of triangles drawn twice (colour and shadow), and CI's CPU
+   * renderer took 75 % longer per frame with the full 900 than with the old 600-cap park.
+   */
+  async load(city: CityMap, base: string, field?: ReclamationField, density = 1): Promise<void> {
+    const all = placeVegetation(city, field);
+    const plants = density >= 1 ? all : all.filter((_, i) => hash2(i, 91, 7) < density);
     if (!plants.length) {
       if (this.fallback) this.fallback.visible = false;
       return;

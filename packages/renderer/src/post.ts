@@ -53,7 +53,7 @@ const NIGHT: Mood = {
   bloomStrength: 0.62,
   bloomThreshold: 0.32,
   bloomRadius: 0.7,
-  saturation: 0.92,
+  saturation: 0.86,
   contrast: 1.08,
   vignette: 0.42,
   shadows: [0.9, 0.97, 1.12],
@@ -65,11 +65,13 @@ const DAY: Mood = {
   bloomStrength: 0.22,
   bloomThreshold: 0.92,
   bloomRadius: 0.45,
-  saturation: 1.14,
-  contrast: 1.07,
-  vignette: 0.22,
-  shadows: [0.98, 1.0, 1.03],
-  highlights: [1.04, 1.01, 0.96],
+  // A city years after the fall, not a brochure: colour drained, olive in the shade,
+  // dust in the light. At 1.14 the paint and lawns read as a town on a good day.
+  saturation: 0.88,
+  contrast: 1.1,
+  vignette: 0.3,
+  shadows: [0.96, 1.0, 0.96],
+  highlights: [1.05, 1.0, 0.89],
 };
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;

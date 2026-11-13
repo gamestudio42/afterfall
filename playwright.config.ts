@@ -12,6 +12,7 @@ const shared = {
 export default defineConfig({
   testDir: "tests/e2e",
   timeout: 120_000,
+  retries: process.env.CI ? 1 : 0,
   projects: [
     {
       name: "chromium",

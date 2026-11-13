@@ -47,7 +47,10 @@ test("captures dawn, dusk and night", async ({ page }) => {
     g.renderer.rts.goalDistance = 90;
     g.renderer.rts.distance = 90;
   });
-  await page.waitForTimeout(1_500);
+  await page.waitForFunction(() => {
+    const r = (window as unknown as Win).__afterfall.renderer.rts;
+    return Math.abs(r.distance - r.goalDistance) < 0.05 && r.target.distanceTo(r.goalTarget) < 0.05;
+  });
 
   const shots: [string, number][] = [
     ["dawn", 7.0],

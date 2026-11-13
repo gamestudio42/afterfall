@@ -13,7 +13,8 @@ test("defense joints use authored piers and damage reaches the surface shader", 
   await page.getByTestId("start").click();
   await expect(page.getByTestId("help")).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.waitForFunction(() => (window as any).__afterfall.renderer.structuresReady);
+  // Asset loading is real I/O and can take longer on a loaded software-WebGL CI runner.
+  await page.waitForFunction(() => (window as any).__afterfall.renderer.structuresReady, null, { timeout: 30_000 });
   const result = await page.evaluate(() => {
     const g = (window as any).__afterfall;
     cancelAnimationFrame(g.raf);

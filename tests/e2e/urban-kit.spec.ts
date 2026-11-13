@@ -15,10 +15,15 @@ test("the urban kit retains its palettes, roof detail and instancing in WebGL", 
   await page.getByTestId("start").click();
   await expect(page.getByTestId("help")).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.waitForFunction(() => {
-    const r = (window as unknown as Win).__afterfall.renderer;
-    return r.propScene && r.structuresReady && r.buildings.materials.roof.bumpMap && r.vegetation?.group.visible;
-  });
+  // Asset loading is real I/O and can take longer on a loaded software-WebGL CI runner.
+  await page.waitForFunction(
+    () => {
+      const r = (window as unknown as Win).__afterfall.renderer;
+      return r.propScene && r.structuresReady && r.buildings.materials.roof.bumpMap && r.vegetation?.group.visible;
+    },
+    null,
+    { timeout: 30_000 },
+  );
   const result = await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
     cancelAnimationFrame(g.raf);

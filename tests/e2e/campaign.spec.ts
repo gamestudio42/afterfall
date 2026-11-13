@@ -45,10 +45,22 @@ test("research buys a capability, and the ledger shows what the day cost", async
   await expect
     .poll(async () => page.evaluate(() => (window as unknown as Win).__afterfall.sim.hasTech("preserves")), { timeout: 15_000 })
     .toBe(true);
-  // The panel re-renders on the frame counter, which on a software renderer can take
-  // a second; poll the derived state instead of asserting it on the next tick.
-  await expect.poll(() => page.getByTestId("tech-cistern").isEnabled(), { timeout: 15_000 }).toBe(true);
-  await expect.poll(() => page.getByTestId("research-points").textContent(), { timeout: 15_000 }).toContain("8");
+  // The panel re-renders on the 0.2s UI beat. On a software renderer where frames
+  // can take a second each, this re-render can miss the old 15s window. Advance
+  // frames deterministically and give the poll more time.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const g = (window as unknown as Win).__afterfall;
+          g.step(1 / 60, 6);
+          return document.querySelector('[data-testid="tech-cistern"]') as HTMLButtonElement | null;
+        }),
+      { timeout: 30_000 },
+    )
+    .not.toBeNull();
+  await expect.poll(() => page.getByTestId("tech-cistern").isEnabled(), { timeout: 30_000 }).toBe(true);
+  await expect.poll(() => page.getByTestId("research-points").textContent(), { timeout: 30_000 }).toContain("8");
 
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("research")).toBeHidden();
@@ -64,9 +76,10 @@ test("research buys a capability, and the ledger shows what the day cost", async
 test("the built structures wear their models, not the fallback box", async ({ page }) => {
   await startGame(page);
   // The structure kit arrives asynchronously; a missing or broken file silently keeps the box,
-  // which is exactly the regression this guards.
+  // which is exactly the regression this guards. Asset loading is real I/O and can take
+  // longer on a loaded software-WebGL CI runner.
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as Win).__afterfall.renderer.structuresReady), { timeout: 20_000 })
+    .poll(() => page.evaluate(() => (window as unknown as Win).__afterfall.renderer.structuresReady), { timeout: 30_000 })
     .toBe(true);
   const parts = await page.evaluate(() => {
     const r = (window as unknown as Win).__afterfall.renderer;

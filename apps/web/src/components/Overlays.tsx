@@ -120,6 +120,7 @@ export function Banner() {
       <div className="banner">
         <strong>{t(`struct.${buildMode}`)}</strong>
         <small>{t("banner.build")}</small>
+        {(buildMode === "wall" || buildMode === "gate") && <small data-testid="build-rotate">{t("banner.buildRotate")}</small>}
       </div>
     );
   if (speed === 0) return <div className="banner subtle">{t("hud.paused")}</div>;

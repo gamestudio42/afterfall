@@ -20,7 +20,7 @@ export type Command =
   | { type: "stop"; units: EntityId[] }
   | { type: "setAuto"; units: EntityId[] }
   | { type: "setStance"; units: EntityId[]; stance: Stance }
-  | { type: "placeStructures"; kind: StructureKind; cells: [number, number][] }
+  | { type: "placeStructures"; kind: StructureKind; cells: [number, number][]; yaw?: number }
   | { type: "convert"; building: number; fn: BuildingFunction }
   | { type: "cancelTask"; task: number }
   | { type: "setTaskPriority"; task: number; priority: number }
@@ -136,7 +136,7 @@ export function applyCommand(sim: Simulation, cmd: Command): void {
       for (const e of units(sim, cmd.units)) e.survivor!.stance = cmd.stance;
       return;
     case "placeStructures":
-      if (placeStructures(sim, cmd.kind, cmd.cells)) sim.alert("alert.blueprintPlaced", { kind: cmd.kind }, "info");
+      if (placeStructures(sim, cmd.kind, cmd.cells, cmd.yaw)) sim.alert("alert.blueprintPlaced", { kind: cmd.kind }, "info");
       return;
     case "convert":
       if (startConversion(sim, cmd.building, cmd.fn)) sim.alert("alert.conversionStarted", { fn: cmd.fn }, "info");

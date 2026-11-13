@@ -372,6 +372,12 @@ export function destroyStructure(sim: Simulation, s: Entity): void {
   for (const [id, task] of sim.state.tasks) if (task.structures.length === 0 && task.building < 0) sim.state.tasks.delete(id);
   sim.grid.setStructure(st.cells, CellKind.Free, -1);
   sim.removeEntity(s.id);
+  // A gate waiting to take this wall's place now holds the cells on its own.
+  for (const o of sim.structures()) {
+    if (o.structure.replaces !== s.id) continue;
+    delete o.structure.replaces;
+    sim.grid.reserveStructure(o.structure.cells, o.id);
+  }
   sim.emitFx("collapse", s.transform!.x, s.transform!.y);
   sim.alert("alert.structureDestroyed", { kind: st.kind }, "danger", { x: s.transform!.x, y: s.transform!.y });
 }

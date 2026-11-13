@@ -112,6 +112,8 @@ export interface StructureComp {
    * player drew. Absent on axis-aligned walls and older saves, which orient by neighbours.
    */
   line?: LineFrame;
+  /** A blueprint gate set into a built wall: that wall, which it replaces when it is done. */
+  replaces?: EntityId;
 }
 
 export interface Entity {

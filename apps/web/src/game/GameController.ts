@@ -1,14 +1,25 @@
 import { STRUCTURES, type StructureKind } from "@afterfall/content";
-import { Simulation, deserialize, serialize, type Command, type EntityId } from "@afterfall/core";
+import {
+  Simulation,
+  deserialize,
+  foldYaw,
+  isAxial,
+  placementAt,
+  placementYaw,
+  serialize,
+  type Command,
+  type EntityId,
+} from "@afterfall/core";
 import type { CityMap } from "@afterfall/world";
 import { GameRenderer, type PostMode } from "@afterfall/renderer";
-import { CellKind } from "@afterfall/world";
 import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
 import { useUi, type Speed } from "../app/store";
 import { translate } from "../i18n";
 import { AudioDirector, type DirectorStats } from "@afterfall/audio";
 
+/** One press of R turns a single wall or gate by this much. */
+const ROTATE_STEP = Math.PI / 12;
 const CLICK_SLOP = 5;
 const UNIT_PICK_RADIUS = 18;
 const EDGE = 10;
@@ -25,6 +36,9 @@ export class GameController {
   private keys = new Set<string>();
   private mouse = { x: -1, y: -1, inside: false };
   private leftDown: { x: number; y: number; cell?: [number, number] } | null = null;
+  /** The angle the player turned a single wall or gate to with R, for this build mode. */
+  private buildYaw: number | null = null;
+  private buildYawKind: StructureKind | null = null;
   private rightDown: { x: number; y: number; rotating: boolean } | null = null;
   private uiTimer = 0;
   private lastDay = 0;
@@ -325,6 +339,14 @@ export class GameController {
       else if (ui.showEcon) ui.set({ showEcon: false });
       else ui.set({ selectedUnits: [], selectedBuilding: -1, selectedStructure: -1 });
       this.renderer.buildPreview = null;
+    } else if (key === "r" && ui.buildMode && isAxial(ui.buildMode) && sim) {
+      // Turn the next single wall or gate. It starts from the angle the piece would take
+      // on its own (the wall it joins, the street it faces), so one press is a small turn
+      // off that, not a jump back to the grid.
+      const cell = this.cellAt(this.mouse.x, this.mouse.y);
+      const base = this.currentYaw(ui.buildMode, cell);
+      this.buildYaw = foldYaw(base + (e.shiftKey ? -1 : 1) * ROTATE_STEP);
+      this.updateBuildPreview(ui.buildMode, this.mouse);
     } else if (key === "f4") {
       // Bloom and grade: auto follows the driver, and F4 overrides it either way.
       e.preventDefault();
@@ -544,33 +566,41 @@ export class GameController {
 
   private buildCells(kind: StructureKind, end: [number, number], start?: [number, number]): [number, number][] {
     const def = STRUCTURES[kind];
-    if (!start || kind !== "wall") {
+    if (!start || !isAxial(kind)) {
       const off = Math.floor(def.size / 2);
       return [[end[0] - off, end[1] - off]];
     }
-    // Walls: a straight line from where the drag started to where it is now, at any angle.
-    // This used to snap to the dominant axis, so a diagonal drag built a wall that ran off
-    // at ninety degrees from the mouse and the line could not follow a fence or a kerb.
+    // Walls and gates: a straight line from where the drag started to where it is now, at
+    // any angle. A row of gates closes a street the way a row of walls does.
     return lineCells(start, end).slice(0, 200);
   }
 
+  /** The angle a single axial piece takes: the player's turn, else what fits the spot. */
+  private currentYaw(kind: StructureKind, cell: [number, number] | null): number {
+    if (this.buildYawKind !== kind) {
+      this.buildYawKind = kind;
+      this.buildYaw = null;
+    }
+    if (this.buildYaw !== null) return this.buildYaw;
+    return cell && this.sim ? placementYaw(this.sim, cell[0], cell[1]) : 0;
+  }
+
   private cellValid(kind: StructureKind, cx: number, cy: number): boolean {
-    const g = this.sim!.grid;
-    const size = STRUCTURES[kind].size;
-    for (let y = cy; y < cy + size; y++)
-      for (let x = cx; x < cx + size; x++) {
-        if (!g.inBounds(x, y)) return false;
-        const i = g.index(x, y);
-        if (g.kind[i] !== CellKind.Free || g.structureAt[i] !== -1) return false;
-      }
-    return true;
+    const sim = this.sim!;
+    return !!sim.hqBuilding && placementAt(sim, kind, cx, cy) !== null;
   }
 
   private updateBuildPreview(kind: StructureKind, p: { x: number; y: number }): void {
     const end = this.cellAt(p.x, p.y);
     if (!end) return;
     const cells = this.buildCells(kind, end, this.leftDown?.cell);
-    this.renderer.buildPreview = { kind, cells, valid: cells.map(([x, y]) => this.cellValid(kind, x, y)) };
+    const single = cells.length === 1 && isAxial(kind);
+    this.renderer.buildPreview = {
+      kind,
+      cells,
+      valid: cells.map(([x, y]) => this.cellValid(kind, x, y)),
+      yaw: single ? this.currentYaw(kind, cells[0]) : undefined,
+    };
   }
 
   private placeBuild(kind: StructureKind, p: { x: number; y: number }, keep: boolean, start?: [number, number]): void {
@@ -578,9 +608,10 @@ export class GameController {
     const ui = useUi.getState();
     if (!end) return;
     const cells = this.buildCells(kind, end, start);
-    this.command({ type: "placeStructures", kind, cells });
+    const yaw = cells.length === 1 && isAxial(kind) ? this.currentYaw(kind, cells[0]) : undefined;
+    this.command({ type: "placeStructures", kind, cells, yaw });
     this.renderer.buildPreview = null;
-    if (!keep && kind !== "wall") ui.set({ buildMode: null });
+    if (!keep && !isAxial(kind)) ui.set({ buildMode: null });
   }
 }
 

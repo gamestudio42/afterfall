@@ -38,6 +38,8 @@ export interface BuildPreview {
   kind: StructureKind;
   cells: [number, number][];
   valid: boolean[];
+  /** The angle a single wall or gate will take. */
+  yaw?: number;
 }
 
 const MAX_UNITS = 64;
@@ -685,12 +687,15 @@ export class GameRenderer {
       MAX_STRUCTURES,
       false,
     );
+    // The placement ghost draws over everything: a gate set into a wall was otherwise
+    // hidden inside that wall, exactly where the player needs to see green or red.
     this.preview = this.instanced(
       box,
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false, depthTest: false }),
       400,
       false,
     );
+    this.preview.renderOrder = 10;
 
     this.selectionBox = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd34d }));
     this.selectionBox.visible = false;
@@ -1448,16 +1453,23 @@ export class GameRenderer {
     let n = 0;
     const first = p.cells[0];
     const last = p.cells[p.cells.length - 1];
+    const axial = p.kind === "wall" || p.kind === "gate";
+    // A wall or gate previews as the slab it will be, turned the way it will stand: a
+    // cube gave no hint of the angle, and from above it read as a hexagon.
+    const axisYaw = p.cells.length > 1 ? (first[1] === last[1] ? 0 : Math.PI / 2) : (p.yaw ?? 0);
     p.cells.forEach(([cx, cy], i) => {
       if (n >= 400) return;
-      // A wall line at an angle previews along that angle, as it will be built.
-      const line = p.kind === "wall" && p.cells.length > 1 ? lineFrame(first, last, [cx, cy]) : null;
+      const line = axial && p.cells.length > 1 ? lineFrame(first, last, [cx, cy]) : null;
+      const yaw = line ? line.yaw : axisYaw;
+      const length = def.size * cell * (line?.stretch ?? 1);
       tmpQ.identity();
-      if (line) tmpQ.setFromAxisAngle(UP, line.yaw);
+      if (axial) tmpQ.setFromAxisAngle(UP, yaw);
       tmpM.compose(
         tmpV.set((cx + def.size / 2 + (line?.ox ?? 0)) * cell, 0, (cy + def.size / 2 + (line?.oy ?? 0)) * cell),
         tmpQ,
-        tmpS.set((def.size * cell - 0.1) * (line?.stretch ?? 1), Math.max(0.4, def.height), line ? 0.5 : def.size * cell - 0.1),
+        axial
+          ? tmpS.set(length - 0.05, Math.max(0.4, def.height), 0.5)
+          : tmpS.set(def.size * cell - 0.1, Math.max(0.4, def.height), def.size * cell - 0.1),
       );
       this.preview.setMatrixAt(n, tmpM);
       this.preview.setColorAt(n, tmpC.setHex(p.valid[i] ? 0x7dff9a : 0xff5040));

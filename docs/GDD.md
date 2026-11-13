@@ -41,7 +41,8 @@ day produced and consumed, and how many days of each resource remain.
 - **Resources:** food, water, wood, metal, ammo, medicine, firearms.
 - **Buildings:** house, apartment, shop, supermarket, pharmacy, office, warehouse, gas station, hospital, school, police. Each type has its own loot table, hidden infected and chance of survivors inside.
 - **Adaptations:** shelter (beds), storage (capacity), workshop (metal → ammo, with a "keep ammo at N" policy).
-- **Structures:** wall, gate (survivors pass, infected do not), watchtower (+7 m range, guard is unreachable while it stands), garden (food), well (water).
+- **Structures:** wall, gate (survivors pass, infected do not; can be set into a finished wall, which stands until the gate is done), watchtower (+7 m range, guard is unreachable while it stands), garden (food), well (water).
+- **Placing walls and gates:** drag to draw a straight run at any angle; every piece keeps the drawn angle, so walls follow the streets of imported real places. A single wall or gate lines up with the wall it joins, else the nearest street; R / Shift+R turns it by 15°.
 - **Infected:** walker, runner, brute. States: idle, wander, investigate (noise), chase, assault, retreat.
 - **Events:** refugees at the gate, wandering trader, radio cache, storm, accident. All data-driven.
 

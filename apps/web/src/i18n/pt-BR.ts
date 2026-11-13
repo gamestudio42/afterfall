@@ -83,7 +83,7 @@ export const ptBR: Record<string, string> = {
   "struct.farm": "Horta",
   "struct.well": "Poço",
   "struct.desc.wall": "Arraste para traçar. Bloqueia todos.",
-  "struct.desc.gate": "Sobreviventes passam, infectados não.",
+  "struct.desc.gate": "Sobreviventes passam, infectados não. Pode entrar num muro pronto.",
   "struct.desc.tower": "Um vigia atira de longe à noite.",
   "struct.desc.farm": "Dois trabalhadores produzem comida.",
   "struct.desc.well": "Produz água a cada hora.",
@@ -199,7 +199,8 @@ export const ptBR: Record<string, string> = {
 
   "banner.chooseBase": "Escolha um edifício para ser a sede da sua comunidade.",
   "banner.chooseBaseHint": "Prédios grandes e centrais têm mais espaço, mas são mais difíceis de cercar.",
-  "banner.build": "Clique para posicionar · arraste para traçar · botão direito ou Esc para sair",
+  "banner.build": "Clique para posicionar · arraste para traçar · Shift mantém o modo · botão direito ou Esc para sair",
+  "banner.buildRotate": "R / Shift+R: girar a peça",
 
   "outcome.victory": "Vocês sobreviveram",
   "outcome.victoryText": "Doze noites se passaram e a comunidade continua de pé. A reconstrução pode começar.",

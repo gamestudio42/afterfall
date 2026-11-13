@@ -83,7 +83,7 @@ export const en: Record<string, string> = {
   "struct.farm": "Garden",
   "struct.well": "Well",
   "struct.desc.wall": "Drag to draw. Blocks everyone.",
-  "struct.desc.gate": "Survivors pass, infected do not.",
+  "struct.desc.gate": "Survivors pass, infected do not. Can go into a built wall.",
   "struct.desc.tower": "A lookout shoots from afar at night.",
   "struct.desc.farm": "Two workers grow food.",
   "struct.desc.well": "Produces water every hour.",
@@ -199,7 +199,8 @@ export const en: Record<string, string> = {
 
   "banner.chooseBase": "Choose a building to become your community's headquarters.",
   "banner.chooseBaseHint": "Large central buildings hold more, but are harder to wall in.",
-  "banner.build": "Click to place · drag to draw · right-click or Esc to exit",
+  "banner.build": "Click to place · drag to draw · Shift keeps the mode · right-click or Esc to exit",
+  "banner.buildRotate": "R / Shift+R: turn the piece",
 
   "outcome.victory": "You survived",
   "outcome.victoryText": "Twelve nights have passed and the community still stands. Rebuilding can begin.",

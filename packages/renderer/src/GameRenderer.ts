@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } from "@afterfall/content";
 import type { Simulation, EntityId } from "@afterfall/core";
-import { lerp, TICK_SECONDS } from "@afterfall/shared";
+import { lerp, lineFrame, TICK_SECONDS, type LineFrame } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
 import { wallFrame } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
@@ -1303,7 +1303,10 @@ export class GameRenderer {
     // are part of, or a north-south wall is drawn as a row of slabs lying across the
     // line. The neighbours in the navigation grid decide; a corner (both axes) and a
     // lone piece default to the east-west orientation the model is authored in.
-    const wallMeasure = (s: { cx: number; cy: number }): { yaw: number; stretch: number } => {
+    const wallMeasure = (s: { cx: number; cy: number; line?: LineFrame }): { yaw: number; stretch: number } => {
+      // A wall drawn at an angle carries that angle: its neighbours on the grid's
+      // staircase would turn the pieces to 0°, 45° and 90° in turn.
+      if (s.line) return s.line;
       const g = sim.grid;
       const at = (x: number, y: number) => {
         if (!g.inBounds(x, y)) return false;
@@ -1323,7 +1326,8 @@ export class GameRenderer {
     };
     // A junction needs both orientations: the slab only fills its own axis, so an L or T
     // cell left as one slab shows a shoulder-width notch where the other run stops.
-    const isCorner = (s: { cx: number; cy: number }): boolean => {
+    const isCorner = (s: { cx: number; cy: number; line?: LineFrame }): boolean => {
+      if (s.line) return false;
       const g = sim.grid;
       const at = (x: number, y: number) => {
         if (!g.inBounds(x, y)) return false;
@@ -1341,8 +1345,8 @@ export class GameRenderer {
       const s = e.structure;
       const def = STRUCTURES[s.kind];
       const size = def.size * cell;
-      const cx = (s.cx + def.size / 2) * cell;
-      const cz = (s.cy + def.size / 2) * cell;
+      const cx = (s.cx + def.size / 2 + (s.line?.ox ?? 0)) * cell;
+      const cz = (s.cy + def.size / 2 + (s.line?.oy ?? 0)) * cell;
       if (!s.built) {
         if (b >= MAX_STRUCTURES) continue;
         // A ghost is a promise, not a progress bar: at eight percent of the wall's height
@@ -1442,12 +1446,18 @@ export class GameRenderer {
     const def = STRUCTURES[p.kind];
     const cell = sim.grid.cell;
     let n = 0;
+    const first = p.cells[0];
+    const last = p.cells[p.cells.length - 1];
     p.cells.forEach(([cx, cy], i) => {
       if (n >= 400) return;
+      // A wall line at an angle previews along that angle, as it will be built.
+      const line = p.kind === "wall" && p.cells.length > 1 ? lineFrame(first, last, [cx, cy]) : null;
+      tmpQ.identity();
+      if (line) tmpQ.setFromAxisAngle(UP, line.yaw);
       tmpM.compose(
-        tmpV.set((cx + def.size / 2) * cell, 0, (cy + def.size / 2) * cell),
-        tmpQ.identity(),
-        tmpS.set(def.size * cell - 0.1, Math.max(0.4, def.height), def.size * cell - 0.1),
+        tmpV.set((cx + def.size / 2 + (line?.ox ?? 0)) * cell, 0, (cy + def.size / 2 + (line?.oy ?? 0)) * cell),
+        tmpQ,
+        tmpS.set((def.size * cell - 0.1) * (line?.stretch ?? 1), Math.max(0.4, def.height), line ? 0.5 : def.size * cell - 0.1),
       );
       this.preview.setMatrixAt(n, tmpM);
       this.preview.setColorAt(n, tmpC.setHex(p.valid[i] ? 0x7dff9a : 0xff5040));

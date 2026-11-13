@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, tickAt } from "@afterfall/shared";
+import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, lineCells, tickAt } from "@afterfall/shared";
 import { CellKind, cityFromOverpass } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
 import { destroyStructure, emitNoise, hqPerimeter } from "../src/systems/infected";
@@ -114,6 +114,45 @@ describe("construction and community (phase 4)", () => {
     const built = [...sim.structures()];
     expect(built.length).toBeGreaterThan(3);
     for (const s of built) for (const c of s.structure.cells) expect(g.kind[c]).toBe(CellKind.Solid);
+  });
+
+  it("keeps the drawn angle on a wall line off the grid axes", () => {
+    const sim = started(3);
+    const hq = sim.city.buildings[sim.state.hq];
+    const g = sim.grid;
+    const cy = Math.floor(hq.entrance.y / g.cell) + (hq.facing.y > 0 ? 3 : -3);
+    const cx = Math.floor(hq.entrance.x / g.cell);
+    // A street at an angle the grid does not have: a staircase of cells, one line.
+    const cells = lineCells([cx - 3, cy], [cx + 3, cy + (hq.facing.y > 0 ? 2 : -2)]);
+    sim.enqueue({ type: "placeStructures", kind: "wall", cells });
+    sim.runTicks(1);
+    const placed = [...sim.structures()];
+    expect(placed.length).toBeGreaterThan(0);
+    const yaw = placed[0].structure.line!.yaw;
+    for (const s of placed) expect(s.structure.line!.yaw).toBeCloseTo(yaw);
+    expect(Math.abs(yaw) % (Math.PI / 4)).not.toBeCloseTo(0);
+  });
+
+  it("leaves wall pieces that are not one drawn line to their neighbours", () => {
+    const sim = started(3);
+    const hq = sim.city.buildings[sim.state.hq];
+    const g = sim.grid;
+    const cy = Math.floor(hq.entrance.y / g.cell) + (hq.facing.y > 0 ? 3 : -3);
+    const cx = Math.floor(hq.entrance.x / g.cell);
+    // Two runs of an L handed over as one list: first and last are off-axis, but it is
+    // no line, so no piece may take that diagonal as its angle.
+    const cells: [number, number][] = [
+      [cx - 2, cy],
+      [cx - 1, cy],
+      [cx, cy],
+      [cx, cy + 1],
+      [cx, cy + 2],
+    ];
+    sim.enqueue({ type: "placeStructures", kind: "wall", cells });
+    sim.runTicks(1);
+    const placed = [...sim.structures()];
+    expect(placed.length).toBeGreaterThan(0);
+    for (const s of placed) expect(s.structure.line).toBeUndefined();
   });
 
   it("feeds the population twice a day", () => {

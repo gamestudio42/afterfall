@@ -21,9 +21,10 @@ test("the infected model replaces the capsule", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("choose-base")).toBeVisible();
 
-  // The model arrives with the first frames; the capsule draws until then.
+  // The model arrives with the first frames; the capsule draws until then. Asset
+  // loading is real I/O and can take longer on a loaded software-WebGL CI runner.
   await page.waitForFunction(() => (window as unknown as Win).__afterfall.renderer.infectedParts.length > 0, null, {
-    timeout: 15_000,
+    timeout: 30_000,
   });
 
   const state = await page.evaluate(() => {
@@ -108,7 +109,10 @@ test("the infected model replaces the capsule", async ({ page }) => {
     return { infected: [...sim.infected()].length, hour: sim.clock.hourFloat };
   });
   console.log("INFECTED SHOT", JSON.stringify(spawned));
-  await page.waitForTimeout(1_500);
+  await page.waitForFunction(() => {
+    const r = (window as unknown as Win).__afterfall.renderer.rts;
+    return Math.abs(r.distance - r.goalDistance) < 0.05 && r.target.distanceTo(r.goalTarget) < 0.05;
+  });
 
   const after = await page.evaluate(() => {
     const r = (window as unknown as Win).__afterfall.renderer;

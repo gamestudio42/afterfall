@@ -19,6 +19,8 @@ export interface Tuft {
 export const GRASS_CAP = 10000;
 /** Spacing of the scatter grid, in metres. */
 const STEP = 1.35;
+/** Height of every tuft's root: the top of a block's sidewalk (cityMeshes.ts) and a centimetre over. */
+export const ROOT_Y = 0.07;
 /** Doors stay clear, so an entrance reads from the RTS camera and a click finds it. */
 const DOOR_CLEAR = 2.8;
 
@@ -82,9 +84,9 @@ function bladeMask(): THREE.DataTexture {
     const lean = (base - W / 2) * 1.1 + (rand() - 0.5) * 18;
     const top = 0.45 + rand() * 0.55;
     const width = 2.2 + rand() * 2.2;
-    // The bottom rows stay clear (the root sits in the ground): at a distance the mipmaps
-    // still average them into a solid stroke.
-    for (let y = 6; y < H; y++) {
+    // Only the very bottom row stays clear. With the bases centred it is no longer solid,
+    // and clearing more opened a hole at the heart of the clump, where all four feet meet.
+    for (let y = 1; y < H; y++) {
       const v = y / (H - 1);
       if (v > top) break;
       const k = v / top;
@@ -190,7 +192,11 @@ export class Grass {
       straw = new THREE.Color(0x8a7c48);
     tufts.forEach((t, i) => {
       const width = 0.9 + t.height * 0.8;
-      m.compose(v.set(t.x, -0.03, t.z), q.setFromAxisAngle(up, t.yaw), s.set(width, t.height, width));
+      // Rooted at the sidewalk's height. Rooted below it, the foot of every card is buried
+      // and, the cards leaning outward, the clump shows a square of bare ground at its
+      // heart, outlined by the dark feet: the "strokes" seen under a low sun. A park is
+      // 1 cm higher and asphalt 4 cm lower, where the clear foot rows of the mask hide the gap.
+      m.compose(v.set(t.x, ROOT_Y, t.z), q.setFromAxisAngle(up, t.yaw), s.set(width, t.height, width));
       this.mesh.setMatrixAt(i, m);
       this.mesh.setColorAt(i, color.copy(green).lerp(straw, t.dry).multiplyScalar(t.shade));
     });

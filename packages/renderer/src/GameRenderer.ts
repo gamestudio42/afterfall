@@ -582,10 +582,10 @@ export class GameRenderer {
     // The post chain draws the scene into its own 4x MSAA target and only a full-screen
     // quad reaches the canvas, so a multisampled canvas would be memory and a resolve per
     // frame for nothing. The canvas keeps MSAA only when the game starts without the chain.
-    // Turning the chain off with F4 leaves the edges aliased until the next load, which
-    // reads the saved choice.
+    // Turned off with F4 later, the frame still goes through an MSAA target (setPost).
     const mode = opts.post ?? "auto";
     const antialias = !resolvePost(mode, mode === "auto" ? probeRendererName() : "");
+    this.canvasAntialias = antialias;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias, powerPreference: "high-performance", preserveDrawingBuffer: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -905,13 +905,15 @@ export class GameRenderer {
     if (instant) this.weatherNow = { ...WEATHER[this.weather] };
   }
   private postMode: PostMode = "auto";
+  /** Whether the canvas was created with MSAA (only when the chain was off at load). */
+  private canvasAntialias = true;
   private daylight = 1;
   private skyColor = new THREE.Color();
   private sunDir = new THREE.Vector3();
 
   /** Whether bloom and the grade are being drawn. */
   get postEnabled(): boolean {
-    return this.postFx !== null;
+    return this.postFx?.effects ?? false;
   }
 
   get post(): PostMode {
@@ -927,15 +929,18 @@ export class GameRenderer {
     // and four specs past their timeouts, so it follows the same switch.
     if (want && !this.scene.environment) this.scene.environment = this.skyEnv ??= skyEnvironment(this.renderer);
     else if (!want) this.scene.environment = null;
-    if (want && !this.postFx) {
-      this.postFx = new PostFx(this.renderer, this.scene, this.rts.camera);
-      const size = this.renderer.getSize(new THREE.Vector2());
-      this.postFx.setSize(size.x, size.y, this.renderer.getPixelRatio());
-      this.postFx.setMood(this.daylight);
-    } else if (!want && this.postFx) {
-      this.postFx.dispose();
-      this.postFx = null;
-    }
+    // Without the effects, a canvas that has no MSAA of its own still draws through
+    // the chain's MSAA target, so the edges stay smooth after F4.
+    const chain = want ? "effects" : this.canvasAntialias ? "none" : "resolve";
+    const has = !this.postFx ? "none" : this.postFx.effects ? "effects" : "resolve";
+    if (chain === has) return;
+    this.postFx?.dispose();
+    this.postFx = null;
+    if (chain === "none") return;
+    this.postFx = new PostFx(this.renderer, this.scene, this.rts.camera, chain === "effects");
+    const size = this.renderer.getSize(new THREE.Vector2());
+    this.postFx.setSize(size.x, size.y, this.renderer.getPixelRatio());
+    this.postFx.setMood(this.daylight);
   }
 
   private shadowCadence = new ShadowCadence();

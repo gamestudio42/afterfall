@@ -200,7 +200,12 @@ export const en: Record<string, string> = {
   "banner.chooseBase": "Choose a building to become your community's headquarters.",
   "banner.chooseBaseHint": "Large central buildings hold more, but are harder to wall in.",
   "banner.build": "Click to place · drag to draw · Shift keeps the mode · right-click or Esc to exit",
-  "banner.buildRotate": "R / Shift+R: turn",
+  "banner.buildRotate": "R / Shift+R: turn · T: line up by itself",
+  "banner.angleAuto": "automatic angle",
+  "banner.angleManual": "manual angle",
+  "banner.buildCount": "{count} piece(s)",
+  "banner.buildShort": "not enough in store",
+  "banner.buildCapped": "200 per line at most",
 
   "outcome.victory": "You survived",
   "outcome.victoryText": "Twelve nights have passed and the community still stands. Rebuilding can begin.",
@@ -282,7 +287,7 @@ export const en: Record<string, string> = {
   "help.select": "Click: select · Drag: box select · Shift: add to selection",
   "help.orders": "Right-click: move / explore building / attack infected",
   "help.keys":
-    "Space: pause · Shift+1–4: speed · Ctrl+1–9: form squad · 1–9: select squad · F: focus · H: return to base · Esc: cancel · F3: diagnostics",
+    "Space: pause · Shift+1–4: speed · Ctrl+1–9: form squad · 1–9: select squad · F: focus · H: return to base · Esc: cancel · While building, R / Shift+R: turn, T: line up by itself · F3: diagnostics",
   "help.goal": "Goal: research the cure, or survive twelve nights. Explore by day, build defences and be back before dusk.",
   "help.close": "Got it",
   "research.title": "Research",

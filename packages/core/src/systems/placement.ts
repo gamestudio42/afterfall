@@ -255,7 +255,8 @@ function joinFrame(sim: Simulation, cx: number, cy: number, yaw: number): LineFr
       else ox = px + ((cy - py) * ux) / uy - cx;
       // Further than that, the line runs through another cell: this piece is beside it.
       if (Math.abs(ox) + Math.abs(oy) > 0.5 + 1e-6) continue;
-      return { yaw: line.yaw, stretch: line.stretch, ox, oy };
+      // The line's own spacing, not the neighbour's: an end piece may be cut to a corner.
+      return { yaw: line.yaw, stretch: nominalStretch(line.yaw), ox, oy };
     }
   return null;
 }
@@ -264,4 +265,54 @@ function joinFrame(sim: Simulation, cx: number, cy: number, yaw: number): LineFr
 export function previewFrame(sim: Simulation, cx: number, cy: number, yaw: number): LineFrame {
   const self = axialAt(sim, cx, cy)?.structure!.line;
   return self ?? singleFrame(sim, cx, cy, yaw) ?? { yaw: foldYaw(yaw), stretch: 1, ox: 0, oy: 0 };
+}
+
+/** The length, in cells, of one piece of a line at this angle. */
+export function nominalStretch(yaw: number): number {
+  return 1 / Math.max(Math.abs(Math.cos(yaw)), Math.abs(Math.sin(yaw)));
+}
+
+/**
+ * Closes the corner where a newly drawn slanted line meets a piece already standing in
+ * one of its cells (an end, or a crossing). The new line cannot place a piece there (the cell is taken), so its first
+ * panel stopped half a step short of the corner and the old panel ran half a step past
+ * it. The new panel is lengthened back to the corner cell's centre; the old one, when it
+ * is the free end of its own slanted run, is cut to end there too.
+ */
+export function joinCorner(sim: Simulation, corner: [number, number], piece: Entity): void {
+  const at = axialAt(sim, corner[0], corner[1]);
+  const line = piece.structure!.line;
+  // Already lengthened once (a taken cell on each side): leave it.
+  if (!at || !line || at.id === piece.id || Math.abs(line.stretch - nominalStretch(line.yaw)) > 1e-6) return;
+  const s = piece.structure!;
+  // From the new piece's point on its line to the corner cell's centre: one step.
+  const dx = corner[0] - (s.cx + line.ox);
+  const dy = corner[1] - (s.cy + line.oy);
+  line.ox += dx / 4;
+  line.oy += dy / 4;
+  line.stretch *= 1.5;
+  const old = at.structure!.line;
+  if (!old || Math.abs(old.stretch - nominalStretch(old.yaw)) > 1e-6 || Math.abs(Math.sin(old.yaw - line.yaw)) < 1e-3) return;
+  // The run the old piece belongs to: exactly one neighbour at its angle means it is an end.
+  const os = at.structure!;
+  let run: Entity | null = null;
+  let count = 0;
+  for (let ny = -1; ny <= 1; ny++)
+    for (let nx = -1; nx <= 1; nx++) {
+      if (!nx && !ny) continue;
+      const n = axialAt(sim, os.cx + nx, os.cy + ny);
+      if (!n || n.id === piece.id || !n.structure!.line || Math.abs(Math.sin(n.structure!.line.yaw - old.yaw)) > 1e-3) continue;
+      run = n;
+      count++;
+    }
+  if (count !== 1 || !run) return;
+  const rl = run.structure!.line!;
+  const tx = run.structure!.cx + rl.ox - (os.cx + old.ox);
+  const ty = run.structure!.cy + rl.oy - (os.cy + old.oy);
+  const len = Math.hypot(tx, ty);
+  if (len < 1e-6) return;
+  // Keep the half on the run's side: the centre moves a quarter of the piece that way.
+  old.ox += ((tx / len) * old.stretch) / 4;
+  old.oy += ((ty / len) * old.stretch) / 4;
+  old.stretch *= 0.5;
 }

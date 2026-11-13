@@ -200,7 +200,12 @@ export const ptBR: Record<string, string> = {
   "banner.chooseBase": "Escolha um edifício para ser a sede da sua comunidade.",
   "banner.chooseBaseHint": "Prédios grandes e centrais têm mais espaço, mas são mais difíceis de cercar.",
   "banner.build": "Clique para posicionar · arraste para traçar · Shift mantém o modo · botão direito ou Esc para sair",
-  "banner.buildRotate": "R / Shift+R: girar",
+  "banner.buildRotate": "R / Shift+R: girar · T: alinhar sozinho",
+  "banner.angleAuto": "ângulo automático",
+  "banner.angleManual": "ângulo manual",
+  "banner.buildCount": "{count} peça(s)",
+  "banner.buildShort": "falta material em estoque",
+  "banner.buildCapped": "máximo de 200 por traçado",
 
   "outcome.victory": "Vocês sobreviveram",
   "outcome.victoryText": "Doze noites se passaram e a comunidade continua de pé. A reconstrução pode começar.",
@@ -282,7 +287,7 @@ export const ptBR: Record<string, string> = {
   "help.select": "Clique: selecionar · Arrastar: seleção múltipla · Shift: adicionar à seleção",
   "help.orders": "Botão direito: mover / explorar edifício / atacar infectado",
   "help.keys":
-    "Espaço: pausar · 1–4: velocidade (com Shift) · Ctrl+1–9: formar esquadrão · 1–9: selecionar esquadrão · F: focar · H: voltar à base · Esc: cancelar · F3: diagnóstico",
+    "Espaço: pausar · 1–4: velocidade (com Shift) · Ctrl+1–9: formar esquadrão · 1–9: selecionar esquadrão · F: focar · H: voltar à base · Esc: cancelar · Ao construir, R / Shift+R: girar, T: alinhar sozinho · F3: diagnóstico",
   "help.goal": "Objetivo: pesquisar a cura ou sobreviver doze noites. Explore de dia, construa defesas e volte antes de escurecer.",
   "help.close": "Entendi",
   "research.title": "Pesquisa",

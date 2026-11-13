@@ -1368,7 +1368,10 @@ export class GameRenderer {
         tmpM.compose(
           tmpV.set(cx, 0, cz),
           tmpQ2,
-          tmpS.set(axial ? (size - 0.1) * frameB.stretch : size - 0.1, Math.max(0.2, def.height * frac), axial ? 0.5 : size - 0.1),
+          // A gate going into a wall is drawn around that wall, or it would hide inside it.
+          s.replaces !== undefined
+            ? tmpS.set(size * frameB.stretch + 0.1, STRUCTURES.wall.height + 0.25, 1.1)
+            : tmpS.set(axial ? (size - 0.1) * frameB.stretch : size - 0.1, Math.max(0.2, def.height * frac), axial ? 0.5 : size - 0.1),
         );
         this.blueprints.setMatrixAt(b, tmpM);
         this.blueprints.setColorAt(b, tmpC.setHex(e.id === this.selection.structure ? 0xffd34d : 0x6fd0ff));

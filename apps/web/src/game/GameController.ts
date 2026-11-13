@@ -22,6 +22,8 @@ import { AudioDirector, type DirectorStats } from "@afterfall/audio";
 
 /** One press of R turns a single wall or gate by this much. */
 const ROTATE_STEP = Math.PI / 12;
+/** The most pieces one drag draws. */
+const LINE_MAX = 200;
 const CLICK_SLOP = 5;
 const UNIT_PICK_RADIUS = 18;
 const EDGE = 10;
@@ -41,6 +43,8 @@ export class GameController {
   /** The angle the player turned a single wall or gate to with R, for this build mode. */
   private buildYaw: number | null = null;
   private buildYawKind: StructureKind | null = null;
+  /** What the build banner shows: how many pieces the preview holds and how they are turned. */
+  buildInfo: { count: number; capped: boolean; manual: boolean } | null = null;
   private rightDown: { x: number; y: number; rotating: boolean } | null = null;
   private uiTimer = 0;
   private lastDay = 0;
@@ -158,6 +162,12 @@ export class GameController {
     const ui = useUi.getState();
     if (ui.screen !== "game" || !this.sim) return;
     const sim = this.sim;
+    // Leaving build mode forgets the manual angle: the next piece lines itself up again.
+    if (!ui.buildMode && (this.buildYaw !== null || this.buildInfo)) {
+      this.buildYaw = null;
+      this.buildInfo = null;
+      this.renderer.buildPreview = null;
+    }
     // Hold time while a decision is pending so the player can read it.
     const speed = sim.state.pendingEvent || (sim.state.outcome && sim.state.outcome.type === "defeat") ? 0 : ui.speed;
     const simStart = performance.now();
@@ -352,6 +362,10 @@ export class GameController {
       // A panel looks the same half a turn on; a tower, farm or well does not.
       this.buildYaw = isAxial(kind) ? foldYaw(next) : foldTurn(next);
       this.updateBuildPreview(kind, this.mouse);
+    } else if (key === "t" && ui.buildMode && sim) {
+      // Back to automatic: the piece lines up with the wall it joins or the street again.
+      this.buildYaw = null;
+      this.updateBuildPreview(ui.buildMode, this.mouse);
     } else if (key === "f4") {
       // Bloom and grade: auto follows the driver, and F4 overrides it either way.
       e.preventDefault();
@@ -577,7 +591,7 @@ export class GameController {
     }
     // Walls and gates: a straight line from where the drag started to where it is now, at
     // any angle. A row of gates closes a street the way a row of walls does.
-    return lineCells(start, end).slice(0, 200);
+    return lineCells(start, end).slice(0, LINE_MAX);
   }
 
   /**
@@ -613,12 +627,20 @@ export class GameController {
   private updateBuildPreview(kind: StructureKind, p: { x: number; y: number }): void {
     const end = this.cellAt(p.x, p.y);
     if (!end) return;
-    const cells = this.buildCells(kind, end, this.dragStart(this.leftDown, p));
+    const start = this.dragStart(this.leftDown, p);
+    const cells = this.buildCells(kind, end, start);
     const yaw = cells.length === 1 ? this.currentYaw(kind, cells[0]) : undefined;
+    const valid = cells.map(([x, y]) => this.cellValid(kind, x, y, yaw ?? 0));
+    this.buildInfo = {
+      count: valid.filter(Boolean).length,
+      // The line stops at the cap, short of the pointer: say so instead of just stopping.
+      capped: !!start && cells.length === LINE_MAX && (cells[LINE_MAX - 1][0] !== end[0] || cells[LINE_MAX - 1][1] !== end[1]),
+      manual: this.buildYaw !== null,
+    };
     this.renderer.buildPreview = {
       kind,
       cells,
-      valid: cells.map(([x, y]) => this.cellValid(kind, x, y, yaw ?? 0)),
+      valid,
       yaw,
       // A single wall or gate shows where it will really sit: on the line it joins.
       frame: yaw !== undefined && isAxial(kind) ? previewFrame(this.sim!, cells[0][0], cells[0][1], yaw) : undefined,

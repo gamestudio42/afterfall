@@ -16,7 +16,7 @@ function started(seed = 3): Simulation {
 }
 
 /** A free spot near the base with room for a run of `len` walls east of it, and a clear row around it. */
-function freeSpot(sim: Simulation, len = 6): [number, number] {
+function freeSpot(sim: Simulation, len = 6, rows = 2): [number, number] {
   const g = sim.grid;
   const hq = sim.hqEntrance();
   const c0 = g.cellOf(hq.x, hq.y);
@@ -26,7 +26,8 @@ function freeSpot(sim: Simulation, len = 6): [number, number] {
     for (let y = hy - r; y <= hy + r; y++)
       for (let x = hx - r; x <= hx + r; x++) {
         let ok = true;
-        for (let dy = -2; dy <= 2 && ok; dy++) for (let dx = -2; dx < len + 2 && ok; dx++) ok = !!placementAt(sim, "wall", x + dx, y + dy);
+        for (let dy = -2; dy <= rows && ok; dy++)
+          for (let dx = -2; dx < len + 2 && ok; dx++) ok = !!placementAt(sim, "wall", x + dx, y + dy);
         if (ok) return [x, y];
       }
   throw new Error("no free spot");
@@ -383,5 +384,60 @@ describe("defects found auditing the build system", () => {
     placeStructures(sim, "gate", [[x, y]]);
     finishAll(sim);
     expect([...sim.state.tasks.values()].some((t) => t.type === "repair")).toBe(false);
+  });
+});
+
+describe("corners between slanted runs", () => {
+  it("both panels end at the corner cell's centre", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 12, 10);
+    const a: [number, number] = [x, y + 4];
+    const corner: [number, number] = [x + 8, y + 1];
+    const b: [number, number] = [x + 10, y + 8];
+    placeStructures(sim, "wall", lineCells(a, corner));
+    const first = lineCells(a, corner);
+    const second = lineCells(corner, b);
+    placeStructures(sim, "wall", second);
+    // The end of a panel: its point on the line, half its length along the line.
+    const ends = (c: [number, number]) => {
+      const s = at(sim, c[0], c[1])!.structure!;
+      const l = s.line!;
+      const ux = Math.cos(l.yaw);
+      const uy = -Math.sin(l.yaw);
+      const h = l.stretch / 2;
+      const px = s.cx + l.ox;
+      const py = s.cy + l.oy;
+      return [
+        [px - ux * h, py - uy * h],
+        [px + ux * h, py + uy * h],
+      ];
+    };
+    const near = (pts: number[][]) => Math.min(...pts.map(([px, py]) => Math.hypot(px - corner[0], py - corner[1])));
+    // The old run's end piece was cut back to the corner; the new run's first reaches it.
+    expect(near(ends(corner))).toBeCloseTo(0);
+    expect(near(ends(second[1]))).toBeCloseTo(0);
+    expect(at(sim, corner[0], corner[1])!.structure!.line!.stretch).toBeCloseTo(lineFrame(a, corner, corner)!.stretch / 2);
+    // The rest of the old run is untouched.
+    const mid = first[3];
+    expect(at(sim, mid[0], mid[1])!.structure!.line).toEqual(lineFrame(a, corner, mid));
+  });
+
+  it("a line crossing a run reaches it from both sides and leaves the run whole", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 12, 10);
+    const run = lineCells([x, y + 5], [x + 10, y + 2]);
+    placeStructures(sim, "wall", run);
+    const before = run.map((c) => ({ ...at(sim, c[0], c[1])!.structure!.line! }));
+    const cross = lineCells([x + 4, y], [x + 6, y + 8]);
+    placeStructures(sim, "wall", cross);
+    expect(run.map((c) => at(sim, c[0], c[1])!.structure!.line)).toEqual(before);
+    const taken = cross.findIndex((c) => run.some((r) => r[0] === c[0] && r[1] === c[1]));
+    expect(taken).toBeGreaterThan(0);
+    const nominal = lineFrame(cross[0], cross[cross.length - 1], cross[taken - 1])!.stretch;
+    for (const n of [taken - 1, taken + 1]) {
+      const c = cross[n];
+      const run2 = run.some((r) => r[0] === c[0] && r[1] === c[1]);
+      if (!run2) expect(at(sim, c[0], c[1])!.structure!.line!.stretch).toBeCloseTo(nominal * 1.5);
+    }
   });
 });

@@ -1,7 +1,7 @@
 import { BALANCE, BUILDING_FUNCTIONS, RESOURCE_IDS, STRUCTURES, WEAPONS, addToBag, bagTotal, type ResourceBag } from "@afterfall/content";
 import { lineFrame, type Vec2 } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
-import { isAxial, isDrawnLine, placementAt, singleFrame, turnFrame } from "./placement";
+import { isAxial, isDrawnLine, joinCorner, placementAt, singleFrame, turnFrame } from "./placement";
 import { TOWER_RANGE_BONUS } from "./combat";
 import type { Entity, EntityId, SurvivorComp, Task, TaskType } from "../state";
 import {
@@ -669,6 +669,19 @@ export function placeStructures(sim: Simulation, kind: keyof typeof STRUCTURES, 
     work += def.work;
   }
   if (ids.length === 0) return null;
+  // Where a drawn line starts, ends or crosses a standing piece, its own pieces on either
+  // side reach that cell's centre instead of stopping half a step short of it.
+  if (drawn) {
+    const g = sim.grid;
+    const mine = (c: [number, number] | undefined) => {
+      const e = c && g.inBounds(c[0], c[1]) ? sim.state.entities.get(g.structureAt[g.index(c[0], c[1])]) : undefined;
+      return e && ids.includes(e.id) ? e : null;
+    };
+    cells.forEach((c, n) => {
+      if (mine(c)) return;
+      for (const beside of [mine(cells[n - 1]), mine(cells[n + 1])]) if (beside) joinCorner(sim, c, beside);
+    });
+  }
   const task = createTask(sim, "build", { structures: ids, cost, work, maxWorkers: Math.min(4, 1 + Math.ceil(ids.length / 4)) });
   for (const id of ids) sim.state.entities.get(id)!.structure!.task = task.id;
   return task;

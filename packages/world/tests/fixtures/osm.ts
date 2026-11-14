@@ -125,3 +125,139 @@ export function syntheticOverpass(size = 480): OverpassResponse {
   poi(-3 * pitch + 8 + 25, 2 * pitch + 8 + 10, { amenity: "pharmacy" });
   return { elements };
 }
+
+/**
+ * Water and a railway for the synthetic city: a river across the middle as a multipolygon
+ * whose outline arrives in four pieces (two of them reversed), with an island; a pond; a
+ * canal drawn as a line; and a railway that crosses the river on a bridge. Local meters
+ * around the centre, x east, y south, unrotated.
+ */
+export function syntheticTerrain(): OverpassElement[] {
+  const { lat, lon } = FIXTURE_CENTER;
+  const kLon = 111_320 * Math.cos((lat * Math.PI) / 180);
+  const geo = (x: number, y: number) => ({ lat: lat - y / 111_132, lon: lon + x / kLon });
+  const line = (pts: [number, number][]) => pts.map(([x, y]) => geo(x, y));
+  const out: OverpassElement[] = [];
+  const members = [
+    // The north bank and the south bank, each in two pieces, one of them reversed.
+    {
+      type: "way",
+      ref: 1,
+      role: "outer",
+      geometry: line([
+        [-400, 30],
+        [-100, 30],
+        [100, 30],
+      ]),
+    },
+    {
+      type: "way",
+      ref: 2,
+      role: "outer",
+      geometry: line([
+        [400, 30],
+        [400, 70],
+        [250, 70],
+      ]),
+    },
+    {
+      type: "way",
+      ref: 3,
+      role: "outer",
+      geometry: line([
+        [100, 30],
+        [250, 30],
+        [400, 30],
+      ]),
+    },
+    {
+      type: "way",
+      ref: 4,
+      role: "outer",
+      geometry: line([
+        [250, 70],
+        [-100, 70],
+        [-400, 70],
+        [-400, 30],
+      ]),
+    },
+    // An island.
+    {
+      type: "way",
+      ref: 5,
+      role: "inner",
+      geometry: line([
+        [-160, 42],
+        [-130, 42],
+        [-130, 58],
+        [-160, 58],
+        [-160, 42],
+      ]),
+    },
+  ];
+  out.push({ type: "relation", id: 9001, tags: { type: "multipolygon", natural: "water" }, members });
+  // A pond, a plain closed way.
+  out.push({
+    type: "way",
+    id: 9002,
+    tags: { natural: "water" },
+    geometry: line([
+      [150, -180],
+      [190, -180],
+      [190, -150],
+      [150, -150],
+      [150, -180],
+    ]),
+  });
+  // A canal as a line, and a culvert that must be ignored.
+  out.push({
+    type: "way",
+    id: 9003,
+    tags: { waterway: "canal" },
+    geometry: line([
+      [-300, -120],
+      [-60, -120],
+    ]),
+  });
+  out.push({
+    type: "way",
+    id: 9004,
+    tags: { waterway: "canal", tunnel: "culvert" },
+    geometry: line([
+      [-60, -120],
+      [60, -120],
+    ]),
+  });
+  // A railway across the river on a bridge, and a tunnel that must be ignored.
+  out.push({
+    type: "way",
+    id: 9005,
+    tags: { railway: "rail" },
+    geometry: line([
+      [-300, 150],
+      [-100, 150],
+      [100, 20],
+      [300, 20],
+    ]),
+  });
+  out.push({
+    type: "way",
+    id: 9006,
+    tags: { railway: "rail", tunnel: "yes" },
+    geometry: line([
+      [-300, 200],
+      [300, 200],
+    ]),
+  });
+  // A tram in the street: not a railway for this purpose.
+  out.push({
+    type: "way",
+    id: 9007,
+    tags: { railway: "tram" },
+    geometry: line([
+      [-300, 220],
+      [300, 220],
+    ]),
+  });
+  return out;
+}

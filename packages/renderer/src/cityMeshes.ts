@@ -61,6 +61,55 @@ export function sidewalk(path: { x: number; y: number }[], roadWidth: number, wi
   return out;
 }
 
+/** Water: an outline with its islands cut out, drawn flat. */
+function waterArea(poly: { x: number; y: number }[], holes: { x: number; y: number }[][], y: number): THREE.BufferGeometry {
+  const flip = (p: { x: number; y: number }) => new THREE.Vector2(p.x, -p.y);
+  const shape = new THREE.Shape(poly.map(flip));
+  for (const h of holes) shape.holes.push(new THREE.Path(h.map(flip)));
+  const g = new THREE.ShapeGeometry(shape);
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, y, 0);
+  return g;
+}
+
+/** A railway: gravel bed, sleepers across it and two steel rails, as three merged meshes. */
+function railway(path: { x: number; y: number }[]): {
+  bed: THREE.BufferGeometry[];
+  sleepers: THREE.BufferGeometry[];
+  steel: THREE.BufferGeometry[];
+} {
+  const bed: THREE.BufferGeometry[] = [];
+  const sleepers: THREE.BufferGeometry[] = [];
+  const steel: THREE.BufferGeometry[] = [];
+  const strip = (len: number, w: number, y: number, ang: number, cx: number, cz: number) => {
+    const g = new THREE.PlaneGeometry(len, w);
+    g.rotateX(-Math.PI / 2);
+    g.rotateY(-ang);
+    g.translate(cx, y, cz);
+    return g;
+  };
+  let carried = 0;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 0.05) continue;
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const ux = (b.x - a.x) / len;
+    const uz = (b.y - a.y) / len;
+    bed.push(strip(len, 3.6, 0.012, ang, (a.x + b.x) / 2, (a.y + b.y) / 2));
+    for (const side of [-0.72, 0.72]) {
+      steel.push(strip(len, 0.12, 0.05, ang, (a.x + b.x) / 2 - uz * side, (a.y + b.y) / 2 + ux * side));
+    }
+    // Sleepers every 0.8 m, carried across the joints so a bend keeps its rhythm.
+    for (let d = (0.8 - carried) % 0.8; d < len; d += 0.8) {
+      sleepers.push(strip(0.24, 2.5, 0.03, ang, a.x + ux * d, a.y + uz * d));
+    }
+    carried = (carried + len) % 0.8;
+  }
+  return { bed, sleepers, steel };
+}
+
 /** A flat filled outline (parks of imported maps). */
 function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferGeometry {
   const shape = new THREE.Shape(poly.map((p) => new THREE.Vector2(p.x, -p.y)));
@@ -341,6 +390,51 @@ export function buildCityGround(city: CityMap): {
     const parkMesh = new THREE.Mesh(parkGeo, materials.parks);
     parkMesh.receiveShadow = true;
     group.add(parkMesh);
+  }
+  // Water, below the street surfaces so a bridge reads as a deck over it.
+  const waters = (city.waters ?? []).flatMap((w) => [
+    ...(w.polygon ? [waterArea(w.polygon, w.holes ?? [], -0.02)] : []),
+    ...(w.path ? ribbon(w.path, w.width ?? 12, -0.02) : []),
+  ]);
+  if (waters.length) {
+    const mesh = new THREE.Mesh(
+      mergeGeometries(waters.map((g) => (g.index ? g.toNonIndexed() : g))),
+      new THREE.MeshStandardMaterial({ color: 0x2b4a56, roughness: 0.28, metalness: 0.05 }),
+    );
+    mesh.receiveShadow = true;
+    mesh.name = "water";
+    group.add(mesh);
+  }
+  const lines = (city.rails ?? []).map((r) => railway(r.path));
+  if (lines.length) {
+    const add = (name: string, parts: THREE.BufferGeometry[], color: number, roughness: number) => {
+      if (!parts.length) return;
+      const mesh = new THREE.Mesh(
+        mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g))),
+        new THREE.MeshStandardMaterial({ color, roughness }),
+      );
+      mesh.receiveShadow = true;
+      mesh.name = name;
+      group.add(mesh);
+    };
+    add(
+      "rail-bed",
+      lines.flatMap((l) => l.bed),
+      0x5a564d,
+      1,
+    );
+    add(
+      "rail-sleepers",
+      lines.flatMap((l) => l.sleepers),
+      0x3a3029,
+      0.95,
+    );
+    add(
+      "rail-steel",
+      lines.flatMap((l) => l.steel),
+      0x6c6e72,
+      0.55,
+    );
   }
   const trees = city.parks.flatMap((p) => p.trees);
   if (trees.length) {

@@ -45,6 +45,28 @@ export interface ParkDef {
   trees: Vec2[];
 }
 
+/**
+ * Open water: a lake, a pond or a stretch of river as a real outline (islands cut out as
+ * holes), or a thin river or canal as a centre line with a width. Nobody walks or builds
+ * on it, except where a street crosses it: a bridge.
+ */
+export interface WaterDef {
+  id: string;
+  /** Outline, for a lake or a river mapped as an area. */
+  polygon?: Vec2[];
+  /** Islands inside the outline. */
+  holes?: Vec2[][];
+  /** Centre line of a river or canal mapped as a line, with its width in meters. */
+  path?: Vec2[];
+  width?: number;
+}
+
+/** A railway line: walkable, but a track is not a place to build. */
+export interface RailDef {
+  id: string;
+  path: Vec2[];
+}
+
 /** Where a map came from, kept with saves so the same map can be rebuilt. */
 export interface MapSource {
   kind: "osm";
@@ -70,6 +92,10 @@ export interface CityMap {
   intersections: Vec2[];
   buildings: BuildingDef[];
   parks: ParkDef[];
+  /** Water, on imported maps that have any. */
+  waters?: WaterDef[];
+  /** Railways, on imported maps that have any. */
+  rails?: RailDef[];
   /** Road ends at the map border, where hordes enter. */
   spawnPoints: Vec2[];
   /** Set for imported maps; absent for procedural ones. */

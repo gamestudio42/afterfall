@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { CityMap } from "@afterfall/world";
 import { deriveSeed, distToPolyline, pointInPolygon } from "@afterfall/shared";
-import { buildReclamation, growthAt, hash2, type ReclamationField } from "./reclamation";
+import { buildReclamation, growthAt, hash2, inWater, type ReclamationField } from "./reclamation";
 import { assignLods, CULLED, decimateQuads, LEAF_KEEP, type LodPlant } from "./vegetationLod";
 
 type Species = "manaca" | "pequi" | "dead" | "bush";
@@ -38,7 +38,7 @@ export function placeVegetation(city: CityMap, field: ReclamationField = buildRe
   const nearBuilding = (x: number, z: number, m: number) =>
     city.buildings.some((b) => x > b.rect.x - m && x < b.rect.x + b.rect.w + m && z > b.rect.y - m && z < b.rect.y + b.rect.h + m);
   const nearDoor = (x: number, z: number, m: number) => city.buildings.some((b) => Math.hypot(b.entrance.x - x, b.entrance.y - z) < m);
-  const clear = (x: number, z: number) => !nearBuilding(x, z, 2) && !nearRoad(x, z, 1.5);
+  const clear = (x: number, z: number) => !nearBuilding(x, z, 2) && !nearRoad(x, z, 1.5) && !inWater(field, x, z);
   const inPark = (park: CityMap["parks"][number], x: number, z: number) =>
     park.polygon
       ? pointInPolygon(x, z, park.polygon)
@@ -79,7 +79,7 @@ export function placeVegetation(city: CityMap, field: ReclamationField = buildRe
         if (!inPark(park, x, z)) continue;
         const roll = hash2(cx, cz, seed + 7);
         if (roll < 0.5 && clear(x, z)) out.push(tree(++index, x, z, 1.0));
-        else if (roll < 0.85 && !nearBuilding(x, z, 1) && !nearRoad(x, z, 0.8))
+        else if (roll < 0.85 && !nearBuilding(x, z, 1) && !nearRoad(x, z, 0.8) && !inWater(field, x, z))
           out.push({ species: "bush", x, z, scale: 0.9 + hash2(cx, cz, seed + 9) * 0.9, yaw: roll * 40, shade: 0.75 + roll * 0.2 });
       }
   });
@@ -96,7 +96,7 @@ export function placeVegetation(city: CityMap, field: ReclamationField = buildRe
         z = gz + hash2(cx, cz, seed + 17) * step;
       const g = growthAt(field, x, z);
       if (g < 0.35 || hash2(cx, cz, seed + 19) > (g - 0.35) * 1.8) continue;
-      if (city.parks.some((p) => inPark(p, x, z))) continue;
+      if (city.parks.some((p) => inPark(p, x, z)) || inWater(field, x, z)) continue;
       if (nearBuilding(x, z, 2.5) || nearRoad(x, z, 1.5) || nearDoor(x, z, 6)) continue;
       urban++;
       out.push(tree(++index, x, z, 1.25));
@@ -112,7 +112,7 @@ export function placeVegetation(city: CityMap, field: ReclamationField = buildRe
         z = gz + hash2(cx, cz, seed + 29) * 4;
       const g = growthAt(field, x, z);
       if (g < 0.72 || hash2(cx, cz, seed + 31) > 0.35) continue;
-      if (city.parks.some((p) => inPark(p, x, z))) continue;
+      if (city.parks.some((p) => inPark(p, x, z)) || inWater(field, x, z)) continue;
       if (nearBuilding(x, z, 0.7) || nearRoad(x, z, 0.8) || nearDoor(x, z, 4)) continue;
       out.push({ species: "bush", x, z, scale: 0.8 + g * 0.7, yaw: x * 0.7 + z, shade: 0.72 + hash2(cx, cz, seed + 37) * 0.25 });
     }

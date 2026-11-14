@@ -244,11 +244,16 @@ test("the minimap moves the camera where it is clicked", async ({ page }) => {
 });
 
 test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }) => {
-  const { syntheticOverpass } = await import("../../packages/world/tests/fixtures/osm");
+  const { syntheticOverpass, syntheticTerrain } = await import("../../packages/world/tests/fixtures/osm");
   let calls = 0;
+  let terrainCalls = 0;
   await page.route("**/api/interpreter", async (route) => {
-    calls++;
-    await route.fulfill({ contentType: "application/json", body: JSON.stringify(syntheticOverpass()) });
+    // The map asks twice: the city, then water and railways. Answer each as Overpass would.
+    const terrain = decodeURIComponent(route.request().postData() ?? "").includes('"natural"="water"');
+    if (terrain) terrainCalls++;
+    else calls++;
+    const body = terrain ? { elements: syntheticTerrain() } : syntheticOverpass();
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -268,6 +273,19 @@ test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }
   expect(info.buildings).toBeGreaterThan(80);
   expect(info.footprint).toBe(true);
   expect(calls).toBe(1);
+  expect(terrainCalls).toBe(1);
+  // The second answer reached the map: a river, and its cells are not walkable.
+  const terrain = await page.evaluate(() => {
+    const sim = (window as unknown as Win).__afterfall.sim;
+    return {
+      waters: sim.city.waters?.length ?? 0,
+      rails: sim.city.rails?.length ?? 0,
+      wet: [...sim.grid.kind].filter((k: number) => k === 5).length,
+    };
+  });
+  expect(terrain.waters).toBeGreaterThan(0);
+  expect(terrain.rails).toBeGreaterThan(0);
+  expect(terrain.wet).toBeGreaterThan(100);
 
   // Choose a base by clicking an imported building.
   const target = await page.evaluate(() => {

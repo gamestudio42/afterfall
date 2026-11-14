@@ -361,10 +361,13 @@ export class GameController {
       const next = base + (e.shiftKey ? -1 : 1) * ROTATE_STEP;
       // A panel looks the same half a turn on; a tower, farm or well does not.
       this.buildYaw = isAxial(kind) ? foldYaw(next) : foldTurn(next);
+      if (this.buildInfo) this.buildInfo = { ...this.buildInfo, manual: true };
       this.updateBuildPreview(kind, this.mouse);
     } else if (key === "t" && ui.buildMode && sim) {
       // Back to automatic: the piece lines up with the wall it joins or the street again.
       this.buildYaw = null;
+      // The banner must not wait on the pointer being over a cell to say so.
+      if (this.buildInfo) this.buildInfo = { ...this.buildInfo, manual: false };
       this.updateBuildPreview(ui.buildMode, this.mouse);
     } else if (key === "f4") {
       // Bloom and grade: auto follows the driver, and F4 overrides it either way.

@@ -1,4 +1,4 @@
-import { cityFromOverpass, overpassQuery, type CityMap, type OverpassResponse } from "@afterfall/world";
+import { cityFromOverpass, overpassQuery, overpassTerrainQuery, type CityMap, type OverpassResponse } from "@afterfall/world";
 
 /** A place to play: a named point and the side of the square area around it. */
 export interface Place {
@@ -45,7 +45,31 @@ export async function loadPlaceMap(place: Place, size: number, signal?: AbortSig
     data = await fetchOverpass(overpassQuery(place.lat, place.lon, size), signal);
     await cachePut(key, data).catch(() => undefined);
   }
-  return cityFromOverpass(data, { lat: place.lat, lon: place.lon, size, label: place.label });
+  // Water and railways come in a second request of their own, kept under another key: a
+  // river's outline can be large, and a slow or refused answer should cost the water, not
+  // the map. An area saved before this existed simply fetches it the next time it loads.
+  const terrain = await loadTerrain(place, size, signal);
+  return cityFromOverpass(terrain ? { elements: [...data.elements, ...terrain.elements] } : data, {
+    lat: place.lat,
+    lon: place.lon,
+    size,
+    label: place.label,
+  });
+}
+
+async function loadTerrain(place: Place, size: number, signal?: AbortSignal): Promise<OverpassResponse | null> {
+  const key = `terrain:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
+  const cached = await cacheGet(key);
+  if (cached) return cached;
+  try {
+    const data = await fetchOverpass(overpassTerrainQuery(place.lat, place.lon, size), signal);
+    await cachePut(key, data).catch(() => undefined);
+    return data;
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    console.warn("water and railways unavailable, loading the map without them", e);
+    return null;
+  }
 }
 
 async function fetchOverpass(query: string, signal?: AbortSignal): Promise<OverpassResponse> {

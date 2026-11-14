@@ -1,6 +1,6 @@
 import { BALANCE, INFECTED, RESOURCE_IDS, STRUCTURES, hordeForNight } from "@afterfall/content";
 import { TICK_SECONDS, type Vec2 } from "@afterfall/shared";
-import { CellKind } from "@afterfall/world";
+import { CellKind, isWalkableKind } from "@afterfall/world";
 import type { Simulation } from "../simulation";
 import type { Entity, InfectedComp } from "../state";
 
@@ -22,8 +22,8 @@ export class InfectedFields {
 
   assaultCost = (i: number): number => {
     const k = this.sim.grid.kind[i];
-    if (k === CellKind.Free || k === CellKind.Soft) return 1;
-    if (k === CellKind.Building) return Infinity;
+    if (isWalkableKind(k)) return 1;
+    if (k === CellKind.Building || k === CellKind.Water) return Infinity;
     const s = this.sim.state.entities.get(this.sim.grid.structureAt[i]);
     const hp = s?.health?.max ?? 200;
     return 1 + hp / 12;
@@ -31,7 +31,7 @@ export class InfectedFields {
 
   retreatCost = (i: number): number => {
     const k = this.sim.grid.kind[i];
-    return k === CellKind.Free || k === CellKind.Soft ? 1 : Infinity;
+    return isWalkableKind(k) ? 1 : Infinity;
   };
 
   getAssault(): Float32Array | null {

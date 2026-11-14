@@ -1,6 +1,6 @@
 import type { CityMap } from "@afterfall/world";
 import { deriveSeed } from "@afterfall/shared";
-import { growthAt, hash2, inBuilding, onRoad, type ReclamationField } from "./reclamation";
+import { growthAt, hash2, inBuilding, inWater, onRoad, type ReclamationField } from "./reclamation";
 import type { PropPlacement } from "./props";
 import { buildingDecay } from "./buildingBatch";
 
@@ -107,7 +107,7 @@ export function placeLitter(
         px += dx * shift;
         pz += dz * shift;
       }
-      if (onRoad(field, px, pz)) continue;
+      if (onRoad(field, px, pz) || inWater(field, px, pz)) continue;
       let blocked = false;
       for (let a = 0; a < 8 && !blocked; a++) {
         const ex = px + Math.cos((a * Math.PI) / 4) * reach,

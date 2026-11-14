@@ -13,10 +13,14 @@ test.skip(!process.env.REAL_SHOT, "set REAL_SHOT=1 to capture an imported map");
 
 test("captures the ground of an imported map", async ({ page }) => {
   test.setTimeout(180_000);
-  const { syntheticOverpass } = await import("../../packages/world/tests/fixtures/osm");
-  await page.route("**/api/interpreter", (route) =>
-    route.fulfill({ contentType: "application/json", body: JSON.stringify(syntheticOverpass()) }),
-  );
+  const { syntheticOverpass, syntheticTerrain } = await import("../../packages/world/tests/fixtures/osm");
+  await page.route("**/api/interpreter", (route) => {
+    const terrain = decodeURIComponent(route.request().postData() ?? "").includes('"natural"="water"');
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(terrain ? { elements: syntheticTerrain() } : syntheticOverpass()),
+    });
+  });
   await page.goto("/");
   await page.getByTestId("new-game").click();
   await page.getByTestId("map-real").click();

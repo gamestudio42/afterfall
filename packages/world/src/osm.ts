@@ -14,8 +14,8 @@ import {
   type Rect,
   type Vec2,
 } from "@afterfall/shared";
-import type { BuildingDef, CityMap, ParkDef, RoadDef } from "./city";
-import { CellKind, NavGrid } from "./navgrid";
+import type { BuildingDef, CityMap, ParkDef, RailDef, RoadDef, WaterDef } from "./city";
+import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
 
 /**
  * Turns OpenStreetMap data (an Overpass API JSON answer with `out geom`)
@@ -185,6 +185,27 @@ export function overpassQuery(lat: number, lon: number, size: number): string {
 out geom;`;
 }
 
+/**
+ * The second, optional request: water and railways.
+ *
+ * A river is mapped as a multipolygon whose rings can run for kilometres, so this answer
+ * can be far larger than the first. It is asked for separately so that a slow or refused
+ * answer costs the water, not the map.
+ */
+export function overpassTerrainQuery(lat: number, lon: number, size: number): string {
+  const b = bbox(lat, lon, size / 2 + 40);
+  const box = `${b.south.toFixed(6)},${b.west.toFixed(6)},${b.north.toFixed(6)},${b.east.toFixed(6)}`;
+  return `[out:json][timeout:40];
+(
+  way["natural"="water"](${box});
+  relation["natural"="water"](${box});
+  way["waterway"="riverbank"](${box});
+  way["waterway"~"^(river|canal)$"](${box});
+  way["railway"~"^(rail|light_rail|narrow_gauge)$"](${box});
+);
+out geom;`;
+}
+
 const M_PER_DEG_LAT = 111_132;
 
 function bbox(lat: number, lon: number, half: number) {
@@ -279,6 +300,55 @@ function relationRings(el: OverpassElement, project: (p: { lat: number; lon: num
   return { outer: best, holes: inside };
 }
 
+/**
+ * Closed rings from the open ways of a multipolygon.
+ *
+ * A river's outline is rarely one way: it is a chain of them, each ending where the next
+ * begins, in no fixed direction. They are joined end to end by shared points; a chain that
+ * never closes (a river cut off by the data) is dropped rather than guessed at.
+ */
+export function joinRings(pieces: Vec2[][]): Vec2[][] {
+  const key = (p: Vec2) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+  const same = (a: Vec2, b: Vec2) => key(a) === key(b);
+  const left = pieces.filter((p) => p.length >= 2).map((p) => p.slice());
+  const rings: Vec2[][] = [];
+  while (left.length) {
+    let ring = left.pop()!;
+    while (!same(ring[0], ring[ring.length - 1])) {
+      const end = ring[ring.length - 1];
+      const at = left.findIndex((q) => same(q[0], end) || same(q[q.length - 1], end));
+      if (at < 0) break;
+      const next = left.splice(at, 1)[0];
+      if (!same(next[0], end)) next.reverse();
+      ring = ring.concat(next.slice(1));
+    }
+    if (same(ring[0], ring[ring.length - 1]) && ring.length >= 4) rings.push(ring.slice(0, -1));
+  }
+  return rings;
+}
+
+/** The areas of water a `natural=water` relation describes, islands cut out. */
+function waterRelation(el: OverpassElement, project: (p: { lat: number; lon: number }) => Vec2): { polygon: Vec2[]; holes: Vec2[][] }[] {
+  const pieces = (role: string): Vec2[][] =>
+    (el.members ?? [])
+      .filter((m) => m.type === "way" && (m.role === role || (role === "outer" && m.role === "")))
+      .map((m) => (m.geometry ?? []).filter((g): g is { lat: number; lon: number } => !!g).map(project));
+  const outers = joinRings(pieces("outer"));
+  const inners = joinRings(pieces("inner"));
+  return outers.map((polygon) => {
+    const holes = inners.filter((h) => {
+      const c = polygonCentroid(h);
+      return pointInPolygon(c.x, c.y, polygon);
+    });
+    return { polygon, holes };
+  });
+}
+
+const RAIL_KINDS = new Set(["rail", "light_rail", "narrow_gauge"]);
+
+/** Width in meters of a river or canal mapped as a line. */
+const WATERWAY_WIDTH: Record<string, number> = { river: 18, canal: 12 };
+
 export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): CityMap {
   const size = Math.round(opts.size / 2) * 2;
   const cellSize = 2;
@@ -295,6 +365,16 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   const rawBuildings: RawBuilding[] = [];
   const rawRoads: { id: number; kind: string; line: Vec2[]; width: number }[] = [];
   const rawParks: { id: number; poly: Vec2[] }[] = [];
+  const rawWaters: WaterDef[] = [];
+  const rawRails: RailDef[] = [];
+  // Rings get clipped to the play area; a hole is clipped on its own, and only a piece
+  // that still has area is kept.
+  const addWater = (id: string, polygon: Vec2[], holes: Vec2[][] = []) => {
+    const poly = clipPolygonToRect(simplifyPolygon(polygon, 1), bounds);
+    if (poly.length < 3 || polygonArea(poly) < 150) return;
+    const kept = holes.map((h) => clipPolygonToRect(simplifyPolygon(h, 1), bounds)).filter((h) => h.length >= 3 && polygonArea(h) > 20);
+    rawWaters.push({ id, polygon: poly, ...(kept.length ? { holes: kept } : {}) });
+  };
 
   for (const el of data.elements) {
     const tags = el.tags ?? {};
@@ -303,6 +383,10 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       continue;
     }
     if (el.type === "relation") {
+      if (tags.natural === "water" && tags.type === "multipolygon") {
+        waterRelation(el, project).forEach((w, i) => addWater(`w${el.id}_${i}`, w.polygon, w.holes));
+        continue;
+      }
       if (!tags.building || tags.building === "no" || tags.type !== "multipolygon") continue;
       const rings = relationRings(el, project);
       if (!rings) continue;
@@ -330,6 +414,13 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       for (const piece of clipPolylineToRect(pts, bounds)) {
         rawRoads.push({ id: el.id, kind: tags.highway, line: piece, width: roadWidth(tags, tags.highway) });
       }
+    } else if (tags.railway && RAIL_KINDS.has(tags.railway) && tags.tunnel !== "yes") {
+      for (const [k, piece] of clipPolylineToRect(pts, bounds).entries()) rawRails.push({ id: `rail${el.id}_${k}`, path: piece });
+    } else if (tags.waterway && WATERWAY_WIDTH[tags.waterway] && tags.tunnel !== "yes" && tags.tunnel !== "culvert" && !closed) {
+      const width = Math.max(4, Number.parseFloat(tags.width ?? "") || WATERWAY_WIDTH[tags.waterway]);
+      for (const [k, piece] of clipPolylineToRect(pts, bounds).entries()) rawWaters.push({ id: `ww${el.id}_${k}`, path: piece, width });
+    } else if (closed && (tags.natural === "water" || tags.waterway === "riverbank")) {
+      addWater(`w${el.id}`, pts.slice(0, -1));
     } else if (closed && (tags.leisure || tags.landuse || tags.natural)) {
       const poly = clipPolygonToRect(pts.slice(0, -1), bounds);
       if (poly.length >= 3 && polygonArea(poly) > 150) rawParks.push({ id: el.id, poly });
@@ -395,6 +486,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   ensureEssentials(typed, size);
   const grid = new NavGrid(size, size, cellSize);
   typed.forEach((t, i) => grid.stampPolygon(t.rb.poly, i));
+  stampTerrain(grid, { roads, waters: rawWaters, rails: rawRails });
 
   const kept: { rb: RawBuilding; type: BuildingType; entrance: Vec2; facing: Vec2 }[] = [];
   for (const t of typed) {
@@ -460,6 +552,8 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     intersections: intersections(rawRoads, size),
     buildings,
     parks,
+    ...(rawWaters.length ? { waters: rawWaters } : {}),
+    ...(rawRails.length ? { rails: rawRails } : {}),
     spawnPoints,
     source: { kind: "osm", label: opts.label, lat: opts.lat, lon: opts.lon, size, attribution: OSM_ATTRIBUTION },
   };
@@ -651,7 +745,7 @@ function reachable(grid: NavGrid, from: Vec2[]): Uint8Array {
   const queue: number[] = [];
   for (const p of from) {
     const c = grid.cellOf(p.x, p.y);
-    if (grid.kind[c] === CellKind.Free && !seen[c]) {
+    if (isWalkableKind(grid.kind[c]) && !seen[c]) {
       seen[c] = 1;
       queue.push(c);
     }
@@ -670,7 +764,7 @@ function reachable(grid: NavGrid, from: Vec2[]): Uint8Array {
       const ny = y + dy;
       if (!grid.inBounds(nx, ny)) continue;
       const n = grid.index(nx, ny);
-      if (seen[n] || grid.kind[n] !== CellKind.Free) continue;
+      if (seen[n] || !isWalkableKind(grid.kind[n])) continue;
       seen[n] = 1;
       queue.push(n);
     }

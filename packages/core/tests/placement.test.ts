@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { lineCells, lineFrame } from "@afterfall/shared";
 import { CellKind, cityFromOverpass } from "@afterfall/world";
-import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
+import { FIXTURE_CENTER, syntheticOverpass, syntheticTerrain } from "../../world/tests/fixtures/osm";
 import { createSimulation, deserialize, serialize, type Simulation } from "../src";
 import { destroyStructure } from "../src/systems/infected";
 import { foldYaw, placementAt, placementYaw, structureCells } from "../src/systems/placement";
@@ -439,5 +439,68 @@ describe("corners between slanted runs", () => {
       const run2 = run.some((r) => r[0] === c[0] && r[1] === c[1]);
       if (!run2) expect(at(sim, c[0], c[1])!.structure!.line!.stretch).toBeCloseTo(nominal * 1.5);
     }
+  });
+});
+
+describe("water and railways", () => {
+  const map = cityFromOverpass(
+    { elements: [...syntheticOverpass().elements, ...syntheticTerrain()] },
+    { ...FIXTURE_CENTER, size: 480, label: "Test" },
+  );
+
+  function settled(): Simulation {
+    const sim = createSimulation({ seed: map.seed, map });
+    sim.enqueue({ type: "setBase", building: pickBase(sim) });
+    sim.tick();
+    return sim;
+  }
+  const cellOf = (sim: Simulation, kind: number) => [...sim.grid.kind].findIndex((k) => k === kind);
+
+  it("nothing is built on water or on a track", () => {
+    const sim = settled();
+    const g = sim.grid;
+    for (const kind of [CellKind.Water, CellKind.Rail]) {
+      const i = cellOf(sim, kind);
+      expect(i).toBeGreaterThanOrEqual(0);
+      const x = i % g.cols;
+      const y = Math.floor(i / g.cols);
+      expect(placementAt(sim, "wall", x, y)).toBeNull();
+      expect(placementAt(sim, "gate", x, y)).toBeNull();
+      expect(placeStructures(sim, "wall", [[x, y]])).toBeNull();
+    }
+  });
+
+  it("a tower's turned corner cannot reach into the water either", () => {
+    const sim = settled();
+    const g = sim.grid;
+    const i = cellOf(sim, CellKind.Water);
+    const x = i % g.cols;
+    const y = Math.floor(i / g.cols);
+    // Squared to the grid it may sit right beside the water; turned, a corner reaches in.
+    let found = false;
+    for (let dx = -4; dx <= 4 && !found; dx++) {
+      const sq = placementAt(sim, "tower", x + dx, y, 0);
+      const turned = placementAt(sim, "tower", x + dx, y, Math.PI / 4);
+      if (sq && !turned) found = true;
+    }
+    expect(found).toBe(true);
+  });
+
+  it("the infected stay out of the water and the horde field does not route through it", () => {
+    const sim = settled();
+    const i = cellOf(sim, CellKind.Water);
+    expect(sim.grid.passableIndex(i, "infected")).toBe(false);
+    const track = cellOf(sim, CellKind.Rail);
+    expect(sim.grid.passableIndex(track, "infected")).toBe(true);
+  });
+
+  it("a saved game brings the water back", () => {
+    const sim = settled();
+    const back = deserialize(JSON.stringify(serialize(sim)));
+    expect(back.city.waters?.length).toBe(map.waters!.length);
+    expect(back.city.rails?.length).toBe(map.rails!.length);
+    expect([...back.grid.kind].filter((k) => k === CellKind.Water).length).toBe(
+      [...sim.grid.kind].filter((k) => k === CellKind.Water).length,
+    );
   });
 });

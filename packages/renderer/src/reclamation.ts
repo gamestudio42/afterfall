@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { CityMap } from "@afterfall/world";
-import { deriveSeed, pointInPolygon } from "@afterfall/shared";
+import { deriveSeed, pointInPolygon, polygonBounds } from "@afterfall/shared";
 
 /**
  * How far nature has taken back each square metre of the city, years after the
@@ -30,6 +30,8 @@ export interface ReclamationField {
   road: Uint8Array;
   /** 1 inside a building footprint (its bounding rectangle). */
   building: Uint8Array;
+  /** 1 on open water: nothing grows there. */
+  water: Uint8Array;
 }
 
 /** Texels per side at most; a generated city fits at one metre a texel. */
@@ -113,6 +115,7 @@ export function buildReclamation(city: CityMap): ReclamationField {
   const road = new Uint8Array(n);
   const building = new Uint8Array(n);
   const park = new Uint8Array(n);
+  const water = new Uint8Array(n);
   const seed = deriveSeed(city.seed >>> 0, "reclamation");
 
   const cx = (c: number) => x0 + (c + 0.5) * cell;
@@ -136,6 +139,34 @@ export function buildReclamation(city: CityMap): ReclamationField {
   for (const b of city.buildings) fillRect(building, b.rect.x, b.rect.y, b.rect.w, b.rect.h);
   for (const p of city.parks)
     fillRect(park, p.rect.x, p.rect.y, p.rect.w, p.rect.h, p.polygon ? (x, z) => pointInPolygon(x, z, p.polygon!) : undefined);
+  for (const w of city.waters ?? []) {
+    if (w.polygon) {
+      const b = polygonBounds(w.polygon);
+      const holes = w.holes ?? [];
+      fillRect(water, b.x, b.y, b.w, b.h, (x, z) => pointInPolygon(x, z, w.polygon!) && !holes.some((h) => pointInPolygon(x, z, h)));
+    }
+    if (w.path) {
+      const half = (w.width ?? 12) / 2;
+      for (let i = 1; i < w.path.length; i++) {
+        const a = w.path[i - 1],
+          b = w.path[i];
+        const dx = b.x - a.x,
+          dz = b.y - a.y;
+        const len2 = dx * dx + dz * dz || 1;
+        fillRect(
+          water,
+          Math.min(a.x, b.x) - half,
+          Math.min(a.y, b.y) - half,
+          Math.abs(dx) + half * 2,
+          Math.abs(dz) + half * 2,
+          (px, pz) => {
+            const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (pz - a.y) * dz) / len2));
+            return Math.hypot(px - a.x - dx * t, pz - a.y - dz * t) <= half;
+          },
+        );
+      }
+    }
+  }
   for (const rd of city.roads) {
     if (!rd.path) {
       fillRect(road, rd.rect.x, rd.rect.y, rd.rect.w, rd.rect.h);
@@ -192,7 +223,9 @@ export function buildReclamation(city: CityMap): ReclamationField {
       growth[i] = Math.max(0, Math.min(1, g));
       wear[i] = fbm(x, z, 1 / 37, seed + 11);
     }
-  return { x0, z0, cell, cols, rows, growth, wear, road, building };
+  // A street across water is a bridge: it stays a street.
+  for (let i = 0; i < n; i++) if (road[i]) water[i] = 0;
+  return { x0, z0, cell, cols, rows, growth, wear, road, building, water };
 }
 
 function index(f: ReclamationField, x: number, z: number): number {
@@ -211,6 +244,11 @@ export function growthAt(f: ReclamationField, x: number, z: number): number {
 export function onRoad(f: ReclamationField, x: number, z: number): boolean {
   const i = index(f, x, z);
   return i >= 0 && f.road[i] === 1;
+}
+
+export function inWater(f: ReclamationField, x: number, z: number): boolean {
+  const i = index(f, x, z);
+  return i >= 0 && f.water[i] === 1;
 }
 
 export function inBuilding(f: ReclamationField, x: number, z: number): boolean {

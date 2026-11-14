@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { CityMap } from "@afterfall/world";
 import { deriveSeed } from "@afterfall/shared";
-import { growthAt, hash2, inBuilding, onRoad, type ReclamationField } from "./reclamation";
+import { growthAt, hash2, inBuilding, inWater, onRoad, type ReclamationField } from "./reclamation";
 
 /** One clump of tall grass and weeds. */
 export interface Tuft {
@@ -50,6 +50,7 @@ export function placeGrass(city: CityMap, field: ReclamationField, density = 1):
       // Asphalt only gives way at its edges, so tufts there need a stronger field.
       const chance = road ? smooth(0.58, 0.9, g) * 0.7 : smooth(0.5, 0.85, g) * 0.92;
       if (hash2(c, r, seed + 2) >= chance * density) continue;
+      if (inWater(field, x, z)) continue;
       if (inBuilding(field, x, z) || inBuilding(field, x + 0.5, z) || inBuilding(field, x - 0.5, z)) continue;
       if (inBuilding(field, x, z + 0.5) || inBuilding(field, x, z - 0.5) || nearDoor(x, z)) continue;
       const h = hash2(c, r, seed + 3);

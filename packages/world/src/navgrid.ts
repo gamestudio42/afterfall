@@ -1,5 +1,5 @@
 import { pointInPolygon, polygonBounds, polygonCentroid, type Vec2 } from "@afterfall/shared";
-import type { CityMap } from "./city";
+import type { CityMap, RailDef, RoadDef, WaterDef } from "./city";
 import { MinHeap } from "./heap";
 import { abandonedVehicles, vehicleContains } from "./vehicles";
 
@@ -12,6 +12,15 @@ export const enum CellKind {
   Gate = 3,
   /** Non-solid structure such as a farm: passable. */
   Soft = 4,
+  /** Open water: nobody crosses it, and nothing is built on it. */
+  Water = 5,
+  /** A railway track: walkable, but not a place to build. */
+  Rail = 6,
+}
+
+/** Whether an agent can stand on a cell of this kind, gates aside. */
+export function isWalkableKind(k: number): boolean {
+  return k === CellKind.Free || k === CellKind.Soft || k === CellKind.Rail;
 }
 
 export type Agent = "survivor" | "infected";
@@ -91,6 +100,7 @@ export class NavGrid {
           g.buildingAt[i] = b.index;
         }
     }
+    stampTerrain(g, city);
     for (const car of abandonedVehicles(city)) {
       for (let y = Math.floor((car.z - 4) / g.cell); y <= Math.ceil((car.z + 4) / g.cell); y++) {
         for (let x = Math.floor((car.x - 4) / g.cell); x <= Math.ceil((car.x + 4) / g.cell); x++) {
@@ -201,7 +211,7 @@ export class NavGrid {
 
   passableIndex(i: number, agent: Agent): boolean {
     const k = this.kind[i];
-    if (k === CellKind.Free || k === CellKind.Soft) return true;
+    if (isWalkableKind(k)) return true;
     return agent === "survivor" && k === CellKind.Gate;
   }
 
@@ -443,4 +453,81 @@ export class NavGrid {
     }
     return best;
   }
+}
+
+/** Half the width of the gravel a railway lies on, in meters: the cells a track takes. */
+const RAIL_REACH = 1.7;
+
+/**
+ * Stamps water and railways onto a grid whose buildings are already in it.
+ *
+ * Streets win over both: a street that crosses a river is a bridge, one that crosses a
+ * railway a level crossing, and either way it stays a street. Buildings win over water
+ * too, so a footprint mapped a little into a bank is not drowned. Water is stamped first
+ * and the rails after it, so a railway bridge keeps its deck.
+ */
+export function stampTerrain(g: NavGrid, t: { roads: RoadDef[]; waters?: WaterDef[]; rails?: RailDef[] }): void {
+  if (!t.waters?.length && !t.rails?.length) return;
+  const n = g.cols * g.rows;
+  const road = new Uint8Array(n);
+  const near = (path: Vec2[], reach: number, mark: (i: number) => void) => {
+    for (let k = 1; k < path.length; k++) {
+      const a = path[k - 1];
+      const b = path[k];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy || 1;
+      const x0 = Math.max(0, Math.floor((Math.min(a.x, b.x) - reach) / g.cell));
+      const x1 = Math.min(g.cols - 1, Math.floor((Math.max(a.x, b.x) + reach) / g.cell));
+      const y0 = Math.max(0, Math.floor((Math.min(a.y, b.y) - reach) / g.cell));
+      const y1 = Math.min(g.rows - 1, Math.floor((Math.max(a.y, b.y) + reach) / g.cell));
+      for (let y = y0; y <= y1; y++)
+        for (let x = x0; x <= x1; x++) {
+          const px = (x + 0.5) * g.cell;
+          const py = (y + 0.5) * g.cell;
+          const u = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
+          if (Math.hypot(px - a.x - dx * u, py - a.y - dy * u) <= reach) mark(y * g.cols + x);
+        }
+    }
+  };
+  for (const r of t.roads) {
+    if (r.path) near(r.path, (r.width ?? 8) / 2 + 0.5, (i) => (road[i] = 1));
+    else {
+      const x0 = Math.max(0, Math.floor(r.rect.x / g.cell));
+      const x1 = Math.min(g.cols - 1, Math.floor((r.rect.x + r.rect.w) / g.cell));
+      const y0 = Math.max(0, Math.floor(r.rect.y / g.cell));
+      const y1 = Math.min(g.rows - 1, Math.floor((r.rect.y + r.rect.h) / g.cell));
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) road[y * g.cols + x] = 1;
+    }
+  }
+  const stamp = (i: number, kind: CellKind, over: CellKind[]) => {
+    if (road[i] || !over.includes(g.kind[i])) return;
+    g.kind[i] = kind;
+  };
+  const onlyFree = [CellKind.Free];
+  for (const w of t.waters ?? []) {
+    if (w.polygon) {
+      // Even-odd over the outline and its islands together: scan each row once.
+      const rings = [w.polygon, ...(w.holes ?? [])];
+      for (let y = 0; y < g.rows; y++) {
+        const py = (y + 0.5) * g.cell;
+        const xs: number[] = [];
+        for (const ring of rings)
+          for (let k = 0; k < ring.length; k++) {
+            const a = ring[k];
+            const b = ring[(k + 1) % ring.length];
+            if (a.y > py === b.y > py) continue;
+            xs.push(a.x + ((py - a.y) / (b.y - a.y)) * (b.x - a.x));
+          }
+        xs.sort((p, q) => p - q);
+        for (let k = 0; k + 1 < xs.length; k += 2) {
+          const x0 = Math.max(0, Math.ceil(xs[k] / g.cell - 0.5));
+          const x1 = Math.min(g.cols - 1, Math.floor(xs[k + 1] / g.cell - 0.5));
+          for (let x = x0; x <= x1; x++) stamp(y * g.cols + x, CellKind.Water, onlyFree);
+        }
+      }
+    }
+    if (w.path) near(w.path, (w.width ?? 12) / 2, (i) => stamp(i, CellKind.Water, onlyFree));
+  }
+  for (const r of t.rails ?? []) near(r.path, RAIL_REACH, (i) => stamp(i, CellKind.Rail, [CellKind.Free, CellKind.Water]));
 }

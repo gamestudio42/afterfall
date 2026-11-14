@@ -361,10 +361,13 @@ export class GameController {
       const next = base + (e.shiftKey ? -1 : 1) * ROTATE_STEP;
       // A panel looks the same half a turn on; a tower, farm or well does not.
       this.buildYaw = isAxial(kind) ? foldYaw(next) : foldTurn(next);
+      if (this.buildInfo) this.setBuildInfo({ ...this.buildInfo, manual: true });
       this.updateBuildPreview(kind, this.mouse);
     } else if (key === "t" && ui.buildMode && sim) {
       // Back to automatic: the piece lines up with the wall it joins or the street again.
       this.buildYaw = null;
+      // The banner must not wait on the pointer being over a cell to say so.
+      if (this.buildInfo) this.setBuildInfo({ ...this.buildInfo, manual: false });
       this.updateBuildPreview(ui.buildMode, this.mouse);
     } else if (key === "f4") {
       // Bloom and grade: auto follows the driver, and F4 overrides it either way.
@@ -609,6 +612,19 @@ export class GameController {
     return Math.hypot(p.x - down.x, p.y - down.y) > CLICK_SLOP ? down.cell : undefined;
   }
 
+  /**
+   * The banner reads this on the UI tick, which follows frames; a slow frame would
+   * leave the count and the angle stale for seconds after a move or a key. A change
+   * repaints it at once.
+   */
+  private setBuildInfo(next: NonNullable<GameController["buildInfo"]>): void {
+    const prev = this.buildInfo;
+    this.buildInfo = next;
+    if (prev && prev.count === next.count && prev.capped === next.capped && prev.manual === next.manual) return;
+    const ui = useUi.getState();
+    ui.set({ frame: ui.frame + 1 });
+  }
+
   /** The angle a single piece takes: the player's turn, else what fits the spot. */
   private currentYaw(kind: StructureKind, cell: [number, number] | null): number {
     if (this.buildYawKind !== kind) {
@@ -631,12 +647,12 @@ export class GameController {
     const cells = this.buildCells(kind, end, start);
     const yaw = cells.length === 1 ? this.currentYaw(kind, cells[0]) : undefined;
     const valid = cells.map(([x, y]) => this.cellValid(kind, x, y, yaw ?? 0));
-    this.buildInfo = {
+    this.setBuildInfo({
       count: valid.filter(Boolean).length,
       // The line stops at the cap, short of the pointer: say so instead of just stopping.
       capped: !!start && cells.length === LINE_MAX && (cells[LINE_MAX - 1][0] !== end[0] || cells[LINE_MAX - 1][1] !== end[1]),
       manual: this.buildYaw !== null,
-    };
+    });
     this.renderer.buildPreview = {
       kind,
       cells,

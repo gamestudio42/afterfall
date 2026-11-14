@@ -46,9 +46,37 @@ export function Minimap() {
       if (p.polygon) fillPoly(p.polygon);
       else ctx.fillRect(p.rect.x, p.rect.y, p.rect.w, p.rect.h);
     }
+    ctx.fillStyle = "#2a4652";
+    ctx.strokeStyle = "#2a4652";
+    ctx.lineCap = ctx.lineJoin = "round";
+    for (const w of city.waters ?? []) {
+      if (w.polygon) {
+        // Islands are cut out: one path, filled even-odd.
+        ctx.beginPath();
+        for (const ring of [w.polygon, ...(w.holes ?? [])]) {
+          ring.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+          ctx.closePath();
+        }
+        ctx.fill("evenodd");
+      }
+      if (w.path) {
+        ctx.lineWidth = Math.max(w.width ?? 12, 2 / scale);
+        ctx.beginPath();
+        w.path.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.stroke();
+      }
+    }
+    ctx.strokeStyle = "#76716a";
+    ctx.lineWidth = Math.max(2, 1.5 / scale);
+    ctx.setLineDash([4 / scale, 3 / scale]);
+    for (const r of city.rails ?? []) {
+      ctx.beginPath();
+      r.path.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
     ctx.fillStyle = "#4a4d52";
     ctx.strokeStyle = "#4a4d52";
-    ctx.lineCap = ctx.lineJoin = "round";
     for (const r of city.roads) {
       if (!r.path) {
         ctx.fillRect(r.rect.x, r.rect.y, r.rect.w, r.rect.h);

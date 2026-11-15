@@ -956,7 +956,7 @@ export class GameRenderer {
   /** Turns the post chain on, off, or leaves it to the driver (off on a software rasteriser). */
   setPost(mode: PostMode): void {
     this.postMode = mode;
-    const want = resolvePost(mode, this.gpuName);
+    const want = resolvePost(mode, this.gpuName) && !(mode === "auto" && this.effectsDropped);
     // The sky environment is sampled in every lit fragment. On a GPU that is
     // free; on a software rasteriser it took the e2e job from 8 minutes to 15
     // and four specs past their timeouts, so it follows the same switch.
@@ -990,6 +990,8 @@ export class GameRenderer {
   }
 
   private governor = new ResolutionGovernor();
+  /** Set when the governor ran out of resolution and "auto" gave up the effects for this session. */
+  private effectsDropped = false;
   private cssSize = { width: 0, height: 0 };
   /** Render scale the governor has settled on, 1 being the display's pixel ratio (capped at 2). */
   get resolutionScale(): number {
@@ -1004,6 +1006,14 @@ export class GameRenderer {
   observeFrame(ms: number): void {
     if (isSoftwareRenderer(this.gpuName)) return;
     const scale = this.governor.sample(ms);
+    // Resolution is the first thing to go; when it is at its floor and the frames are
+    // still slow, the bloom and the grade go next. Measured on an integrated GPU at
+    // 1080p the chain is about a quarter of the frame. Only when the driver decides
+    // ("auto"): a player who asked for the chain with F4 keeps it.
+    if (this.governor.starved && this.postMode === "auto" && this.postEnabled) {
+      this.effectsDropped = true;
+      this.setPost("auto");
+    }
     if (scale === null) return;
     // Never below 0.75 device pixels per CSS pixel: under that the HUD text turns to mush.
     this.renderer.setPixelRatio(Math.max(0.75, Math.min(window.devicePixelRatio, 2) * scale));

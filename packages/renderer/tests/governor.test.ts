@@ -59,4 +59,17 @@ describe("resolution governor", () => {
     // 21 ms is neither slow (25) nor fast (18.2): nothing should ever change.
     expect(run(g, 21, 120)).toEqual([]);
   });
+
+  it("reports starvation only at the floor with frames still slow", () => {
+    const g = new ResolutionGovernor();
+    run(g, 40, 3);
+    expect(g.scale).toBeGreaterThan(GOVERNOR_DEFAULTS.min);
+    expect(g.starved).toBe(false);
+    run(g, 40, 60);
+    expect(g.scale).toBe(GOVERNOR_DEFAULTS.min);
+    expect(g.starved).toBe(true);
+    // Frames that recover at the floor are not starvation.
+    run(g, 16.7, 2);
+    expect(g.starved).toBe(false);
+  });
 });

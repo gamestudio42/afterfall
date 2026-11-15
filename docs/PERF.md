@@ -207,3 +207,45 @@ The same kind of run on the Eiffel Tower area (600 m, 89 buildings, 7 water bodi
 imports in 150 ms and the game is on screen 1.8 s after the click; a frame submits 583k
 triangles in 60 draw calls, 361k of them shadow casters, and the per-frame JavaScript is under
 0.5 ms.
+
+## First numbers from a GPU: an integrated one, and it is fill-bound (2026-11-15)
+
+Chromium with ANGLE on the laptop's integrated GPU (`Mesa Intel(R) Graphics (RPL-P)`), 1920
+by 1080, vsync on, frames counted over `requestAnimationFrame`. The discrete GPU could not be
+selected from Playwright in this Wayland session, so there is still no number for it.
+
+| scene | fps | render scale the governor settled on |
+| --- | --- | --- |
+| Eiffel Tower area, 160 m | 42–46 | 0.7–0.8 |
+| Eiffel Tower area, zoomed out to 320 m | 37–38 | 0.6 |
+| 661 buildings, day | 28–35 | 0.6 |
+| 661 buildings, night | 27–34 | 0.6 |
+
+The 60 fps budget is not met on this class of GPU, with the resolution already at the
+governor's floor. Turning one thing off at a time (resolution pinned at 1, 661 buildings,
+39 ms a frame, samples of three seconds, a few milliseconds of noise between runs):
+
+| change | frame |
+| --- | --- |
+| baseline | 39–44 ms |
+| half resolution | 20.5 ms |
+| no post chain | 28 ms |
+| no ground | 32 ms |
+| no props and litter (1.6M to 0.4M triangles) | 33 ms |
+| no shadows | 36 ms |
+| no buildings, no grass, no vegetation, 1024 shadow map | within noise |
+
+**Pixels, not triangles.** Halving the resolution nearly halves the frame and the post chain is
+about a quarter of it, while removing three quarters of the triangles buys six milliseconds.
+Culling, level of detail and chunk streaming would not move this number; what a pixel costs
+would (the half-float 4x MSAA target, bloom, PCF-soft shadows, the environment map on every
+lit fragment).
+
+One change came out of it: when the governor is at its floor and frames are still slow, the
+`auto` post mode now gives up the bloom and the grade for the session (`governor.starved`).
+On the default city that took the settled frame rate from 27 fps to roughly 37–40, with
+readings between 22 and 40 across samples — the direction is clear, the size is not. A player
+who turned the chain on with F4 keeps it.
+
+Not done, and the obvious next step: a real low tier for integrated GPUs (fewer MSAA samples,
+plain PCF, no environment map), measured one at a time like the table above.

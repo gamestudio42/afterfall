@@ -170,3 +170,40 @@ What is left is the renderer, and the renderer cannot be judged here: every fram
 in this document comes from SwiftShader, which rasterises on the CPU. The 60 fps budget at
 1080p with a hundred buildings, forty survivors and one night horde is still exactly as
 unverified as it was on day one, and no amount of local optimisation changes that.
+
+## Two megabytes a frame went to the GPU for nothing (2026-11-15)
+
+Every earlier section timed JavaScript or a software rasteriser. This one counts something a
+GPU run would also pay for: the bytes `bufferSubData` sends each frame. Probe: a twelve-block
+city (661 buildings), a base, 513 built wall pieces, sixty fixed frames, with the WebGL
+context's `bufferSubData` wrapped to add up what it is given.
+
+| | before | after |
+| --- | --- | --- |
+| uploaded per frame | 1,978 KB | 63 KB |
+| `bufferSubData` calls per frame | 50 | 14.5 |
+| `updateStructures` | 0.88 ms | 0.07 ms |
+| `refreshBuildingColors`, per call (five a second) | 6.2 ms | 0.9 ms |
+
+Three causes, all the same mistake — `needsUpdate = true` uploads the whole buffer:
+
+- **Instanced batches are sized for the worst case.** Structures hold 1,200 instances per
+  material per kind, the infected 600, and each sent its full matrix, colour and damage
+  buffers every frame with four people on the map. They now send the live instances only
+  (`addUpdateRange`), and an empty batch sends nothing.
+- **Structures were rebuilt every frame.** Walls stand still for minutes. A signature over
+  what the meshes are built from (ids, built, progress, health, selection, grid version)
+  skips the neighbour lookups, the matrices and the upload when nothing changed.
+- **Every building was repainted five times a second.** The colour buffer of this city is
+  megabytes and almost every repaint was the colour already there. `BuildingBatch` remembers
+  what each building wears, skips the ones that match, and uploads only the repainted
+  ranges.
+
+At 60 fps the old figure is about 118 MB a second through the command buffer. What it costs in
+frame time on a GPU is still not measured here: the probe ran under SwiftShader, and the
+60 fps budget remains unverified on real hardware.
+
+The same kind of run on the Eiffel Tower area (600 m, 89 buildings, 7 water bodies): the map
+imports in 150 ms and the game is on screen 1.8 s after the click; a frame submits 583k
+triangles in 60 draw calls, 361k of them shadow casters, and the per-frame JavaScript is under
+0.5 ms.

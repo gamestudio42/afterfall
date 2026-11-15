@@ -261,3 +261,46 @@ describe("a courtyard", () => {
     expect(wallVerts).toBeGreaterThan(solid.mesh.geometry.groups[GROUPS.indexOf("residential")].count);
   });
 });
+
+describe("recolouring", () => {
+  const city = [building(0, "house", 0, 0, 10, 10), building(1, "office", 20, 0, 12, 12), building(2, "shop", 40, 0, 10, 10)];
+  const ranges = (batch: BuildingBatch) => (batch.mesh.geometry.getAttribute("color") as THREE.BufferAttribute).updateRanges;
+  const version = (batch: BuildingBatch) => (batch.mesh.geometry.getAttribute("color") as THREE.BufferAttribute).version;
+
+  it("sends nothing when no building changed colour", () => {
+    // The game repaints every building five times a second; the whole colour buffer of a
+    // real map is megabytes, and almost every repaint is the colour it already has.
+    const batch = new BuildingBatch(city);
+    const wall = new THREE.Color(0.5, 0.4, 0.3);
+    city.forEach((_, i) => batch.setColors(i, wall, wall, 0));
+    batch.commitColors();
+    const sent = version(batch);
+    city.forEach((_, i) => batch.setColors(i, wall, wall, 0));
+    batch.commitColors();
+    expect(version(batch)).toBe(sent);
+  });
+
+  it("sends only the building that changed", () => {
+    const batch = new BuildingBatch(city);
+    const wall = new THREE.Color(0.5, 0.4, 0.3);
+    city.forEach((_, i) => batch.setColors(i, wall, wall, 0));
+    batch.commitColors();
+    ranges(batch).length = 0;
+    const sent = version(batch);
+    batch.setColors(1, new THREE.Color(0.9, 0.5, 0.2), wall, 1);
+    batch.commitColors();
+    expect(version(batch)).toBeGreaterThan(sent);
+    const color = batch.mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
+    const covered = ranges(batch).reduce((n, r) => n + r.count, 0);
+    expect(covered).toBeGreaterThan(0);
+    expect(covered).toBeLessThan(color.array.length);
+    // Every vertex inside the ranges belongs to building 1, and it wears the new colour.
+    for (const r of ranges(batch)) {
+      for (let k = r.start; k < r.start + r.count; k += 3) {
+        expect(batch.ownerOfTriangle(Math.floor(k / 9))).toBe(1);
+      }
+    }
+    const glow = batch.mesh.geometry.getAttribute("glow") as THREE.BufferAttribute;
+    expect(Array.from(glow.array as Float32Array).filter((g) => g === 1).length).toBeGreaterThan(0);
+  });
+});

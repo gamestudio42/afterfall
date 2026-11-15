@@ -136,6 +136,10 @@ export class BuildingBatch {
   private triOwner: Int32Array;
   private night = 0;
   private lit: Partial<Record<Group, boolean>> = {};
+  /** What each building is painted with (wall and glow, roof), so an unchanged one is skipped. */
+  private painted: Float64Array;
+  /** Vertex ranges repainted since the last commit. */
+  private dirty: Range[] = [];
 
   constructor(buildings: BuildingDef[]) {
     const parts = Object.fromEntries(GROUPS.map((g) => [g, new Builder()])) as Record<Group, Builder>;
@@ -218,6 +222,7 @@ export class BuildingBatch {
       triAt += p.owner.length;
     }
     this.ranges = local.map((mine) => mine.map((r) => ({ group: r.group, start: r.start + offset[r.group]!, count: r.count })));
+    this.painted = new Float64Array(buildings.length * 2).fill(-1);
     this.triOwner = owners;
 
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
@@ -241,8 +246,19 @@ export class BuildingBatch {
     this.mesh.castShadow = this.mesh.receiveShadow = true;
   }
 
-  /** Per-building colours: walls, roof and trim, and whether its windows glow at night. */
+  /**
+   * Per-building colours: walls, roof and trim, and whether its windows glow at night.
+   *
+   * The game asks for every building's colour five times a second and almost none of
+   * them change, so a building that already wears the colour is skipped, and only the
+   * vertex ranges that were repainted are sent to the GPU (see `commitColors`).
+   */
   setColors(i: number, wall: THREE.Color, roofColor: THREE.Color, glow: number): void {
+    const key = wall.getHex() * 2 + (glow ? 1 : 0);
+    const roofKey = roofColor.getHex();
+    if (this.painted[i * 2] === key && this.painted[i * 2 + 1] === roofKey) return;
+    this.painted[i * 2] = key;
+    this.painted[i * 2 + 1] = roofKey;
     const color = this.mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
     const glowAttr = this.mesh.geometry.getAttribute("glow") as THREE.BufferAttribute;
     const trim = tmp.copy(wall).multiplyScalar(0.86);
@@ -251,12 +267,28 @@ export class BuildingBatch {
       paint(color, r, c);
       const g = glowAttr.array as Float32Array;
       g.fill(glow, r.start, r.start + r.count);
+      this.dirty.push(r);
     }
   }
 
+  /** Sends what `setColors` repainted since the last call, and nothing when nothing changed. */
   commitColors(): void {
-    this.mesh.geometry.getAttribute("color").needsUpdate = true;
-    this.mesh.geometry.getAttribute("glow").needsUpdate = true;
+    if (this.dirty.length === 0) return;
+    const color = this.mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
+    const glow = this.mesh.geometry.getAttribute("glow") as THREE.BufferAttribute;
+    color.clearUpdateRanges();
+    glow.clearUpdateRanges();
+    // A handful of buildings go as their own ranges; a repaint of the whole city (a new
+    // map, an overlay) is cheaper as one upload than as thousands of small ones.
+    if (this.dirty.length <= MAX_DIRTY_RANGES) {
+      for (const r of this.dirty) {
+        color.addUpdateRange(r.start * 3, r.count * 3);
+        glow.addUpdateRange(r.start, r.count);
+      }
+    }
+    this.dirty.length = 0;
+    color.needsUpdate = true;
+    glow.needsUpdate = true;
   }
 
   /** Gives the batch its maps as they arrive; a missing one keeps the flat colour. */
@@ -315,6 +347,8 @@ export class BuildingBatch {
 }
 
 const tmp = new THREE.Color();
+/** Above this many repainted ranges the colour buffers are uploaded whole. */
+const MAX_DIRTY_RANGES = 96;
 
 /**
  * Where each style's windows sit inside a 3.2 m bay and floor, as `tools/blender/facades.py`

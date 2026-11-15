@@ -245,9 +245,17 @@ export class CharacterBatch {
   }
 
   end(): void {
+    // Only the people on the map are sent: `needsUpdate` alone uploads the whole batch,
+    // which is sized for a horde of six hundred.
     for (const mesh of this.meshes) {
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      const n = mesh.count;
+      if (n === 0) continue;
+      for (const a of [mesh.instanceMatrix, mesh.instanceColor]) {
+        if (!a) continue;
+        a.clearUpdateRanges();
+        a.addUpdateRange(0, n * a.itemSize);
+        a.needsUpdate = true;
+      }
       if (mesh.morphTexture) mesh.morphTexture.needsUpdate = true;
     }
   }

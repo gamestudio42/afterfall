@@ -73,6 +73,32 @@ const UP = new THREE.Vector3(0, 1, 0);
 const lightBasis = new THREE.Matrix4();
 const lightRight = new THREE.Vector3();
 const lightUp = new THREE.Vector3();
+const tmpC2 = new THREE.Color();
+const roofC = new THREE.Color();
+const tmpQ2 = new THREE.Quaternion();
+const SELECTED_STRUCTURE = new THREE.Color(0xffd34d);
+const SUN_DAY = new THREE.Color(0xffe9c8);
+const SUN_DUSK = new THREE.Color(0xff9a50);
+const MOON = new THREE.Color(0x8ea6e6);
+
+/**
+ * Sends an instanced mesh's live instances to the GPU, and only those.
+ *
+ * `needsUpdate` alone uploads the whole buffer: a batch sized for 600 infected or 1,200
+ * structures sent all of it every frame, with four people on the map. An empty batch
+ * sends nothing.
+ */
+function uploadInstances(mesh: THREE.InstancedMesh, extra?: THREE.BufferAttribute): void {
+  const n = mesh.count;
+  if (n === 0) return;
+  const attrs = [mesh.instanceMatrix, mesh.instanceColor, extra];
+  for (const a of attrs) {
+    if (!a) continue;
+    a.clearUpdateRanges();
+    a.addUpdateRange(0, n * a.itemSize);
+    a.needsUpdate = true;
+  }
+}
 
 /**
  * Draws a Simulation with Three.js. Reads simulation state but never
@@ -761,6 +787,7 @@ export class GameRenderer {
     const city = sim.city;
     this.shadowCadence.invalidate();
     this.selectionOutlineOf = -1;
+    this.structureState = NaN;
     const ground = buildCityGround(city);
     this.vegetation?.dispose();
     this.grass?.dispose();
@@ -860,7 +887,6 @@ export class GameRenderer {
   refreshBuildingColors(): void {
     const sim = this.sim;
     if (!sim || !this.buildings) return;
-    const roofC = new THREE.Color();
     sim.city.buildings.forEach((def, i) => {
       const st = sim.state.buildings[i];
       tmpC.setHex(BUILDING_TYPES[def.type].color);
@@ -871,14 +897,14 @@ export class GameRenderer {
         const d = Math.min(1, st.hiddenInfected / 8);
         tmpC.setRGB(0.3 + 0.6 * d, 0.3 * (1 - d) + 0.15, 0.3 * (1 - d) + 0.15);
       } else {
-        if (st.fn !== "none") tmpC.lerp(new THREE.Color(FUNCTION_TINT[st.fn] ?? 0xffffff), 0.12);
+        if (st.fn !== "none") tmpC.lerp(tmpC2.setHex(FUNCTION_TINT[st.fn] ?? 0xffffff), 0.12);
         else if (st.searchProgress >= st.searchTotal) {
           const grey = 0.299 * tmpC.r + 0.587 * tmpC.g + 0.114 * tmpC.b;
-          tmpC.lerp(new THREE.Color(grey, grey, grey), 0.45).multiplyScalar(0.78);
+          tmpC.lerp(tmpC2.setRGB(grey, grey, grey), 0.45).multiplyScalar(0.78);
         } else if (!st.explored) tmpC.multiplyScalar(0.82);
-        if (st.cache) tmpC.lerp(new THREE.Color(0x4ee0c0), 0.5);
+        if (st.cache) tmpC.lerp(tmpC2.setHex(0x4ee0c0), 0.5);
       }
-      if (i === this.hoverBuilding) tmpC.lerp(new THREE.Color(0xffffff), 0.18);
+      if (i === this.hoverBuilding) tmpC.lerp(tmpC2.setHex(0xffffff), 0.18);
       // The roof map is already dark tar: tinting it at 0.7 as well turned roofs to mud.
       roofC.copy(tmpC);
       // Windows glow only in settlement buildings.
@@ -1122,8 +1148,8 @@ export class GameRenderer {
     this.sun.target.position.set(snapped.x, snapped.y, snapped.z);
     this.shadowDue = this.shadowCadence.due(snapped.x, snapped.z, sc.right);
     const dusk = 1 - Math.abs(elev * 2 - 0.4) * 1.2;
-    const sunColor = new THREE.Color(0xffe9c8).lerp(new THREE.Color(0xff9a50), Math.max(0, Math.min(1, dusk)) * 0.6);
-    this.sun.color.copy(daylight > 0.05 ? sunColor : new THREE.Color(0x8ea6e6));
+    const sunColor = tmpC2.copy(SUN_DAY).lerp(SUN_DUSK, Math.max(0, Math.min(1, dusk)) * 0.6);
+    this.sun.color.copy(daylight > 0.05 ? sunColor : MOON);
     // The moon is a real key light: at 1.0 the night was a dark green murk where
     // the streets, the units and the horde all had the same value.
     // Weather arrives as a front: the state eases toward the day's kind.
@@ -1292,13 +1318,41 @@ export class GameRenderer {
     this.infected.count = this.infectedParts.length > 0 ? 0 : zi;
     this.hpBg.count = bars;
     this.hpFg.count = bars;
-    for (const m of [this.survivors, this.heads, this.packs, this.rings, this.infected, this.hpBg, this.hpFg]) {
-      m.instanceMatrix.needsUpdate = true;
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    uploadInstances(this.survivors);
+    uploadInstances(this.heads);
+    uploadInstances(this.packs);
+    uploadInstances(this.rings);
+    uploadInstances(this.infected);
+    uploadInstances(this.hpBg);
+    uploadInstances(this.hpFg);
+  }
+
+  /**
+   * What the structure meshes were last built from. Walls stand still for minutes at a
+   * time, and rebuilding every instance of every piece each frame — neighbour lookups,
+   * matrices, and the upload of all of it — was the largest per-frame cost on a walled
+   * settlement.
+   */
+  private structureState = NaN;
+
+  /** A number that changes when anything `updateStructures` draws from changes. */
+  private structureSignature(sim: Simulation): number {
+    let h = (this.selection.structure | 0) ^ (this.structuresReady ? 0x5bd1e995 : 0) ^ Math.imul(sim.grid.version | 0, 0x9e3779b1);
+    let n = 0;
+    for (const e of sim.structures()) {
+      const s = e.structure;
+      const hp = e.health ? Math.round((e.health.hp / e.health.max) * 255) : 255;
+      h = Math.imul(h ^ e.id, 0x01000193);
+      h = Math.imul(h ^ (s.built ? 0x10000 | hp : Math.round(s.progress * 8)), 0x01000193);
+      n++;
     }
+    return (h >>> 0) + n * 4294967296;
   }
 
   private updateStructures(sim: Simulation): void {
+    const signature = this.structureSignature(sim);
+    if (signature === this.structureState) return;
+    this.structureState = signature;
     let b = 0;
     this.blueprintIds.length = 0;
     this.structureIds.length = 0;
@@ -1346,8 +1400,7 @@ export class GameRenderer {
       return nz && nx;
     };
 
-    const tmpQ2 = new THREE.Quaternion();
-    const up = new THREE.Vector3(0, 1, 0);
+    const up = UP;
     for (const e of sim.structures()) {
       const s = e.structure;
       const def = STRUCTURES[s.kind];
@@ -1401,7 +1454,7 @@ export class GameRenderer {
       const hpFrac = e.health ? e.health.hp / e.health.max : 1;
       tmpC.setScalar(0.88 + (variation % 13) / 100);
       if (hpFrac < 0.99) tmpC.multiplyScalar(0.8 + hpFrac * 0.2);
-      if (e.id === this.selection.structure) tmpC.lerp(new THREE.Color(0xffd34d), 0.4);
+      if (e.id === this.selection.structure) tmpC.lerp(SELECTED_STRUCTURE, 0.4);
       for (const placement of placements) {
         if (model.ids.length >= MAX_STRUCTURES) break;
         const n = model.ids.length;
@@ -1421,16 +1474,10 @@ export class GameRenderer {
     this.structures.count = this.structureIds.length;
     this.blueprints.count = b;
     for (const model of this.structureModels.values()) {
-      for (const part of model.parts) {
-        part.instanceMatrix.needsUpdate = true;
-        part.geometry.getAttribute("structureDamage").needsUpdate = true;
-        if (part.instanceColor) part.instanceColor.needsUpdate = true;
-      }
+      for (const part of model.parts) uploadInstances(part, part.geometry.getAttribute("structureDamage") as THREE.BufferAttribute);
     }
-    for (const m of [this.structures, this.blueprints]) {
-      m.instanceMatrix.needsUpdate = true;
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
-    }
+    uploadInstances(this.structures);
+    uploadInstances(this.blueprints);
   }
 
   private updateSelection(sim: Simulation): void {
@@ -1483,8 +1530,7 @@ export class GameRenderer {
       n++;
     });
     this.preview.count = n;
-    this.preview.instanceMatrix.needsUpdate = true;
-    if (this.preview.instanceColor) this.preview.instanceColor.needsUpdate = true;
+    uploadInstances(this.preview);
   }
 
   private updateFx(sim: Simulation, dt: number): void {

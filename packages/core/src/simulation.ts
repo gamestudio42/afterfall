@@ -193,8 +193,10 @@ export class Simulation {
     const lootRng = new Rng(deriveSeed(seed, "loot"));
     const buildings: BuildingState[] = this.city.buildings.map((b) => {
       const def = BUILDING_TYPES[b.type];
-      const area = b.area * b.floors;
-      const units = Math.max(6, Math.round((area / 100) * def.lootDensity * lootRng.range(0.6, 1.25)));
+      // A landmark's height is a silhouette, not storeys: a tower, a spire or an obelisk
+      // has the floor area of its base, however far up it goes.
+      const area = b.area * (b.landmark ? 1 : b.floors);
+      const units = Math.min(BALANCE.maxBuildingLoot, Math.max(6, Math.round((area / 100) * def.lootDensity * lootRng.range(0.6, 1.25))));
       const loot: ResourceBag = {};
       for (let i = 0; i < units; i++) addToBag(loot, lootRng.weighted(def.loot as Record<ResourceId, number>), 1);
       return {

@@ -13,6 +13,15 @@ export const BALANCE = {
   mealFood: 1,
   mealWater: 1,
   mealHours: [7, 19],
+  /**
+   * The most loot one building holds, in units. Loot scales with floor area, and a real
+   * map has footprints no generated block has: the Eiffel Tower is 9,700 m² and 330 m
+   * tall, which came to 62,000 units against a median building's 80 — a base founded
+   * there never had to scavenge again. The cap sits above anything the generated city
+   * produces (its richest building holds about 400), so only the outliers of imported
+   * maps are cut.
+   */
+  maxBuildingLoot: 600,
   /** Search points per worker-minute at skill 1. */
   searchRate: 1.2,
   /** Food produced per worker-minute on a farm. */

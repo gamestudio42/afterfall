@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BALANCE } from "@afterfall/content";
 import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, lineCells, tickAt } from "@afterfall/shared";
 import { CellKind, cityFromOverpass } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
@@ -408,6 +409,31 @@ describe("headless scenario", () => {
 
 describe("real maps (OpenStreetMap)", () => {
   const map = cityFromOverpass(syntheticOverpass(), { ...FIXTURE_CENTER, size: 480, label: "Test" });
+
+  it("does not turn a landmark into an endless stockpile", () => {
+    // The Eiffel Tower: 9,700 m² at the base, 330 m tall. Counted as floor area that was
+    // 62,000 units of loot, and a base founded there kept half of it.
+    const kLon = 111_320 * Math.cos((FIXTURE_CENTER.lat * Math.PI) / 180);
+    const at = (dx: number, dy: number) => ({ lat: FIXTURE_CENTER.lat - dy / 111_132, lon: FIXTURE_CENTER.lon + dx / kLon });
+    const data = syntheticOverpass();
+    data.elements.push({
+      type: "way",
+      id: 9201,
+      tags: { building: "tower", man_made: "tower", height: "330" },
+      geometry: [at(-70, -70), at(28, -70), at(28, 28), at(-70, 28), at(-70, -70)],
+    });
+    const city = cityFromOverpass(data, { ...FIXTURE_CENTER, size: 480, label: "Test" });
+    const tower = city.buildings.find((b) => b.landmark === "tower")!;
+    expect(tower.area).toBeGreaterThan(5000);
+    const sim = createSimulation({ seed: city.seed, map: city });
+    expect(sim.state.buildings[tower.index].searchTotal).toBeLessThanOrEqual(BALANCE.maxBuildingLoot);
+    for (const b of sim.state.buildings) expect(b.searchTotal).toBeLessThanOrEqual(BALANCE.maxBuildingLoot);
+
+    sim.enqueue({ type: "setBase", building: tower.index });
+    sim.tick();
+    const stock = Object.values(sim.hqBuilding!.storage).reduce((n, v) => n + (v ?? 0), 0);
+    expect(stock).toBeLessThanOrEqual(sim.hqBuilding!.storageCapacity);
+  });
 
   it("plays a day on an imported map without navigation failures", () => {
     const sim = createSimulation({ seed: map.seed, map });

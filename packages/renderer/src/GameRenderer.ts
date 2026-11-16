@@ -22,8 +22,9 @@ import { Rain, WEATHER, easeWeather, weatherFor, type WeatherKind, type WeatherS
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
 import { VfxSystem, type FxEvent } from "./vfx";
-import { isSoftwareRenderer, PostFx, rendererName, resolvePost, type PostMode } from "./post";
+import { isSoftwareRenderer, PostFx, rendererName, type PostMode } from "./post";
 import { ResolutionGovernor } from "./governor";
+import { resolveQuality, TIERS, wantsEffects, type Quality, type QualityMode } from "./quality";
 import { ShadowCadence, snapToTexels } from "./shadowCadence";
 
 export type OverlayMode = "none" | "resources" | "danger";
@@ -605,7 +606,7 @@ export class GameRenderer {
 
   constructor(
     readonly canvas: HTMLCanvasElement,
-    opts: { baseUrl?: string; post?: PostMode } = {},
+    opts: { baseUrl?: string; post?: PostMode; quality?: QualityMode; slowGpu?: string } = {},
   ) {
     this.artBase = opts.baseUrl ?? "./";
     this.art = loadArtTextures(this.artBase, (art) => this.applyArt(art));
@@ -614,12 +615,14 @@ export class GameRenderer {
     // frame for nothing. The canvas keeps MSAA only when the game starts without the chain.
     // Turned off with F4 later, the frame still goes through an MSAA target (setPost).
     const mode = opts.post ?? "auto";
-    const antialias = !resolvePost(mode, mode === "auto" ? probeRendererName() : "");
+    // A GPU that starts on the low tier has no chain at all: the canvas keeps its own MSAA.
+    this.qualityMode = opts.quality ?? "auto";
+    const probed = mode === "auto" ? probeRendererName() : "";
+    const antialias = !wantsEffects(mode, resolveQuality(this.qualityMode, probed, opts.slowGpu), probed);
     this.canvasAntialias = antialias;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias, powerPreference: "high-performance", preserveDrawingBuffer: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // Redrawn on a cadence (shadowCadence.ts), not every frame.
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -628,6 +631,8 @@ export class GameRenderer {
     // The post chain draws several passes a frame; count them all as one frame.
     this.renderer.info.autoReset = false;
     this.gpuName = rendererName(this.renderer.getContext());
+    this.tier = resolveQuality(this.qualityMode, this.gpuName, opts.slowGpu);
+    this.renderer.shadowMap.type = TIERS[this.tier].softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.rts = new RtsCamera(canvas.clientWidth / Math.max(1, canvas.clientHeight));
     this.setPost(mode);
     this.scene.add(this.skyDome.mesh);
@@ -956,21 +961,23 @@ export class GameRenderer {
   /** Turns the post chain on, off, or leaves it to the driver (off on a software rasteriser). */
   setPost(mode: PostMode): void {
     this.postMode = mode;
-    const want = resolvePost(mode, this.gpuName) && !(mode === "auto" && this.effectsDropped);
+    const tier = TIERS[this.tier];
+    const want = wantsEffects(mode, this.tier, this.gpuName);
     // The sky environment is sampled in every lit fragment. On a GPU that is
     // free; on a software rasteriser it took the e2e job from 8 minutes to 15
     // and four specs past their timeouts, so it follows the same switch.
-    if (want && !this.scene.environment) this.scene.environment = this.skyEnv ??= skyEnvironment(this.renderer);
-    else if (!want) this.scene.environment = null;
+    const env = want && tier.environment;
+    if (env && !this.scene.environment) this.scene.environment = this.skyEnv ??= skyEnvironment(this.renderer);
+    else if (!env) this.scene.environment = null;
     // Without the effects, a canvas that has no MSAA of its own still draws through
     // the chain's MSAA target, so the edges stay smooth after F4.
     const chain = want ? "effects" : this.canvasAntialias ? "none" : "resolve";
     const has = !this.postFx ? "none" : this.postFx.effects ? "effects" : "resolve";
-    if (chain === has) return;
+    if (chain === has && (!this.postFx || this.postFx.samples === tier.samples)) return;
     this.postFx?.dispose();
     this.postFx = null;
     if (chain === "none") return;
-    this.postFx = new PostFx(this.renderer, this.scene, this.rts.camera, chain === "effects");
+    this.postFx = new PostFx(this.renderer, this.scene, this.rts.camera, chain === "effects", tier.samples);
     const size = this.renderer.getSize(new THREE.Vector2());
     this.postFx.setSize(size.x, size.y, this.renderer.getPixelRatio());
     this.postFx.setMood(this.daylight);
@@ -990,8 +997,39 @@ export class GameRenderer {
   }
 
   private governor = new ResolutionGovernor();
-  /** Set when the governor ran out of resolution and "auto" gave up the effects for this session. */
-  private effectsDropped = false;
+  private qualityMode: QualityMode = "auto";
+  private tier: Quality = "high";
+
+  /** The tier being drawn. "auto" starts high and falls to low when resolution runs out. */
+  get quality(): Quality {
+    return this.tier;
+  }
+
+  get qualityChoice(): QualityMode {
+    return this.qualityMode;
+  }
+
+  /** Forces a tier, or hands the choice back to the frame times ("auto" keeps the current one). */
+  setQuality(mode: QualityMode): void {
+    this.qualityMode = mode;
+    if (mode !== "auto") this.applyTier(mode);
+  }
+
+  private applyTier(tier: Quality): void {
+    if (tier === this.tier) return;
+    this.tier = tier;
+    const type = TIERS[tier].softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    if (this.renderer.shadowMap.type !== type) {
+      this.renderer.shadowMap.type = type;
+      // The filter is compiled into every lit program, and three.js only notices on a rebuild.
+      this.scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        for (const mat of Array.isArray(m) ? m : m ? [m] : []) mat.needsUpdate = true;
+      });
+      this.shadowDue = true;
+    }
+    this.setPost(this.postMode);
+  }
   private cssSize = { width: 0, height: 0 };
   /** Render scale the governor has settled on, 1 being the display's pixel ratio (capped at 2). */
   get resolutionScale(): number {
@@ -1007,13 +1045,9 @@ export class GameRenderer {
     if (isSoftwareRenderer(this.gpuName)) return;
     const scale = this.governor.sample(ms);
     // Resolution is the first thing to go; when it is at its floor and the frames are
-    // still slow, the bloom and the grade go next. Measured on an integrated GPU at
-    // 1080p the chain is about a quarter of the frame. Only when the driver decides
-    // ("auto"): a player who asked for the chain with F4 keeps it.
-    if (this.governor.starved && this.postMode === "auto" && this.postEnabled) {
-      this.effectsDropped = true;
-      this.setPost("auto");
-    }
+    // still slow, the low tier takes over (quality.ts): no bloom or grade unless the
+    // player forced them with F4, fewer MSAA samples, plain shadows, no sky reflections.
+    if (this.governor.starved && this.qualityMode === "auto") this.applyTier("low");
     if (scale === null) return;
     // Never below 0.75 device pixels per CSS pixel: under that the HUD text turns to mush.
     this.renderer.setPixelRatio(Math.max(0.75, Math.min(window.devicePixelRatio, 2) * scale));

@@ -13,7 +13,7 @@ import {
   type EntityId,
 } from "@afterfall/core";
 import type { CityMap } from "@afterfall/world";
-import { GameRenderer, type PostMode } from "@afterfall/renderer";
+import { GameRenderer, type PostMode, type QualityMode } from "@afterfall/renderer";
 import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
 import { useUi, type Speed } from "../app/store";
@@ -56,7 +56,12 @@ export class GameController {
   private disposed = false;
 
   constructor(readonly canvas: HTMLCanvasElement) {
-    this.renderer = new GameRenderer(canvas, { baseUrl: import.meta.env.BASE_URL, post: initialPost() });
+    this.renderer = new GameRenderer(canvas, {
+      baseUrl: import.meta.env.BASE_URL,
+      post: initialPost(),
+      quality: initialQuality(),
+      slowGpu: stored(SLOW_GPU_KEY) ?? "",
+    });
     this.bindInput();
     this.resize();
     // The browser only unlocks audio after a gesture: create the context on the first one.
@@ -151,12 +156,32 @@ export class GameController {
     for (let i = 0; i < times; i++) this.frame(dtSeconds * 1000);
   }
 
+  private slowGpuSaved = false;
+
+  /**
+   * Once this GPU has fallen to the low tier by itself, the next session starts there
+   * instead of spending its first seconds finding out again.
+   */
+  private rememberSlowGpu(): void {
+    const r = this.renderer;
+    if (this.slowGpuSaved || r.quality !== "low" || r.qualityChoice !== "auto" || !r.gpuName) return;
+    this.slowGpuSaved = true;
+    try {
+      localStorage.setItem(SLOW_GPU_KEY, r.gpuName);
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
   private frame(fixedDtMs?: number): void {
     const frameStart = performance.now();
     const now = frameStart;
     const dt = Math.min(0.1, (fixedDtMs ?? now - this.last) / 1000);
     // The real interval, not the clamped one: the resolution governor judges the display.
-    if (fixedDtMs === undefined && this.renderer) this.renderer.observeFrame(now - this.last);
+    if (fixedDtMs === undefined && this.renderer) {
+      this.renderer.observeFrame(now - this.last);
+      this.rememberSlowGpu();
+    }
     this.last = now;
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
     const ui = useUi.getState();
@@ -673,6 +698,22 @@ export class GameController {
     this.renderer.buildPreview = null;
     if (!keep && !isAxial(kind)) ui.set({ buildMode: null });
   }
+}
+
+const SLOW_GPU_KEY = "afterfall.slowGpu";
+
+function stored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** `?quality=low|high|auto` for captures and for a machine the automatic choice gets wrong. */
+function initialQuality(): QualityMode {
+  const q = new URLSearchParams(window.location.search).get("quality");
+  return q === "low" || q === "high" ? q : "auto";
 }
 
 /** `?post=on|off` wins (captures use it), then the player's last F4 choice, then the driver. */

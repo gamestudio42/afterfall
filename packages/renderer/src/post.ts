@@ -163,9 +163,10 @@ export class PostFx {
     scene: THREE.Scene,
     camera: THREE.Camera,
     readonly effects = true,
+    readonly samples = 4,
   ) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples });
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
     if (effects) {

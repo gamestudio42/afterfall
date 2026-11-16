@@ -247,5 +247,42 @@ On the default city that took the settled frame rate from 27 fps to roughly 37â€
 readings between 22 and 40 across samples â€” the direction is clear, the size is not. A player
 who turned the chain on with F4 keeps it.
 
-Not done, and the obvious next step: a real low tier for integrated GPUs (fewer MSAA samples,
-plain PCF, no environment map), measured one at a time like the table above.
+That fallback became the low tier described next.
+
+## A low tier for GPUs that run out of fill rate (2026-11-15)
+
+`packages/renderer/src/quality.ts`. Two tiers, `high` and `low`; low is no bloom or grade
+(unless forced with F4), a 2x MSAA target instead of 4x, plain PCF shadows instead of PCF-soft,
+and no sky environment on lit fragments. The shadow map stays at 2048: shrinking it measured
+within noise.
+
+How a session lands on it:
+
+- `auto` (the default) starts high. When the governor is at its resolution floor and frames
+  are still slow (`governor.starved`), the renderer switches to low for the session.
+- The web app then stores the driver's name (`afterfall.slowGpu`), and the next session on the
+  same GPU starts low. Started that way there is no post chain at all: the canvas keeps its
+  own MSAA and the scene is drawn straight to it.
+- `?quality=low|high` forces a tier. F3 shows the tier in use.
+
+Same GPU and method as the section above (integrated Intel, 1920 by 1080, vsync on, 661
+buildings, resolution pinned at 1), switching tiers inside one session so that drift hits all
+of them alike. The laptop was running hotter than in the first session, so the absolute
+numbers are higher and must not be compared with the table above:
+
+| tier | frame, two clean rounds |
+| --- | --- |
+| high | 60, 66 ms |
+| high, no bloom or grade | 40, 44 ms |
+| low | 33, 38 ms |
+| low, bloom and grade forced on | 41, 46 ms |
+
+Two of the four rounds were disturbed (readings of 50 to 73 ms in no order) and are left out;
+this is a laptop that throttles, not a bench. What holds in the clean rounds: low is a little
+over half the frame of high, most of that is the post chain, and the cheaper MSAA and shadows
+are worth about another 15 %. Bloom and grade forced on over the low tier still cost
+about a third less than high.
+
+Checked end to end in `auto`: the session fell to low by itself, the driver name was stored,
+and a second session started on low. Not measured: the discrete GPU, and how the low tier
+looks next to high (no side-by-side captures were taken).

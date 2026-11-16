@@ -170,3 +170,119 @@ What is left is the renderer, and the renderer cannot be judged here: every fram
 in this document comes from SwiftShader, which rasterises on the CPU. The 60 fps budget at
 1080p with a hundred buildings, forty survivors and one night horde is still exactly as
 unverified as it was on day one, and no amount of local optimisation changes that.
+
+## Two megabytes a frame went to the GPU for nothing (2026-11-15)
+
+Every earlier section timed JavaScript or a software rasteriser. This one counts something a
+GPU run would also pay for: the bytes `bufferSubData` sends each frame. Probe: a twelve-block
+city (661 buildings), a base, 513 built wall pieces, sixty fixed frames, with the WebGL
+context's `bufferSubData` wrapped to add up what it is given.
+
+| | before | after |
+| --- | --- | --- |
+| uploaded per frame | 1,978 KB | 63 KB |
+| `bufferSubData` calls per frame | 50 | 14.5 |
+| `updateStructures` | 0.88 ms | 0.07 ms |
+| `refreshBuildingColors`, per call (five a second) | 6.2 ms | 0.9 ms |
+
+Three causes, all the same mistake — `needsUpdate = true` uploads the whole buffer:
+
+- **Instanced batches are sized for the worst case.** Structures hold 1,200 instances per
+  material per kind, the infected 600, and each sent its full matrix, colour and damage
+  buffers every frame with four people on the map. They now send the live instances only
+  (`addUpdateRange`), and an empty batch sends nothing.
+- **Structures were rebuilt every frame.** Walls stand still for minutes. A signature over
+  what the meshes are built from (ids, built, progress, health, selection, grid version)
+  skips the neighbour lookups, the matrices and the upload when nothing changed.
+- **Every building was repainted five times a second.** The colour buffer of this city is
+  megabytes and almost every repaint was the colour already there. `BuildingBatch` remembers
+  what each building wears, skips the ones that match, and uploads only the repainted
+  ranges.
+
+At 60 fps the old figure is about 118 MB a second through the command buffer. What it costs in
+frame time on a GPU is still not measured here: the probe ran under SwiftShader, and the
+60 fps budget remains unverified on real hardware.
+
+The same kind of run on the Eiffel Tower area (600 m, 89 buildings, 7 water bodies): the map
+imports in 150 ms and the game is on screen 1.8 s after the click; a frame submits 583k
+triangles in 60 draw calls, 361k of them shadow casters, and the per-frame JavaScript is under
+0.5 ms.
+
+## First numbers from a GPU: an integrated one, and it is fill-bound (2026-11-15)
+
+Chromium with ANGLE on the laptop's integrated GPU (`Mesa Intel(R) Graphics (RPL-P)`), 1920
+by 1080, vsync on, frames counted over `requestAnimationFrame`. The discrete GPU could not be
+selected from Playwright in this Wayland session, so there is still no number for it.
+
+| scene | fps | render scale the governor settled on |
+| --- | --- | --- |
+| Eiffel Tower area, 160 m | 42–46 | 0.7–0.8 |
+| Eiffel Tower area, zoomed out to 320 m | 37–38 | 0.6 |
+| 661 buildings, day | 28–35 | 0.6 |
+| 661 buildings, night | 27–34 | 0.6 |
+
+The 60 fps budget is not met on this class of GPU, with the resolution already at the
+governor's floor. Turning one thing off at a time (resolution pinned at 1, 661 buildings,
+39 ms a frame, samples of three seconds, a few milliseconds of noise between runs):
+
+| change | frame |
+| --- | --- |
+| baseline | 39–44 ms |
+| half resolution | 20.5 ms |
+| no post chain | 28 ms |
+| no ground | 32 ms |
+| no props and litter (1.6M to 0.4M triangles) | 33 ms |
+| no shadows | 36 ms |
+| no buildings, no grass, no vegetation, 1024 shadow map | within noise |
+
+**Pixels, not triangles.** Halving the resolution nearly halves the frame and the post chain is
+about a quarter of it, while removing three quarters of the triangles buys six milliseconds.
+Culling, level of detail and chunk streaming would not move this number; what a pixel costs
+would (the half-float 4x MSAA target, bloom, PCF-soft shadows, the environment map on every
+lit fragment).
+
+One change came out of it: when the governor is at its floor and frames are still slow, the
+`auto` post mode now gives up the bloom and the grade for the session (`governor.starved`).
+On the default city that took the settled frame rate from 27 fps to roughly 37–40, with
+readings between 22 and 40 across samples — the direction is clear, the size is not. A player
+who turned the chain on with F4 keeps it.
+
+That fallback became the low tier described next.
+
+## A low tier for GPUs that run out of fill rate (2026-11-15)
+
+`packages/renderer/src/quality.ts`. Two tiers, `high` and `low`; low is no bloom or grade
+(unless forced with F4), a 2x MSAA target instead of 4x, plain PCF shadows instead of PCF-soft,
+and no sky environment on lit fragments. The shadow map stays at 2048: shrinking it measured
+within noise.
+
+How a session lands on it:
+
+- `auto` (the default) starts high. When the governor is at its resolution floor and frames
+  are still slow (`governor.starved`), the renderer switches to low for the session.
+- The web app then stores the driver's name (`afterfall.slowGpu`), and the next session on the
+  same GPU starts low. Started that way there is no post chain at all: the canvas keeps its
+  own MSAA and the scene is drawn straight to it.
+- `?quality=low|high` forces a tier. F3 shows the tier in use.
+
+Same GPU and method as the section above (integrated Intel, 1920 by 1080, vsync on, 661
+buildings, resolution pinned at 1), switching tiers inside one session so that drift hits all
+of them alike. The laptop was running hotter than in the first session, so the absolute
+numbers are higher and must not be compared with the table above:
+
+| tier | frame, two clean rounds |
+| --- | --- |
+| high | 60, 66 ms |
+| high, no bloom or grade | 40, 44 ms |
+| low | 33, 38 ms |
+| low, bloom and grade forced on | 41, 46 ms |
+
+Two of the four rounds were disturbed (readings of 50 to 73 ms in no order) and are left out;
+this is a laptop that throttles, not a bench. What holds in the clean rounds: low is a little
+over half the frame of high, most of that is the post chain, and the cheaper MSAA and shadows
+are worth about another 15 %. Bloom and grade forced on over the low tier still cost
+about a third less than high.
+
+Checked end to end in `auto`: the session fell to low by itself, the driver name was stored,
+and a second session started on low. Not measured: the discrete GPU, and how the low tier
+looks next to high (no side-by-side captures were taken).

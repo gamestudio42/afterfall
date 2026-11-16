@@ -51,6 +51,14 @@ export class ResolutionGovernor {
     this.o = { ...GOVERNOR_DEFAULTS, ...options };
   }
 
+  /**
+   * True once the scale is at its floor and frames are still slow: resolution has nothing
+   * left to give, and whoever owns the frame has to give up something else.
+   */
+  get starved(): boolean {
+    return this.scale <= this.o.min && this.slowFor >= this.o.dropAfterMs * 2;
+  }
+
   /** Feeds one frame interval; returns the new scale when it changes, otherwise null. */
   sample(frameMs: number): number | null {
     if (!(frameMs > 0) || frameMs > this.o.stallMs) {

@@ -299,3 +299,21 @@ It does not change who wins. Thirty seeds, twelve nights: **14/30 with the resea
 and 16/30 without**, the same dead heat as before, which says the arm is limited by the
 night, not by the larder. Recorded so nobody reads the food numbers as a difficulty
 change.
+
+## Loot is capped per building (2026-11-15)
+
+Loot scales with floor area (`area × floors × lootDensity`). On an imported map that has no
+upper bound: the Eiffel Tower is one footprint of 9,738 m² with a height of 330 m, which the
+importer reads as 103 floors, and it held **61,907 units** against a median of 81 and a 90th
+percentile of 216 on the same map. A base founded there kept half — about 31,000 units of food,
+water, wood and metal — and the scavenging loop (pillar 3) was over before it began.
+
+Two changes: a landmark counts as one floor for loot (its height is a silhouette), and
+`BALANCE.maxBuildingLoot = 600` caps any building. Over 300 generated seeds the richest building
+holds 435 units, so the cap never touches a generated city and the sweeps above are unchanged.
+The tower now holds at most 600 and a base there starts with at most 300 on top of the founding
+stock, inside the headquarters' 600 storage.
+
+Not measured: whether 600 is the right number for very large real buildings (a hospital campus,
+a mall). It is a ceiling chosen to sit above the generated range, not a tuned value.
+

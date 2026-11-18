@@ -216,6 +216,28 @@ describe("landmarks", () => {
     expect(tower!.height).toBeGreaterThan(300);
   });
 
+  it("stands a lattice tower on four piers and leaves the ground between them open", () => {
+    // The Eiffel Tower is tagged tower:construction=lattice; its footprint is the square
+    // around its legs, and the esplanade under it is walkable ground, not a building.
+    const tags = { building: "tower", man_made: "tower", height: "330", "tower:construction": "lattice" };
+    const city = cityFromOverpass(withWay(9204, tags, ring(-60, 40, -60, 40)), opts);
+    const tower = city.buildings.find((b) => b.landmark === "lattice")!;
+    expect(tower).toBeDefined();
+    const grid = NavGrid.fromCity(city);
+    const r = tower.rect;
+    const cell = (x: number, y: number) => grid.kind[grid.cellOf(x, y)];
+    // The middle of the base is open, the corners are piers.
+    expect(cell(r.x + r.w / 2, r.y + r.h / 2)).not.toBe(CellKind.Building);
+    expect(cell(r.x + 2, r.y + 2)).toBe(CellKind.Building);
+    expect(cell(r.x + r.w - 2, r.y + r.h - 2)).toBe(CellKind.Building);
+    let blocked = 0;
+    for (let i = 0; i < grid.kind.length; i++) if (grid.buildingAt[i] === tower.index) blocked++;
+    const all = (r.w * r.h) / (grid.cell * grid.cell);
+    // Four piers of a fifth of the side each: about 16% of the base, never the whole of it.
+    expect(blocked / all).toBeGreaterThan(0.08);
+    expect(blocked / all).toBeLessThan(0.25);
+  });
+
   it("marks a church as a spire and a monument as an obelisk", () => {
     const church = cityFromOverpass(withWay(9202, { building: "church", "building:levels": "3" }, ring(20, 60, 20, 60)), opts);
     expect(church.buildings.some((b) => b.landmark === "spire")).toBe(true);

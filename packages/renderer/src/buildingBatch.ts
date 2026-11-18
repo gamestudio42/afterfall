@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { BuildingDef } from "@afterfall/world";
+import { latticeTower } from "./lattice";
 
 /** Outline of a building: its real footprint, or its rectangle. */
 export function outlineOf(b: BuildingDef): { x: number; y: number }[] {
@@ -53,7 +54,8 @@ const PARAPET_T = 0.3;
 const CORNICE_OUT = 0.12;
 
 /** Draw groups, one material each, in this order. */
-export const GROUPS = ["residential", "office", "industrial", "storefront", "roof", "trim"] as const;
+/** `iron` is untextured: the members of a lattice tower (lattice.ts). */
+export const GROUPS = ["residential", "office", "industrial", "storefront", "roof", "trim", "iron"] as const;
 export type Group = (typeof GROUPS)[number];
 
 interface Range {
@@ -101,6 +103,7 @@ const MAP_GAIN: Record<Group, number> = {
   storefront: 1.25,
   roof: 1.8,
   trim: 1,
+  iron: 1,
 };
 
 const WINDOW_GLOW = new THREE.Color(0xffa94d);
@@ -162,6 +165,11 @@ export class BuildingBatch {
       // show the same lit windows and boards in the same places.
       const du = ((b.index * 5) % 4) * FLOOR;
       const dv = ((b.index * 3) % 4) * FLOOR;
+      if (b.landmark === "lattice") {
+        add("iron", (o) => latticeTower(b, o));
+        local.push(mine);
+        continue;
+      }
       if (b.landmark) {
         buildLandmark(b, poly, style, du, dv, add);
         local.push(mine);
@@ -441,7 +449,9 @@ const ROOF_DECAY = /* glsl */ `
 function facadeMaterial(group: Group): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: group === "roof" ? 0.95 : 0.86,
+    roughness: group === "roof" ? 0.95 : group === "iron" ? 0.62 : 0.86,
+    // Painted wrought iron: a little sheen where the sky catches a member, never a mirror.
+    metalness: group === "iron" ? 0.3 : 0,
     emissive: WINDOW_GLOW,
     emissiveIntensity: 0,
   });
@@ -470,7 +480,7 @@ function facadeMaterial(group: Group): THREE.MeshStandardMaterial {
         float damp = 1.0 - smoothstep(0.2, 2.6, facadePosition.y);
         float rain = smoothstep(0.68, 0.98, streak) * 0.12;
         diffuseColor.rgb *= 1.0 - damp * 0.23 - rain;
-        ${group === "trim" ? "" : `{${wallDecay(group)}}`}
+        ${group === "trim" || group === "iron" ? "" : `{${wallDecay(group)}}`}
       `,
       );
     } else {

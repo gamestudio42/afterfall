@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { BuildingDef } from "@afterfall/world";
+import { latticeLegs, type BuildingDef } from "@afterfall/world";
 import { holesOf, inflate, outlineOf } from "./buildingBatch";
 
 /** How far the darkening reaches from a wall, and how dark it is at the wall. */
@@ -44,6 +44,11 @@ export function buildContactShadows(buildings: BuildingDef[]): THREE.Mesh {
   for (const b of buildings) {
     // Taller buildings hide more sky, so their shade reaches a little farther.
     const reach = CONTACT_REACH * Math.min(1.6, 0.7 + b.height / 30);
+    // A lattice tower meets the ground at its four piers only.
+    if (b.landmark === "lattice") {
+      for (const leg of latticeLegs(b)) skirt(leg, CONTACT_REACH);
+      continue;
+    }
     skirt(outlineOf(b), reach);
     // A courtyard is open air walled on every side: it darkens inward.
     for (const hole of holesOf(b)) skirt(hole, -Math.min(reach, 1.6));

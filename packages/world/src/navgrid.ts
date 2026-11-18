@@ -1,5 +1,6 @@
 import { pointInPolygon, polygonBounds, polygonCentroid, type Vec2 } from "@afterfall/shared";
 import type { CityMap, RailDef, RoadDef, WaterDef } from "./city";
+import { latticeLegs } from "./landmarks";
 import { MinHeap } from "./heap";
 import { abandonedVehicles, vehicleContains } from "./vehicles";
 
@@ -84,6 +85,11 @@ export class NavGrid {
   static fromCity(city: CityMap): NavGrid {
     const g = new NavGrid(city.width, city.height, city.cellSize);
     for (const b of city.buildings) {
+      if (b.landmark === "lattice") {
+        // Only the piers stand on the ground; the square between them is open.
+        for (const leg of latticeLegs(b)) g.stampPolygon(leg, b.index);
+        continue;
+      }
       if (b.footprint) {
         g.stampPolygon(b.footprint, b.index, b.holes);
         continue;

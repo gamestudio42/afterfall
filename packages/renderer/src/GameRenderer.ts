@@ -78,6 +78,8 @@ const tmpC2 = new THREE.Color();
 const roofC = new THREE.Color();
 const tmpQ2 = new THREE.Quaternion();
 const SELECTED_STRUCTURE = new THREE.Color(0xffd34d);
+/** The Eiffel Tower's own brown (OSM `building:colour=#706550`), a touch lifted for the grade. */
+const LATTICE_IRON = 0x7a6b55;
 const SUN_DAY = new THREE.Color(0xffe9c8);
 const SUN_DUSK = new THREE.Color(0xff9a50);
 const MOON = new THREE.Color(0x8ea6e6);
@@ -894,7 +896,8 @@ export class GameRenderer {
     if (!sim || !this.buildings) return;
     sim.city.buildings.forEach((def, i) => {
       const st = sim.state.buildings[i];
-      tmpC.setHex(BUILDING_TYPES[def.type].color);
+      // A lattice tower is painted iron whatever the shops under it sell.
+      tmpC.setHex(def.landmark === "lattice" ? LATTICE_IRON : BUILDING_TYPES[def.type].color);
       if (this.overlay === "resources") {
         const left = st.fn === "none" ? bagTotal(st.remainingLoot) / Math.max(1, st.searchTotal) : 0;
         tmpC.setRGB(0.25 + 0.1 * (1 - left), 0.3 + 0.6 * left, 0.25);

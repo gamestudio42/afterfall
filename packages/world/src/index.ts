@@ -5,3 +5,4 @@ export * from "./heap";
 export * from "./spatial";
 export * from "./chunks";
 export * from "./osm";
+export * from "./landmarks";

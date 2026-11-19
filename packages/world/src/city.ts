@@ -1,6 +1,8 @@
 import { BUILDING_TYPES, type BuildingType, type Zone } from "@afterfall/content";
 import { Rng, deriveSeed, type Rect, type Vec2 } from "@afterfall/shared";
 
+export type Landmark = "tower" | "lattice" | "spire" | "obelisk";
+
 export interface BuildingDef {
   id: string;
   index: number;
@@ -14,9 +16,11 @@ export interface BuildingDef {
   holes?: Vec2[][];
   /**
    * A silhouette the extruder should not use: a footprint cannot draw a tower, a spire or
-   * an obelisk, because the way OSM maps them is the square around their feet.
+   * an obelisk, because the way OSM maps them is the square around their feet. A
+   * `lattice` tower (`tower:construction=lattice`, the Eiffel Tower) is open iron standing
+   * on four piers, and only the piers block the ground (`latticeLegs`).
    */
-  landmark?: "tower" | "spire" | "obelisk";
+  landmark?: Landmark;
   /** Ground area in m². */
   area: number;
   floors: number;

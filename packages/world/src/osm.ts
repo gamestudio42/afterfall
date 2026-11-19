@@ -14,7 +14,7 @@ import {
   type Rect,
   type Vec2,
 } from "@afterfall/shared";
-import type { BuildingDef, CityMap, ParkDef, RailDef, RoadDef, WaterDef } from "./city";
+import type { BuildingDef, CityMap, Landmark, ParkDef, RailDef, RoadDef, WaterDef } from "./city";
 import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
 
 /**
@@ -633,7 +633,10 @@ function ensureEssentials(typed: { rb: RawBuilding; type: BuildingType }[], size
  * The Eiffel Tower is one way tagged `building=tower`, `height=330`: extruded like a
  * building it becomes the hall between its four legs, six floors tall.
  */
-function landmarkOf(tags: Record<string, string>): "tower" | "spire" | "obelisk" | undefined {
+function landmarkOf(tags: Record<string, string>): Landmark | undefined {
+  // Iron you can see through, on four piers: drawn as a lattice, and the ground between
+  // the piers stays open.
+  if (tags["tower:construction"] === "lattice" && (tags.man_made === "tower" || tags.building === "tower")) return "lattice";
   if (tags.man_made === "tower" || tags.building === "tower" || tags["tower:type"]) return "tower";
   if (/^(cathedral|church|chapel|basilica|mosque|synagogue|temple|abbey)$/.test(tags.building ?? "")) return "spire";
   if (tags.historic === "monument" || tags.historic === "memorial" || tags.man_made === "obelisk") return "obelisk";

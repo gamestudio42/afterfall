@@ -168,7 +168,7 @@ describe("landmarks", () => {
     return bands;
   }
 
-  function tower(landmark: "tower" | "spire" | "obelisk"): BuildingBatch {
+  function tower(landmark: "tower" | "lattice" | "spire" | "obelisk"): BuildingBatch {
     const b: BuildingDef = {
       id: "t1",
       index: 0,
@@ -200,6 +200,52 @@ describe("landmarks", () => {
     expect(bands[0]).toBeGreaterThan(40);
     expect(bands[bands.length - 1]).toBeLessThan(bands[0] * 0.4);
     for (let k = 1; k < bands.length; k++) expect(bands[k]).toBeLessThanOrEqual(bands[k - 1] + 0.01);
+  });
+
+  it("a lattice tower is open between its legs and reaches its full height", () => {
+    const batch = tower("lattice");
+    const pos = batch.mesh.geometry.getAttribute("position");
+    let top = 0;
+    let underArches = 0;
+    for (let v = 0; v < pos.count; v++) {
+      top = Math.max(top, pos.getY(v));
+      // Nothing stands on the ground between the piers: the middle of the base, low down.
+      if (pos.getY(v) < 20 && Math.hypot(pos.getX(v) - 50, pos.getZ(v) - 50) < 20) underArches++;
+    }
+    expect(top).toBeCloseTo(330, 3);
+    expect(underArches).toBe(0);
+    // Every triangle is iron: no facade, no roof, no shop front.
+    const iron = groupOf(batch, "iron");
+    expect(iron.count).toBe(pos.count);
+  });
+
+  it("a lattice tower is mostly air", () => {
+    // Seen from the side, on a 2 m grid: how many cells does the tower cover? The solid
+    // taper of the same outline covers its whole silhouette; a lattice leaves most of it
+    // open between the members.
+    const covered = (batch: BuildingBatch) => {
+      const pos = batch.mesh.geometry.getAttribute("position");
+      const cells = new Set<number>();
+      for (let v = 0; v < pos.count; v += 3) {
+        const p = [0, 1, 2].map((k) => [pos.getX(v + k), pos.getY(v + k)]);
+        const x0 = Math.floor(Math.min(...p.map((q) => q[0])) / 2),
+          x1 = Math.floor(Math.max(...p.map((q) => q[0])) / 2);
+        const y0 = Math.floor(Math.min(...p.map((q) => q[1])) / 2),
+          y1 = Math.floor(Math.max(...p.map((q) => q[1])) / 2);
+        const area = (p[1][0] - p[0][0]) * (p[2][1] - p[0][1]) - (p[2][0] - p[0][0]) * (p[1][1] - p[0][1]);
+        if (Math.abs(area) < 1e-9) continue;
+        for (let y = y0; y <= y1; y++)
+          for (let x = x0; x <= x1; x++) {
+            const cx = x * 2 + 1,
+              cy = y * 2 + 1;
+            const w1 = ((p[1][0] - cx) * (p[2][1] - cy) - (p[2][0] - cx) * (p[1][1] - cy)) / area;
+            const w2 = ((p[2][0] - cx) * (p[0][1] - cy) - (p[0][0] - cx) * (p[2][1] - cy)) / area;
+            if (w1 >= 0 && w2 >= 0 && w1 + w2 <= 1) cells.add(y * 1000 + x);
+          }
+      }
+      return cells.size;
+    };
+    expect(covered(tower("lattice"))).toBeLessThan(covered(tower("tower")) * 0.6);
   });
 
   it("a spire is slender at the top, an obelisk narrows once", () => {

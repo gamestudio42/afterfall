@@ -84,7 +84,8 @@ jobs:
 
   e2e:
     if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where Playwright 1.56 has no browser builds.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -104,7 +105,8 @@ jobs:
 
   e2e-cross-browser:
     if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where Playwright 1.56 has no browser builds.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

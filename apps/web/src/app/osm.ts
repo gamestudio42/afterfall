@@ -58,7 +58,9 @@ export async function loadPlaceMap(place: Place, size: number, signal?: AbortSig
 }
 
 async function loadTerrain(place: Place, size: number, signal?: AbortSignal): Promise<OverpassResponse | null> {
-  const key = `terrain:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
+  // "terrain2": the request now includes bridge decks, and an answer cached before that
+  // would keep a place without them for good.
+  const key = `terrain2:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
   try {

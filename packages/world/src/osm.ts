@@ -14,7 +14,7 @@ import {
   type Rect,
   type Vec2,
 } from "@afterfall/shared";
-import type { BuildingDef, CityMap, Landmark, ParkDef, RailDef, RoadDef, WaterDef } from "./city";
+import type { BridgeDef, BuildingDef, CityMap, Landmark, ParkDef, RailDef, RoadDef, WaterDef } from "./city";
 import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
 
 /**
@@ -202,6 +202,7 @@ export function overpassTerrainQuery(lat: number, lon: number, size: number): st
   way["waterway"="riverbank"](${box});
   way["waterway"~"^(river|canal)$"](${box});
   way["railway"~"^(rail|light_rail|narrow_gauge)$"](${box});
+  way["man_made"="bridge"](${box});
 );
 out geom;`;
 }
@@ -367,6 +368,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   const rawParks: { id: number; poly: Vec2[] }[] = [];
   const rawWaters: WaterDef[] = [];
   const rawRails: RailDef[] = [];
+  const rawBridges: BridgeDef[] = [];
   // Rings get clipped to the play area; a hole is clipped on its own, and only a piece
   // that still has area is kept.
   const addWater = (id: string, polygon: Vec2[], holes: Vec2[][] = []) => {
@@ -419,6 +421,9 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     } else if (tags.waterway && WATERWAY_WIDTH[tags.waterway] && tags.tunnel !== "yes" && tags.tunnel !== "culvert" && !closed) {
       const width = Math.max(4, Number.parseFloat(tags.width ?? "") || WATERWAY_WIDTH[tags.waterway]);
       for (const [k, piece] of clipPolylineToRect(pts, bounds).entries()) rawWaters.push({ id: `ww${el.id}_${k}`, path: piece, width });
+    } else if (closed && tags.man_made === "bridge") {
+      const poly = clipPolygonToRect(simplifyPolygon(pts.slice(0, -1), 0.5), bounds);
+      if (poly.length >= 3 && polygonArea(poly) > 40) rawBridges.push({ id: `br${el.id}`, polygon: poly });
     } else if (closed && (tags.natural === "water" || tags.waterway === "riverbank")) {
       addWater(`w${el.id}`, pts.slice(0, -1));
     } else if (closed && (tags.leisure || tags.landuse || tags.natural)) {
@@ -486,7 +491,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   ensureEssentials(typed, size);
   const grid = new NavGrid(size, size, cellSize);
   typed.forEach((t, i) => grid.stampPolygon(t.rb.poly, i));
-  stampTerrain(grid, { roads, waters: rawWaters, rails: rawRails });
+  stampTerrain(grid, { roads, waters: rawWaters, rails: rawRails, bridges: rawBridges });
 
   const kept: { rb: RawBuilding; type: BuildingType; entrance: Vec2; facing: Vec2 }[] = [];
   for (const t of typed) {
@@ -554,6 +559,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     parks,
     ...(rawWaters.length ? { waters: rawWaters } : {}),
     ...(rawRails.length ? { rails: rawRails } : {}),
+    ...(rawBridges.length ? { bridges: rawBridges } : {}),
     spawnPoints,
     source: { kind: "osm", label: opts.label, lat: opts.lat, lon: opts.lon, size, attribution: OSM_ATTRIBUTION },
   };

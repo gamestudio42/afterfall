@@ -1,5 +1,5 @@
 import { pointInPolygon, polygonBounds, polygonCentroid, type Vec2 } from "@afterfall/shared";
-import type { CityMap, RailDef, RoadDef, WaterDef } from "./city";
+import type { BridgeDef, CityMap, RailDef, RoadDef, WaterDef } from "./city";
 import { latticeLegs } from "./landmarks";
 import { MinHeap } from "./heap";
 import { abandonedVehicles, vehicleContains } from "./vehicles";
@@ -470,9 +470,10 @@ const RAIL_REACH = 1.7;
  * Streets win over both: a street that crosses a river is a bridge, one that crosses a
  * railway a level crossing, and either way it stays a street. Buildings win over water
  * too, so a footprint mapped a little into a bank is not drowned. Water is stamped first
- * and the rails after it, so a railway bridge keeps its deck.
+ * and the rails after it, so a railway bridge keeps its deck. A bridge deck mapped as an
+ * area (`BridgeDef`) is dry ground wherever it covers water.
  */
-export function stampTerrain(g: NavGrid, t: { roads: RoadDef[]; waters?: WaterDef[]; rails?: RailDef[] }): void {
+export function stampTerrain(g: NavGrid, t: { roads: RoadDef[]; waters?: WaterDef[]; rails?: RailDef[]; bridges?: BridgeDef[] }): void {
   if (!t.waters?.length && !t.rails?.length) return;
   const n = g.cols * g.rows;
   const road = new Uint8Array(n);
@@ -534,6 +535,18 @@ export function stampTerrain(g: NavGrid, t: { roads: RoadDef[]; waters?: WaterDe
       }
     }
     if (w.path) near(w.path, (w.width ?? 12) / 2, (i) => stamp(i, CellKind.Water, onlyFree));
+  }
+  for (const b of t.bridges ?? []) {
+    const r = polygonBounds(b.polygon);
+    const x0 = Math.max(0, Math.floor(r.x / g.cell));
+    const x1 = Math.min(g.cols - 1, Math.floor((r.x + r.w) / g.cell));
+    const y0 = Math.max(0, Math.floor(r.y / g.cell));
+    const y1 = Math.min(g.rows - 1, Math.floor((r.y + r.h) / g.cell));
+    for (let y = y0; y <= y1; y++)
+      for (let x = x0; x <= x1; x++) {
+        const i = y * g.cols + x;
+        if (g.kind[i] === CellKind.Water && pointInPolygon((x + 0.5) * g.cell, (y + 0.5) * g.cell, b.polygon)) g.kind[i] = CellKind.Free;
+      }
   }
   for (const r of t.rails ?? []) near(r.path, RAIL_REACH, (i) => stamp(i, CellKind.Rail, [CellKind.Free, CellKind.Water]));
 }

@@ -8,6 +8,7 @@ import { wallFrame } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
 import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
+import { WATER_TIME } from "./water";
 import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
 import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
@@ -1127,6 +1128,8 @@ export class GameRenderer {
   render(dt: number): void {
     const sim = this.sim;
     this.time += dt;
+    // Wrapped, so the ripples keep their float precision after hours of play.
+    WATER_TIME.value = (WATER_TIME.value + dt) % 3600;
     this.frameDt = dt;
     this.vegetation?.update(this.time, this.rts.camera);
     this.grass?.update(this.time);

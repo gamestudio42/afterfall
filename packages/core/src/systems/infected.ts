@@ -22,8 +22,11 @@ export class InfectedFields {
 
   assaultCost = (i: number): number => {
     const k = this.sim.grid.kind[i];
+    // Slope is not priced here: a horde walks straight up a hill, slowed by the climb
+    // itself (movement.ts), and does not look for the gentler way round. Priced, the field
+    // over Machu Picchu took a second to build, a stall in the middle of a night.
     if (isWalkableKind(k)) return 1;
-    if (k === CellKind.Building || k === CellKind.Water) return Infinity;
+    if (k === CellKind.Building || k === CellKind.Water || k === CellKind.Cliff) return Infinity;
     const s = this.sim.state.entities.get(this.sim.grid.structureAt[i]);
     const hp = s?.health?.max ?? 200;
     return 1 + hp / 12;

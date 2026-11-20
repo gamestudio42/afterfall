@@ -56,16 +56,15 @@ export async function loadPlaceMap(place: Place, size: number, signal?: AbortSig
   // Water and railways come in a second request of their own, kept under another key: a
   // river's outline can be large, and a slow or refused answer should cost the water, not
   // the map. An area saved before this existed simply fetches it the next time it loads.
-  const terrain = await loadTerrain(place, size, signal);
-  const city = cityFromOverpass(terrain ? { elements: [...data.elements, ...terrain.elements] } : data, {
+  const [terrain, relief] = await Promise.all([loadTerrain(place, size, signal), loadRelief(place, size, signal)]);
+  // The relief goes in before the import: its cliffs decide which doors can be reached.
+  return cityFromOverpass(terrain ? { elements: [...data.elements, ...terrain.elements] } : data, {
     lat: place.lat,
     lon: place.lon,
     size,
     label: place.label,
+    ...(relief ? { terrain: relief } : {}),
   });
-  const relief = await loadRelief(place, size, signal);
-  if (relief) city.terrain = relief;
-  return city;
 }
 
 /** `?terrain=0` turns the relief off: a flat map, as before it existed. */

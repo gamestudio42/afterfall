@@ -1,4 +1,5 @@
-import { WEAPONS } from "@afterfall/content";
+import { BALANCE, WEAPONS } from "@afterfall/content";
+import { heightAt } from "@afterfall/world";
 import { closestOnPolygon } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
 import type { Entity } from "../state";
@@ -12,6 +13,11 @@ export const TOWER_RANGE_BONUS = 7;
 const WINDOW_RANGE = 0.8;
 /** Accuracy multiplier when shooting from a window. */
 const WINDOW_ACCURACY = 0.85;
+
+/** A weapon's range from a shooter standing `above` metres over the target (none from below). */
+export function highGroundRange(range: number, above: number): number {
+  return range * (1 + Math.min(BALANCE.highGroundRangeMax, Math.max(0, above) * BALANCE.highGroundRangePerMetre));
+}
 
 /** Survivors automatically engage infected in range; infected deaths are resolved here. */
 export function combatSystem(sim: Simulation): void {
@@ -29,18 +35,28 @@ export function combatSystem(sim: Simulation): void {
     const floodlights = sim.hasTech("floodlights") && sim.clock.phase === "night" ? 8 : 0;
     const range = weapon.range + (s.mounted >= 0 ? TOWER_RANGE_BONUS + floodlights : 0);
     const t = e.transform!;
+    // High ground: a shooter above the target reaches further (decision 58).
+    const terrain = sim.city.terrain;
+    const own = terrain ? heightAt(terrain, t.x, t.y) : 0;
+    const reachTo = (x: number, y: number) => (terrain ? highGroundRange(range, own - heightAt(terrain, x, y)) : range);
+    const farthest = terrain ? range * (1 + BALANCE.highGroundRangeMax) : range;
     let target: Entity | null = null;
     if (s.activity.type === "attack") {
       const forced = sim.state.entities.get(s.activity.target);
-      if (forced?.transform && Math.hypot(forced.transform.x - t.x, forced.transform.y - t.y) <= range) target = forced;
+      if (
+        forced?.transform &&
+        Math.hypot(forced.transform.x - t.x, forced.transform.y - t.y) <= reachTo(forced.transform.x, forced.transform.y)
+      )
+        target = forced;
     }
     if (!target) {
-      let bestD = range * range;
-      sim.infectedHash.query(t.x, t.y, range, (id) => {
+      let bestD = farthest * farthest;
+      sim.infectedHash.query(t.x, t.y, farthest, (id) => {
         const o = sim.state.entities.get(id);
         if (!o?.transform || !o.infected) return;
         const d = (o.transform.x - t.x) ** 2 + (o.transform.y - t.y) ** 2;
         if (d > bestD) return;
+        if (terrain && d > reachTo(o.transform.x, o.transform.y) ** 2) return;
         if (d === bestD && target && o.id > target.id) return;
         if (!sim.grid.lineOfSight(t.x, t.y, o.transform.x, o.transform.y)) return;
         bestD = d;

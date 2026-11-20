@@ -1,4 +1,4 @@
-import { STRUCTURES, type StructureKind } from "@afterfall/content";
+import { BALANCE, STRUCTURES, type StructureKind } from "@afterfall/content";
 import { lineCells, type LineFrame } from "@afterfall/shared";
 import { CellKind } from "@afterfall/world";
 import type { Simulation } from "../simulation";
@@ -83,6 +83,8 @@ export function placementAt(sim: Simulation, kind: StructureKind, cx: number, cy
       continue;
     }
     if (g.kind[i] !== CellKind.Free) return null;
+    // Nothing stands on ground steeper than this: a wall on a hillside would hang in the air.
+    if (g.steep && g.steep[i] > BALANCE.terrainBuildGrade) return null;
   }
   // Do not seal off building doors.
   if (kind !== "farm" && touchesEntrance(sim, cells)) return null;

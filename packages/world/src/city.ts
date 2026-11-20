@@ -44,6 +44,11 @@ export interface RoadDef {
   /** Center line of an imported road, with its width in meters. */
   path?: Vec2[];
   width?: number;
+  /**
+   * A footpath, steps or a track standing in for streets on a site that has none (Machu
+   * Picchu, the Great Wall at Badaling): walked like a street, drawn as packed earth.
+   */
+  trail?: boolean;
 }
 
 export interface ParkDef {

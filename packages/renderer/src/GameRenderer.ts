@@ -81,6 +81,9 @@ const tmpQ2 = new THREE.Quaternion();
 const SELECTED_STRUCTURE = new THREE.Color(0xffd34d);
 /** The Eiffel Tower's own brown (OSM `building:colour=#706550`), a touch lifted for the grade. */
 const LATTICE_IRON = 0x7a6b55;
+/** Pyramids and amphitheatres are dressed stone, sand and travertine, whatever is sold in them. */
+const ANCIENT_STONE = new Set(["pyramid", "stepped", "amphitheatre"]);
+const WORN_STONE = 0xc9b48e;
 const SUN_DAY = new THREE.Color(0xffe9c8);
 const SUN_DUSK = new THREE.Color(0xff9a50);
 const MOON = new THREE.Color(0x8ea6e6);
@@ -898,7 +901,13 @@ export class GameRenderer {
     sim.city.buildings.forEach((def, i) => {
       const st = sim.state.buildings[i];
       // A lattice tower is painted iron whatever the shops under it sell.
-      tmpC.setHex(def.landmark === "lattice" ? LATTICE_IRON : BUILDING_TYPES[def.type].color);
+      tmpC.setHex(
+        def.landmark === "lattice"
+          ? LATTICE_IRON
+          : def.landmark && ANCIENT_STONE.has(def.landmark)
+            ? WORN_STONE
+            : BUILDING_TYPES[def.type].color,
+      );
       if (this.overlay === "resources") {
         const left = st.fn === "none" ? bagTotal(st.remainingLoot) / Math.max(1, st.searchTotal) : 0;
         tmpC.setRGB(0.25 + 0.1 * (1 - left), 0.3 + 0.6 * left, 0.25);

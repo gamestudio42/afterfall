@@ -1,7 +1,12 @@
 import { BUILDING_TYPES, type BuildingType, type Zone } from "@afterfall/content";
 import { Rng, deriveSeed, type Rect, type Vec2 } from "@afterfall/shared";
 
-export type Landmark = "tower" | "lattice" | "spire" | "obelisk";
+/**
+ * Silhouettes the extruder draws instead of a block: towers, spires and obelisks; a
+ * lattice tower on four piers; a pyramid to its apex (Giza); a stepped pyramid with a
+ * temple on top (Chichén Itzá); an amphitheatre open to the sky (the Colosseum).
+ */
+export type Landmark = "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre";
 
 export interface BuildingDef {
   id: string;

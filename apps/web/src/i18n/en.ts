@@ -206,6 +206,7 @@ export const en: Record<string, string> = {
   "banner.buildCount": "{count} piece(s)",
   "banner.buildShort": "not enough in store",
   "banner.buildCapped": "200 per line at most",
+  "banner.buildSteep": "too steep to build on",
 
   "outcome.victory": "You survived",
   "outcome.victoryText": "Twelve nights have passed and the community still stands. Rebuilding can begin.",

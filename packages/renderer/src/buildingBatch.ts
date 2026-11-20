@@ -14,6 +14,22 @@ export function outlineOf(b: BuildingDef): { x: number; y: number }[] {
   ];
 }
 
+/**
+ * Where a building sits on a hillside: `foot` is the lowest ground under its outline, `base`
+ * where its walls start. A building stands on its foot, the uphill wall running into the
+ * hill, unless the hill would reach past its roof: then it is raised until the roof clears
+ * the highest ground by a storey's worth, on a stone plinth down to the foot.
+ */
+export function buildingSeat(b: BuildingDef, terrain: TerrainDef | undefined): { base: number; foot: number } {
+  if (!terrain) return { base: 0, foot: 0 };
+  const r = heightRange(terrain, [...outlineOf(b), { x: b.rect.x + b.rect.w / 2, y: b.rect.y + b.rect.h / 2 }]);
+  const clear = Math.min(2.5, b.height * 0.5);
+  return { foot: r.min, base: Math.max(r.min, r.max + clear - b.height) };
+}
+
+/** How far a plinth reaches under the foot, so it never shows a gap at the low corner. */
+const PLINTH_SINK = 0.4;
+
 /** Facade families, each one baked module (`tools/blender/facades.py`). */
 export type FacadeStyle = "residential" | "office" | "industrial";
 
@@ -147,6 +163,7 @@ export class BuildingBatch {
   constructor(buildings: BuildingDef[], terrain?: TerrainDef) {
     const parts = Object.fromEntries(GROUPS.map((g) => [g, new Builder()])) as Record<Group, Builder>;
     const local: { group: Group; start: number; count: number }[][] = [];
+    const seats = buildings.map((b) => buildingSeat(b, terrain));
     for (const b of buildings) {
       const mine: { group: Group; start: number; count: number }[] = [];
       const add = (group: Group, fn: (out: Builder) => void) => {
@@ -159,6 +176,10 @@ export class BuildingBatch {
       };
       const poly = outlineOf(b);
       const holes = holesOf(b);
+      // A raised building's plinth, in the building's own frame (below its base at 0).
+      const seat = seats[b.index] ?? { base: 0, foot: 0 };
+      if (seat.base - seat.foot > 0.1 && b.landmark !== "lattice")
+        add("trim", (o) => walls(poly, seat.foot - seat.base - PLINTH_SINK, 0, o, 0, 0, 3, 3));
       const top = Math.max(FLOOR * 0.5, b.height - TOP);
       const style = facadeStyle(b.type);
       // Shift each building by whole bays and floors, so neighbours do not
@@ -245,7 +266,7 @@ export class BuildingBatch {
     const groundY = new Float32Array(pos.length / 3);
     buildings.forEach((b, i) => {
       const d = buildingDecay(b);
-      const base = terrain ? heightRange(terrain, [...outlineOf(b), { x: b.rect.x + b.rect.w / 2, y: b.rect.y + b.rect.h / 2 }]).min : 0;
+      const base = seats[i].base;
       for (const r of this.ranges[i] ?? []) {
         decay.fill(d, r.start, r.start + r.count);
         if (!base) continue;

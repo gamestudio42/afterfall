@@ -1,4 +1,4 @@
-import { STRUCTURES, type StructureKind } from "@afterfall/content";
+import { BALANCE, STRUCTURES, type StructureKind } from "@afterfall/content";
 import {
   Simulation,
   deserialize,
@@ -44,7 +44,7 @@ export class GameController {
   private buildYaw: number | null = null;
   private buildYawKind: StructureKind | null = null;
   /** What the build banner shows: how many pieces the preview holds and how they are turned. */
-  buildInfo: { count: number; capped: boolean; manual: boolean } | null = null;
+  buildInfo: { count: number; capped: boolean; manual: boolean; steep?: boolean } | null = null;
   private rightDown: { x: number; y: number; rotating: boolean } | null = null;
   private uiTimer = 0;
   private lastDay = 0;
@@ -645,7 +645,8 @@ export class GameController {
   private setBuildInfo(next: NonNullable<GameController["buildInfo"]>): void {
     const prev = this.buildInfo;
     this.buildInfo = next;
-    if (prev && prev.count === next.count && prev.capped === next.capped && prev.manual === next.manual) return;
+    if (prev && prev.count === next.count && prev.capped === next.capped && prev.manual === next.manual && prev.steep === next.steep)
+      return;
     const ui = useUi.getState();
     ui.set({ frame: ui.frame + 1 });
   }
@@ -665,6 +666,16 @@ export class GameController {
     return !!sim.hqBuilding && placementAt(sim, kind, cx, cy, isAxial(kind) ? 0 : yaw) !== null;
   }
 
+  /** Whether ground steeper than the build grade lies under a piece placed at this cell. */
+  private tooSteep(kind: StructureKind, cx: number, cy: number): boolean {
+    const g = this.sim?.grid;
+    if (!g?.steep) return false;
+    const size = STRUCTURES[kind].size;
+    for (let y = cy; y < cy + size; y++)
+      for (let x = cx; x < cx + size; x++) if (g.inBounds(x, y) && g.steep[g.index(x, y)] > BALANCE.terrainBuildGrade) return true;
+    return false;
+  }
+
   private updateBuildPreview(kind: StructureKind, p: { x: number; y: number }): void {
     const end = this.cellAt(p.x, p.y);
     if (!end) return;
@@ -677,6 +688,8 @@ export class GameController {
       // The line stops at the cap, short of the pointer: say so instead of just stopping.
       capped: !!start && cells.length === LINE_MAX && (cells[LINE_MAX - 1][0] !== end[0] || cells[LINE_MAX - 1][1] !== end[1]),
       manual: this.buildYaw !== null,
+      // A red piece on a hillside is the slope, not a bug: say so.
+      steep: cells.some(([x, y], i) => !valid[i] && this.tooSteep(kind, x, y)),
     });
     this.renderer.buildPreview = {
       kind,

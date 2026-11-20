@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CityMap } from "@afterfall/world";
+import { inflate } from "./buildingBatch";
 import { distanceField, type ReclamationField } from "./reclamation";
 
 /** Seconds of water motion, shared by every water material: the renderer advances it. */
@@ -167,35 +168,38 @@ export function quayGeometry(city: CityMap, f: ReclamationField): THREE.BufferGe
   for (const w of city.waters ?? []) {
     if (!w.polygon) continue;
     const ring = w.polygon;
+    // The outer edge of the coping is the outline grown by the quay's width, mitred at
+    // every corner, so the stones of two edges meet instead of leaving a notch between them.
+    const outer = inflate(ring, QUAY_WIDTH);
     for (let i = 0; i < ring.length; i++) {
       const a = ring[i];
       const b = ring[(i + 1) % ring.length];
+      const A = outer[i];
+      const B = outer[(i + 1) % ring.length];
       if (onBorder(a, b)) continue;
       const len = Math.hypot(b.x - a.x, b.y - a.y);
       if (len < 0.5) continue;
-      const dx = (b.x - a.x) / len;
-      const dz = (b.y - a.y) / len;
-      // The land side is whichever side is not water a couple of metres out.
-      let nx = -dz;
-      let nz = dx;
-      const mx = (a.x + b.x) / 2;
-      const mz = (a.y + b.y) / 2;
-      if (isWater(mx + nx * 2.5, mz + nz * 2.5) && !isWater(mx - nx * 2.5, mz - nz * 2.5)) {
-        nx = -nx;
-        nz = -nz;
-      }
+      // Towards the land, square to this edge.
+      let nx = (A.x + B.x - a.x - b.x) / 2;
+      let nz = (A.y + B.y - a.y - b.y) / 2;
+      const nl = Math.hypot(nx, nz) || 1;
+      nx /= nl;
+      nz /= nl;
       // In steps of about two metres, so a street crossing the bank cuts the coping.
       const steps = Math.max(1, Math.round(len / 2));
       for (let s = 0; s < steps; s++) {
         const t0 = s / steps;
         const t1 = (s + 1) / steps;
-        const p0 = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };
-        const p1 = { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 };
-        const cx = (p0.x + p1.x) / 2 + nx * QUAY_WIDTH * 0.5;
-        const cz = (p0.y + p1.y) / 2 + nz * QUAY_WIDTH * 0.5;
+        const lerp = (p: Pt, q: Pt, t: number) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+        const p0 = lerp(a, b, t0);
+        const p1 = lerp(a, b, t1);
+        const q0 = lerp(A, B, t0);
+        const q1 = lerp(A, B, t1);
+        const cx = (p0.x + p1.x + q0.x + q1.x) / 4;
+        const cz = (p0.y + p1.y + q0.y + q1.y) / 4;
         if (isRoad(cx, cz) || isWater(cx + nx * QUAY_WIDTH, cz + nz * QUAY_WIDTH)) continue;
-        const o0 = [p0.x + nx * QUAY_WIDTH, QUAY_TOP, p0.y + nz * QUAY_WIDTH];
-        const o1 = [p1.x + nx * QUAY_WIDTH, QUAY_TOP, p1.y + nz * QUAY_WIDTH];
+        const o0 = [q0.x, QUAY_TOP, q0.y];
+        const o1 = [q1.x, QUAY_TOP, q1.y];
         const e0 = [p0.x, QUAY_TOP, p0.y];
         const e1 = [p1.x, QUAY_TOP, p1.y];
         quad(windUp([e0, e1, o1, o0]), [0, 1, 0]);

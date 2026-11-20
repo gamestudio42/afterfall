@@ -264,14 +264,17 @@ export function inBuilding(f: ReclamationField, x: number, z: number): boolean {
   return i >= 0 && f.building[i] === 1;
 }
 
-/** The field as a texture the ground shaders sample: R growth, G wear. */
+/**
+ * The field as a texture the ground shaders sample: R growth, G wear, B carriageway, and A
+ * dry land (0 where the water runs, under bridges too).
+ */
 export function reclamationTexture(f: ReclamationField): THREE.DataTexture {
   const data = new Uint8Array(f.cols * f.rows * 4);
   for (let i = 0; i < f.cols * f.rows; i++) {
     data[i * 4] = Math.round(f.growth[i] * 255);
     data[i * 4 + 1] = Math.round(f.wear[i] * 255);
     data[i * 4 + 2] = f.road[i] * 255;
-    data[i * 4 + 3] = 255;
+    data[i * 4 + 3] = (f.wet ?? f.water)[i] ? 0 : 255;
   }
   const tex = new THREE.DataTexture(data, f.cols, f.rows, THREE.RGBAFormat);
   tex.colorSpace = THREE.NoColorSpace;
@@ -382,9 +385,12 @@ export function reclaimSurface(material: THREE.MeshStandardMaterial, kind: Recla
     );
     shader.fragmentShader = COMMON + shader.fragmentShader;
     // After colour, so it lands over the layered two-scale sampling rather than under it.
+    // A park is drawn above the water, so a pond inside it was a lawn with a quay round it:
+    // the lawn steps aside wherever the field says water runs.
+    const dry = kind === "park" ? "if (texture2D(uReclaim, (vReclaimPos.xz - uReclaimRect.xy) * uReclaimRect.zw).a < 0.5) discard;\n" : "";
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <color_fragment>",
-      `#include <color_fragment>\nfloat rcReclaimed = 0.0;\n${FRAGMENT(kind)}`,
+      `${dry}#include <color_fragment>\nfloat rcReclaimed = 0.0;\n${FRAGMENT(kind)}`,
     );
     // Soil and growth are matte, whatever the paving's roughness map says, and dry:
     // rain sheen on the asphalt stops where the moss starts.
@@ -393,5 +399,5 @@ export function reclaimSurface(material: THREE.MeshStandardMaterial, kind: Recla
       "#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 1.0, rcReclaimed);",
     );
   };
-  material.customProgramCacheKey = () => `${previousKey()}|reclaim-${kind}-v1`;
+  material.customProgramCacheKey = () => `${previousKey()}|reclaim-${kind}-v2`;
 }

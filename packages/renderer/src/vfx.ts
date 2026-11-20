@@ -8,6 +8,7 @@
  */
 
 import * as THREE from "three";
+import { heightAt, type TerrainDef } from "@afterfall/world";
 import { NoiseRings } from "./noiseRing";
 
 export type FxKind = "shot" | "melee" | "hit" | "death" | "noise" | "build" | "collapse";
@@ -397,12 +398,34 @@ export class VfxSystem {
     for (const fx of events) {
       if (fx.seq <= this.lastSeq) continue;
       this.lastSeq = fx.seq;
+      const particlesBefore = this.particles.length;
+      const burstsBefore = this.bursts.length;
+      this.emitOne(fx);
+      // On a hillside an effect happens on the ground where it happened, not at sea level.
+      if (this.terrain) {
+        const g = heightAt(this.terrain, fx.x, fx.y);
+        for (let i = particlesBefore; i < this.particles.length; i++) this.particles[i].y += g;
+        for (let i = burstsBefore; i < this.bursts.length; i++) this.bursts[i].y += g;
+      }
+    }
+  }
+
+  private terrain: TerrainDef | undefined;
+
+  /** The ground effects happen on; none on a flat map. */
+  setGround(terrain: TerrainDef | undefined): void {
+    this.terrain = terrain;
+    this.noise.setGround(terrain);
+  }
+
+  private emitOne(fx: FxEvent): void {
+    {
       if (fx.type === "noise") {
         this.noise.push(fx.x, fx.y, fx.r ?? 0);
-        continue;
+        return;
       }
       const burst = BURSTS[fx.type];
-      if (!burst) continue;
+      if (!burst) return;
       if (fx.type === "shot" && this.muzzleFrames.length > 0) {
         if (this.bursts.length < MAX_SPRITES) this.bursts.push(this.muzzle(fx));
       } else if (fx.type === "melee" && this.meleeFrames.length > 0) {

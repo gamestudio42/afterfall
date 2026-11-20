@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { BuildingDef } from "@afterfall/world";
+import { heightAt, type BuildingDef, type TerrainDef } from "@afterfall/world";
 import { outlineOf } from "./buildingBatch";
 
 /** Where a door sits: a point on the wall and the wall's outward normal (map x, y). */
@@ -57,7 +57,7 @@ export class Doors {
   private doorMat: THREE.MeshStandardMaterial;
   private meshes: THREE.InstancedMesh[] = [];
 
-  constructor(buildings: BuildingDef[]) {
+  constructor(buildings: BuildingDef[], terrain?: TerrainDef) {
     this.group.name = "doors";
     this.spots = buildings.map(doorSpot);
     const placed = this.spots.filter((s): s is DoorSpot => s !== null);
@@ -83,7 +83,8 @@ export class Doors {
     placed.forEach((s, i) => {
       // Local +Z is the door's front: turn it to the wall's outward normal.
       q.setFromAxisAngle(up, Math.atan2(s.nx, s.ny));
-      p.set(s.x + s.nx * 0.02, 0, s.y + s.ny * 0.02);
+      // At the ground in front of the door, wherever on the slope the wall stands.
+      p.set(s.x + s.nx * 0.02, heightAt(terrain, s.x + s.nx, s.y + s.ny), s.y + s.ny * 0.02);
       m.compose(p, q, one);
       door.setMatrixAt(i, m);
       canopy.setMatrixAt(i, m);

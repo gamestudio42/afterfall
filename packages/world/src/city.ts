@@ -1,5 +1,6 @@
 import { BUILDING_TYPES, type BuildingType, type Zone } from "@afterfall/content";
 import { Rng, deriveSeed, type Rect, type Vec2 } from "@afterfall/shared";
+import type { TerrainDef } from "./terrain";
 
 /**
  * Silhouettes the extruder draws instead of a block: towers, spires and obelisks; a
@@ -122,6 +123,8 @@ export interface CityMap {
   rails?: RailDef[];
   /** Bridge decks over that water. */
   bridges?: BridgeDef[];
+  /** The ground's relief, on imported maps that have any (terrain.ts). */
+  terrain?: TerrainDef;
   /** Road ends at the map border, where hordes enter. */
   spawnPoints: Vec2[];
   /** Set for imported maps; absent for procedural ones. */

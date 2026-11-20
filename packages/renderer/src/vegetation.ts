@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import type { CityMap } from "@afterfall/world";
+import { heightAt, type CityMap } from "@afterfall/world";
 import { deriveSeed, distToPolyline, pointInPolygon } from "@afterfall/shared";
 import { buildReclamation, growthAt, hash2, inWater, type ReclamationField } from "./reclamation";
 import { assignLods, CULLED, decimateQuads, LEAF_KEEP, type LodPlant } from "./vegetationLod";
@@ -13,6 +13,8 @@ export interface Plant {
   scale: number;
   yaw: number;
   shade: number;
+  /** Ground under the plant: 0 on a flat map. */
+  y?: number;
 }
 /** Instances across every species. Trees cast shadows, so this is the real budget. */
 export const VEGETATION_CAP = 900;
@@ -193,6 +195,7 @@ export class Vegetation {
   async load(city: CityMap, base: string, field?: ReclamationField, density = 1): Promise<void> {
     const all = placeVegetation(city, field);
     const plants = density >= 1 ? all : all.filter((_, i) => hash2(i, 91, 7) < density);
+    if (city.terrain) for (const p of plants) p.y = heightAt(city.terrain, p.x, p.z);
     if (!plants.length) {
       if (this.fallback) this.fallback.visible = false;
       return;
@@ -245,7 +248,7 @@ export class Vegetation {
               up = new THREE.Vector3(0, 1, 0);
             list.forEach((p, i) => {
               q.setFromAxisAngle(up, p.yaw);
-              matrix.compose(v.set(p.x, 0.08, p.z), q, s.setScalar(p.scale)).toArray(matrices, i * 16);
+              matrix.compose(v.set(p.x, 0.08 + (p.y ?? 0), p.z), q, s.setScalar(p.scale)).toArray(matrices, i * 16);
               colors.fill(p.shade, i * 3, i * 3 + 3);
             });
           }
@@ -375,7 +378,7 @@ export class Vegetation {
       matrix
         .makeRotationY(p.yaw)
         .scale(new THREE.Vector3(2.3 * p.scale, 1, 1.8 * p.scale))
-        .setPosition(p.x, 0.09, p.z);
+        .setPosition(p.x, 0.09 + (p.y ?? 0), p.z);
       mesh.setMatrixAt(i, matrix);
     });
     this.resources.push(geo, mat, mesh);

@@ -178,6 +178,8 @@ export interface OutskirtBox {
   d: number;
   h: number;
   shade: number;
+  /** Ground under the box: on a hillside, the map edge's own height, held. */
+  y?: number;
 }
 
 /** How far past the map's edge the outskirts start and end, in metres. */
@@ -236,7 +238,7 @@ export function buildOutskirts(boxes: OutskirtBox[]): THREE.InstancedMesh {
   const m = new THREE.Matrix4();
   const c = new THREE.Color();
   boxes.forEach((b, i) => {
-    m.makeScale(b.w, b.h, b.d).setPosition(b.x, 0, b.z);
+    m.makeScale(b.w, b.h, b.d).setPosition(b.x, b.y ?? 0, b.z);
     mesh.setMatrixAt(i, m);
     mesh.setColorAt(i, c.setRGB(0.42 * b.shade, 0.41 * b.shade, 0.4 * b.shade));
   });

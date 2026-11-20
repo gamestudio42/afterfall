@@ -1,4 +1,12 @@
-import { cityFromOverpass, overpassQuery, overpassTerrainQuery, type CityMap, type OverpassResponse } from "@afterfall/world";
+import {
+  cityFromOverpass,
+  overpassQuery,
+  overpassTerrainQuery,
+  type CityMap,
+  type OverpassResponse,
+  type TerrainDef,
+} from "@afterfall/world";
+import { fetchTerrain } from "./elevation";
 
 /** A place to play: a named point and the side of the square area around it. */
 export interface Place {
@@ -49,12 +57,44 @@ export async function loadPlaceMap(place: Place, size: number, signal?: AbortSig
   // river's outline can be large, and a slow or refused answer should cost the water, not
   // the map. An area saved before this existed simply fetches it the next time it loads.
   const terrain = await loadTerrain(place, size, signal);
-  return cityFromOverpass(terrain ? { elements: [...data.elements, ...terrain.elements] } : data, {
+  const city = cityFromOverpass(terrain ? { elements: [...data.elements, ...terrain.elements] } : data, {
     lat: place.lat,
     lon: place.lon,
     size,
     label: place.label,
   });
+  const relief = await loadRelief(place, size, signal);
+  if (relief) city.terrain = relief;
+  return city;
+}
+
+/** `?terrain=0` turns the relief off: a flat map, as before it existed. */
+function reliefWanted(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get("terrain") !== "0";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * The ground's relief, a third and optional request: open elevation tiles, kept in the
+ * cache like the rest. A refused or slow answer costs the relief, never the map.
+ */
+async function loadRelief(place: Place, size: number, signal?: AbortSignal): Promise<TerrainDef | null> {
+  if (!reliefWanted()) return null;
+  const key = `relief:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
+  const cached = (await cacheGet(key)) as unknown as { terrain: TerrainDef | null } | null;
+  if (cached) return cached.terrain;
+  try {
+    const terrain = await fetchTerrain(place.lat, place.lon, size, signal);
+    await cachePut(key, { terrain } as unknown as OverpassResponse).catch(() => undefined);
+    return terrain;
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    console.warn("relief unavailable, loading the map flat", e);
+    return null;
+  }
 }
 
 async function loadTerrain(place: Place, size: number, signal?: AbortSignal): Promise<OverpassResponse | null> {

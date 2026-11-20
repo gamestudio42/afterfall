@@ -7,6 +7,8 @@ import { RtsCamera } from "./camera";
 import { wallFrame } from "./structureLayout";
 import { BuildingBatch, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
+import { heightAt, heightRange } from "@afterfall/world";
+import { drape, rayGround, terrainTop } from "./terrainMesh";
 import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
 import { WATER_TIME } from "./water";
 import { decalGeometry, placeDecals } from "./decals";
@@ -381,7 +383,7 @@ export class GameRenderer {
         },
       );
     }
-    const mesh = new THREE.Mesh(decalGeometry(placements), this.decalMat);
+    const mesh = new THREE.Mesh(drape(decalGeometry(placements), sim.city.terrain), this.decalMat);
     // Above asphalt (0.03) and paint (0.05), below the raised curb (0.12).
     mesh.position.y = 0.07;
     mesh.receiveShadow = true;
@@ -428,7 +430,7 @@ export class GameRenderer {
       // by the building it belongs to, which is exactly how the first cut failed.
       const x = def.entrance.x + def.facing.x * 0.6;
       const z = def.entrance.y + def.facing.y * 0.6;
-      const base = def.height + 0.05;
+      const base = def.height + 0.05 + this.baseOf(def);
       tmpM.compose(new THREE.Vector3(x, base + 2.1, z), tmpQ.setFromAxisAngle(up, 0), tmpS.set(1, 1, 1));
       poles.setMatrixAt(i, tmpM);
       // The face turned to the street, not the edge: a flag seen edge-on is four pixels
@@ -477,7 +479,7 @@ export class GameRenderer {
       const x = def.entrance.x + def.facing.x * 1.1;
       const z = def.entrance.y + def.facing.y * 1.1;
       tmpQ.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-      tmpM.compose(new THREE.Vector3(x, 0.11, z), tmpQ, tmpS.set(5.2, 5.2, 1));
+      tmpM.compose(new THREE.Vector3(x, 0.11 + this.ground(x, z), z), tmpQ, tmpS.set(5.2, 5.2, 1));
       pools.setMatrixAt(i, tmpM);
     });
     pools.instanceMatrix.needsUpdate = true;
@@ -533,10 +535,13 @@ export class GameRenderer {
     const litter = this.reclamation
       ? placeLitter(sim.city, this.reclamation, [...street.values()].flat(), isSoftwareRenderer(this.gpuName) ? 0.35 : 1)
       : new Map<LitterKind, PropPlacement[]>();
+    // On a hillside, what stands on the street stands on the ground under it.
+    const onGround = <K>(m: Map<K, PropPlacement[]>) =>
+      sim.city.terrain ? new Map([...m].map(([k, list]) => [k, list.map((p) => ({ ...p, y: (p.y ?? 0) + this.ground(p.x, p.z) }))])) : m;
     const placements = new Map<PropKind | RoofKind | LitterKind, PropPlacement[]>([
-      ...street,
-      ...placeRoofProps(sim.city.buildings, sim.city.seed ?? 1),
-      ...litter,
+      ...onGround(street),
+      ...placeRoofProps(sim.city.buildings, sim.city.seed ?? 1, (b) => this.baseOf(b)),
+      ...onGround(litter),
     ]);
     void loadProps(this.artBase, placements, (kit) => {
       if (token !== this.propToken) {
@@ -817,7 +822,15 @@ export class GameRenderer {
     this.applyArt(this.art);
     this.scene.add(this.cityGroup);
 
-    this.buildings = new BuildingBatch(city.buildings);
+    this.buildings = new BuildingBatch(city.buildings, city.terrain);
+    this.groundTop = terrainTop(city.terrain);
+    this.buildingBases = new Float32Array(
+      city.buildings.map((b) =>
+        city.terrain ? heightRange(city.terrain, [...outlineOf(b), { x: b.rect.x + b.rect.w / 2, y: b.rect.y + b.rect.h / 2 }]).min : 0,
+      ),
+    );
+    this.rts.groundHeight = city.terrain ? (x, z) => heightAt(city.terrain, x, z) : null;
+    this.vfx?.setGround(city.terrain);
     // Textures may already have arrived before the city existed: apply the
     // building maps now, and let applyArt handle anything that lands later.
     this.buildings.setArt(this.art);
@@ -826,7 +839,7 @@ export class GameRenderer {
       this.scene.remove(this.doors.group);
       this.doors.dispose();
     }
-    this.doors = new Doors(city.buildings);
+    this.doors = new Doors(city.buildings, city.terrain);
     this.doors.setMap(this.art.door);
     this.scene.add(this.doors.group);
     if (this.contact) {
@@ -835,13 +848,16 @@ export class GameRenderer {
       (this.contact.material as THREE.Material).dispose();
     }
     this.contact = buildContactShadows(city.buildings);
+    this.contact.geometry = drape(this.contact.geometry, city.terrain);
     this.scene.add(this.contact);
     if (this.outskirts) {
       this.scene.remove(this.outskirts);
       this.outskirts.geometry.dispose();
       (this.outskirts.material as THREE.Material).dispose();
     }
-    this.outskirts = buildOutskirts(placeOutskirts(city, city.seed ?? 1));
+    this.outskirts = buildOutskirts(
+      placeOutskirts(city, city.seed ?? 1).map((b) => (city.terrain ? { ...b, y: heightAt(city.terrain, b.x, b.z) } : b)),
+    );
     this.scene.add(this.outskirts);
     this.refreshBuildingColors();
     this.dressStreets(sim);
@@ -1084,10 +1100,22 @@ export class GameRenderer {
 
   groundPoint(ndcX: number, ndcY: number): { x: number; y: number } | null {
     const r = this.ray(ndcX, ndcY).ray;
-    if (Math.abs(r.direction.y) < 1e-6) return null;
-    const t = -r.origin.y / r.direction.y;
-    if (t < 0) return null;
-    return { x: r.origin.x + r.direction.x * t, y: r.origin.z + r.direction.z * t };
+    const hit = rayGround(r.origin, r.direction, this.sim?.city.terrain, this.groundTop);
+    return hit ? { x: hit.x, y: hit.z } : null;
+  }
+
+  /** Height of the ground at a map point: 0 on a flat map. */
+  ground(x: number, z: number): number {
+    return heightAt(this.sim?.city.terrain, x, z);
+  }
+
+  /** Highest ground on the map, where a pick starts marching down. */
+  private groundTop = 0;
+  /** The ground each building stands on: the lowest under its outline (BuildingBatch does the same). */
+  private buildingBases: Float32Array = new Float32Array(0);
+
+  baseOf(b: { index: number }): number {
+    return this.buildingBases[b.index] ?? 0;
   }
 
   pickBuilding(ndcX: number, ndcY: number): number {
@@ -1122,7 +1150,7 @@ export class GameRenderer {
 
   /** Screen position (CSS pixels) of a world point. */
   toScreen(x: number, y: number, h = 1): { x: number; y: number; visible: boolean } {
-    tmpV.set(x, h, y).project(this.rts.camera);
+    tmpV.set(x, h + this.ground(x, y), y).project(this.rts.camera);
     const w = this.canvas.clientWidth;
     const hh = this.canvas.clientHeight;
     return { x: (tmpV.x * 0.5 + 0.5) * w, y: (-tmpV.y * 0.5 + 0.5) * hh, visible: tmpV.z < 1 };
@@ -1267,7 +1295,7 @@ export class GameRenderer {
       const b = sim.city.buildings[hq];
       // At door height: over the roof it turns the roof into a white plate, which is
       // what the first cut of the night did.
-      this.hqLight.position.set(b.entrance.x, 3.1, b.entrance.y);
+      this.hqLight.position.set(b.entrance.x, 3.1 + this.ground(b.entrance.x, b.entrance.y), b.entrance.y);
       // A generator that is not quite healthy: the base flickers, the city does not.
       const flicker = 0.93 + 0.07 * Math.sin(sim.state.tick * 0.021) * Math.sin(sim.state.tick * 0.0037);
       this.hqLight.intensity = (1 - daylight) * 260 * flicker;
@@ -1278,7 +1306,7 @@ export class GameRenderer {
       const cy = b.rect.y + b.rect.h / 2;
       const d = Math.hypot(cx - corner.x, cy - corner.y) || 1;
       const k = Math.min(1.5, d * 0.4) / d;
-      this.hqMarker.position.set(corner.x + (cx - corner.x) * k, b.height + 0.2, corner.y + (cy - corner.y) * k);
+      this.hqMarker.position.set(corner.x + (cx - corner.x) * k, b.height + 0.2 + this.baseOf(b), corner.y + (cy - corner.y) * k);
     } else {
       this.hqMarker.visible = false;
       this.hqLight.intensity = 0;
@@ -1323,7 +1351,7 @@ export class GameRenderer {
       if (e.survivor) {
         const s = e.survivor;
         if (s.inside >= 0 || su >= MAX_UNITS) continue;
-        const y = s.mounted >= 0 ? 3.4 : 0;
+        const y = (s.mounted >= 0 ? 3.4 : 0) + this.ground(x, z);
         tmpQ.setFromAxisAngle(UP, -motion.heading + Math.PI / 2);
         tmpM.compose(tmpV.set(x, y, z), tmpQ, tmpS.set(UNIT_SCALE, UNIT_SCALE, UNIT_SCALE));
         this.survivors.setMatrixAt(su, tmpM);
@@ -1349,7 +1377,7 @@ export class GameRenderer {
         const def = INFECTED[e.infected.kind];
         tmpQ.setFromAxisAngle(UP, -motion.heading + Math.PI / 2);
         const width = e.infected.kind === "brute" ? 1.25 : e.infected.kind === "runner" ? 0.78 : 1;
-        tmpM.compose(tmpV.set(x, 0, z), tmpQ, tmpS.set(def.scale * width, def.scale, def.scale));
+        tmpM.compose(tmpV.set(x, this.ground(x, z), z), tmpQ, tmpS.set(def.scale * width, def.scale, def.scale));
         if (this.infectedBatch) {
           this.infectedBatch.place(e, tmpM, motion, false, this.overlay === "danger");
         } else {
@@ -1358,7 +1386,7 @@ export class GameRenderer {
         }
         zi++;
         const h = e.health!;
-        if (h.hp < h.max) addBar(x, 2.1 * def.scale * UNIT_SCALE, z, h.hp / h.max, 0xd04a3a);
+        if (h.hp < h.max) addBar(x, 2.1 * def.scale * UNIT_SCALE + this.ground(x, z), z, h.hp / h.max, 0xd04a3a);
       }
     }
     // Entities that died keep their phase forever otherwise.
@@ -1476,7 +1504,7 @@ export class GameRenderer {
         const frameB = axial ? wallMeasure(s) : { yaw: s.line?.yaw ?? 0, stretch: 1 };
         tmpQ2.setFromAxisAngle(up, frameB.yaw);
         tmpM.compose(
-          tmpV.set(cx, 0, cz),
+          tmpV.set(cx, this.ground(cx, cz), cz),
           tmpQ2,
           // A gate going into a wall is drawn around that wall, or it would hide inside it.
           s.replaces !== undefined
@@ -1496,7 +1524,7 @@ export class GameRenderer {
         if (this.structureIds.length >= MAX_STRUCTURES) continue;
         const n = this.structureIds.length;
         const inset = s.kind === "wall" || s.kind === "gate" ? 0 : 0.3;
-        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ.identity(), tmpS.set(size - inset, def.height, size - inset));
+        tmpM.compose(tmpV.set(cx, this.ground(cx, cz), cz), tmpQ.identity(), tmpS.set(size - inset, def.height, size - inset));
         this.structures.setMatrixAt(n, tmpM);
         this.structures.setColorAt(n, tmpC.setHex(def.color));
         this.structureIds[n] = e.id;
@@ -1517,7 +1545,7 @@ export class GameRenderer {
         const n = model.ids.length;
         tmpQ2.setFromAxisAngle(up, placement.yaw);
         // Junction geometry is authored at its final dimensions.
-        tmpM.compose(tmpV.set(cx, 0, cz), tmpQ2, tmpS.set(corner ? 1 : frame.stretch, 1, 1));
+        tmpM.compose(tmpV.set(cx, this.ground(cx, cz), cz), tmpQ2, tmpS.set(corner ? 1 : frame.stretch, 1, 1));
         for (const part of model.parts) {
           part.setMatrixAt(n, tmpM);
           part.setColorAt(n, tmpC);
@@ -1546,6 +1574,7 @@ export class GameRenderer {
         const b = sim.city.buildings[i];
         this.selectionBox.geometry.dispose();
         this.selectionBox.geometry = selectionGeometry(outlineOf(b), b.height);
+        this.selectionBox.position.y = this.baseOf(b);
         this.selectionOutlineOf = i;
       }
       this.selectionBox.visible = true;
@@ -1575,8 +1604,10 @@ export class GameRenderer {
       tmpQ.identity();
       if (axial) tmpQ.setFromAxisAngle(UP, yaw);
       else if (p.yaw) tmpQ.setFromAxisAngle(UP, p.yaw);
+      const px = (cx + def.size / 2 + (line?.ox ?? 0)) * cell;
+      const pz = (cy + def.size / 2 + (line?.oy ?? 0)) * cell;
       tmpM.compose(
-        tmpV.set((cx + def.size / 2 + (line?.ox ?? 0)) * cell, 0, (cy + def.size / 2 + (line?.oy ?? 0)) * cell),
+        tmpV.set(px, this.ground(px, pz), pz),
         tmpQ,
         axial
           ? tmpS.set(length - 0.05, Math.max(0.4, def.height), 0.5)
@@ -1600,8 +1631,8 @@ export class GameRenderer {
       if (fx.type !== "shot") continue;
       const i = this.tracerNext;
       this.tracerNext = (this.tracerNext + 1) % MAX_TRACERS;
-      pos.setXYZ(i * 2, fx.x, 1.3, fx.y);
-      pos.setXYZ(i * 2 + 1, fx.tx, 1.0, fx.ty);
+      pos.setXYZ(i * 2, fx.x, 1.3 + this.ground(fx.x, fx.y), fx.y);
+      pos.setXYZ(i * 2 + 1, fx.tx, 1.0 + this.ground(fx.tx, fx.ty), fx.ty);
       this.tracerAge[i] = 0.12;
     }
     this.vfx.emit(fresh);

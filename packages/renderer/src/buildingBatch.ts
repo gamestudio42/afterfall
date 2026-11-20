@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { latticeFrame, type BuildingDef } from "@afterfall/world";
+import { heightRange, latticeFrame, type BuildingDef, type TerrainDef } from "@afterfall/world";
 import { latticeTower } from "./lattice";
 
 /** Outline of a building: its real footprint, or its rectangle. */
@@ -144,7 +144,7 @@ export class BuildingBatch {
   /** Vertex ranges repainted since the last commit. */
   private dirty: Range[] = [];
 
-  constructor(buildings: BuildingDef[]) {
+  constructor(buildings: BuildingDef[], terrain?: TerrainDef) {
     const parts = Object.fromEntries(GROUPS.map((g) => [g, new Builder()])) as Record<Group, Builder>;
     const local: { group: Group; start: number; count: number }[][] = [];
     for (const b of buildings) {
@@ -239,11 +239,22 @@ export class BuildingBatch {
     geo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pos.length).fill(1), 3));
     geo.setAttribute("glow", new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3), 1));
     const decay = new Float32Array(pos.length / 3);
+    // On a hillside a building stands on the lowest ground under its outline: the downhill
+    // wall meets the ground, the uphill one runs into it. The facade shader measures its
+    // grime and creepers from this base, not from sea level.
+    const groundY = new Float32Array(pos.length / 3);
     buildings.forEach((b, i) => {
       const d = buildingDecay(b);
-      for (const r of this.ranges[i] ?? []) decay.fill(d, r.start, r.start + r.count);
+      const base = terrain ? heightRange(terrain, [...outlineOf(b), { x: b.rect.x + b.rect.w / 2, y: b.rect.y + b.rect.h / 2 }]).min : 0;
+      for (const r of this.ranges[i] ?? []) {
+        decay.fill(d, r.start, r.start + r.count);
+        if (!base) continue;
+        groundY.fill(base, r.start, r.start + r.count);
+        for (let v = r.start; v < r.start + r.count; v++) pos[v * 3 + 1] += base;
+      }
     });
     geo.setAttribute("decay", new THREE.Float32BufferAttribute(decay, 1));
+    geo.setAttribute("groundY", new THREE.Float32BufferAttribute(groundY, 1));
     geo.computeBoundingSphere();
 
     this.materials = Object.fromEntries(GROUPS.map((g) => [g, facadeMaterial(g)])) as Record<Group, THREE.MeshStandardMaterial>;
@@ -460,10 +471,13 @@ function facadeMaterial(group: Group): THREE.MeshStandardMaterial {
   const varyings = "varying float vGlow;\nvarying vec3 facadePosition;\nvarying float vDecay;\nvarying vec2 facadeMetres;";
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\nattribute float glow;\nattribute float decay;\n${varyings}`)
+      .replace(
+        "#include <common>",
+        `#include <common>\nattribute float glow;\nattribute float decay;\nattribute float groundY;\n${varyings}`,
+      )
       .replace(
         "#include <begin_vertex>",
-        `#include <begin_vertex>\nvGlow = glow;\nfacadePosition = position;\nvDecay = decay;\nfacadeMetres = uv * ${f(MODULE)};`,
+        `#include <begin_vertex>\nvGlow = glow;\nfacadePosition = position - vec3(0.0, groundY, 0.0);\nvDecay = decay;\nfacadeMetres = uv * ${f(MODULE)};`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { heightAt, type TerrainDef } from "@afterfall/world";
 
 /**
  * Gunfire noise: a line on the ground that opens to the radius that pulls infected toward
@@ -87,12 +88,28 @@ export class NoiseRings {
   private clock = 0;
   private pin: number | null = null;
   private readonly meshes: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>[] = [];
+  /** Which ring each mesh's vertices were laid over, so a hillside is draped once per ring. */
+  private draped: (NoiseRing | null)[] = [];
+  private terrain: TerrainDef | undefined;
+
+  /** On a hillside a ring lies over the ground; on a flat map it is one flat quad. */
+  setGround(terrain: TerrainDef | undefined): void {
+    this.terrain = terrain;
+    this.draped = this.meshes.map(() => null);
+    const segments = terrain ? 40 : 1;
+    for (const m of this.meshes) {
+      m.geometry.dispose();
+      const geo = new THREE.PlaneGeometry(1, 1, segments, segments);
+      geo.rotateX(-Math.PI / 2);
+      m.geometry = geo;
+    }
+  }
 
   constructor() {
     this.group.name = "noise-rings";
-    const geo = new THREE.PlaneGeometry(1, 1);
-    geo.rotateX(-Math.PI / 2);
     for (let i = 0; i < RING_CAP; i++) {
+      const geo = new THREE.PlaneGeometry(1, 1);
+      geo.rotateX(-Math.PI / 2);
       const mat = new THREE.ShaderMaterial({
         vertexShader: VERTEX,
         fragmentShader: FRAGMENT,
@@ -143,6 +160,15 @@ export class NoiseRings {
       mesh.visible = true;
       mesh.position.set(ring.x, RING_Y, ring.z);
       mesh.scale.set(ring.radius * 2, 1, ring.radius * 2);
+      if (this.terrain && this.draped[w] !== ring) {
+        // Each vertex takes the ground under it (the quad's y is not scaled).
+        const p = mesh.geometry.getAttribute("position");
+        for (let k = 0; k < p.count; k++)
+          p.setY(k, heightAt(this.terrain, ring.x + p.getX(k) * ring.radius * 2, ring.z + p.getZ(k) * ring.radius * 2));
+        p.needsUpdate = true;
+        mesh.geometry.computeBoundingSphere();
+        this.draped[w] = ring;
+      }
       const u = mesh.material.uniforms;
       u.uReach.value = ring.radius;
       u.uOpen.value = ringOpen(t);
@@ -160,7 +186,9 @@ export class NoiseRings {
   }
 
   dispose(): void {
-    this.meshes[0]?.geometry.dispose();
-    for (const m of this.meshes) m.material.dispose();
+    for (const m of this.meshes) {
+      m.geometry.dispose();
+      m.material.dispose();
+    }
   }
 }

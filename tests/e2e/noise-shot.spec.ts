@@ -21,7 +21,7 @@ test("captures the noise ring", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("choose-base")).toBeVisible();
 
-  // The sheet arrives after the first frame, like every texture.
+  // Kept for callers that waited on the old sheet; the rings need none.
   await expect
     .poll(() => page.evaluate(() => (window as unknown as Win).__afterfall.renderer.vfx.noiseReady as boolean), { timeout: 15_000 })
     .toBe(true);
@@ -39,9 +39,7 @@ test("captures the noise ring", async ({ page }) => {
   await page.waitForTimeout(800);
   await page.screenshot({ path: "docs/art/noise.png" });
 
-  const visible = await page.evaluate(
-    () => (window as unknown as Win).__afterfall.renderer.vfx.pool.filter((m: { visible: boolean }) => m.visible).length,
-  );
+  const visible = await page.evaluate(() => (window as unknown as Win).__afterfall.renderer.vfx.noise.visible as number);
   console.log("NOISE", visible);
   expect(visible).toBe(2);
 });

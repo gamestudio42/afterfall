@@ -288,6 +288,29 @@ describe("landmarks", () => {
     expect(groupOf(batch, "trim").count).toBe(pos.count);
   });
 
+  it("a rock-cut facade is carved on the side the door faces, proud of the rock", () => {
+    // Door to the north (y = -1): the carving stands out of the north face, at y < 0.
+    const batch = tower("rockcut", 39);
+    const pos = batch.mesh.geometry.getAttribute("position");
+    let north = Infinity;
+    let south = -Infinity;
+    let top = 0;
+    for (let v = 0; v < pos.count; v++) {
+      north = Math.min(north, pos.getZ(v));
+      south = Math.max(south, pos.getZ(v));
+      top = Math.max(top, pos.getY(v));
+    }
+    expect(north).toBeLessThan(-0.9);
+    expect(north).toBeGreaterThan(-3);
+    // The cliff runs on behind the outline, by under a third of the facade's width.
+    expect(south).toBeGreaterThan(100);
+    expect(south).toBeLessThan(100 + 39 * 0.64 * 0.31);
+    // The rock rises in a crest behind the facade.
+    expect(top).toBeGreaterThan(39);
+    // And the doorway is there, in the darker tone.
+    expect(groupOf(batch, "roof").count).toBeGreaterThan(0);
+  });
+
   it("a dome rises from a hall on a platform to a finial", () => {
     const batch = tower("dome", 60);
     const bands = profile(batch, 60, 50, 50);

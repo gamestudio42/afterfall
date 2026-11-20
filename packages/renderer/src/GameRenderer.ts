@@ -9,7 +9,7 @@ import { BuildingBatch, buildingSeat, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
 import { heightAt } from "@afterfall/world";
 import { drape, groundNormal, rayGround, terrainTop } from "./terrainMesh";
-import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
+import { ARID_GROUND_TINT, buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
 import { WATER_TIME } from "./water";
 import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
@@ -95,6 +95,8 @@ const LATTICE_IRON = 0x7a6b55;
 /** Pyramids and amphitheatres are dressed stone, sand and travertine, whatever is sold in them. */
 const ANCIENT_STONE = new Set(["pyramid", "stepped", "amphitheatre", "watchtower"]);
 const WORN_STONE = 0xc9b48e;
+/** Petra's rose-red sandstone, for a facade carved in the rock. */
+const ROSE_SANDSTONE = 0xc4836a;
 const SUN_DAY = new THREE.Color(0xffe9c8);
 const SUN_DUSK = new THREE.Color(0xff9a50);
 const MOON = new THREE.Color(0x8ea6e6);
@@ -591,7 +593,11 @@ export class GameRenderer {
         mat.needsUpdate = true;
       };
       // An imported map has no blocks, so its base is street-level paving, not a lawn.
-      set("ground", this.groundImported ? art.concrete : art.grass, this.groundImported ? URBAN_GROUND_TINT : TEXTURED_TINT.ground);
+      set(
+        "ground",
+        this.groundImported || this.groundArid ? art.concrete : art.grass,
+        this.groundArid ? ARID_GROUND_TINT : this.groundImported ? URBAN_GROUND_TINT : TEXTURED_TINT.ground,
+      );
       set("blocks", art.sidewalk);
       set("curbs", art.concrete);
       set("roads", art.asphalt);
@@ -619,6 +625,7 @@ export class GameRenderer {
 
   private groundMats: GroundMaterials | null = null;
   private groundImported = false;
+  private groundArid = false;
   private vegetation: Vegetation | null = null;
   private reclamationTex: THREE.DataTexture | null = null;
   private reclamation: ReclamationField | null = null;
@@ -843,6 +850,7 @@ export class GameRenderer {
     void this.vegetation.load(city, this.artBase, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.16 : 1);
     this.groundMats = ground.materials;
     this.groundImported = ground.imported;
+    this.groundArid = city.climate === "arid";
     this.applyArt(this.art);
     this.scene.add(this.cityGroup);
 
@@ -942,9 +950,11 @@ export class GameRenderer {
           ? def.colour
           : def.landmark === "lattice"
             ? LATTICE_IRON
-            : def.landmark && ANCIENT_STONE.has(def.landmark)
-              ? WORN_STONE
-              : BUILDING_TYPES[def.type].color,
+            : def.landmark === "rockcut"
+              ? ROSE_SANDSTONE
+              : def.landmark && ANCIENT_STONE.has(def.landmark)
+                ? WORN_STONE
+                : BUILDING_TYPES[def.type].color,
       );
       if (this.overlay === "resources") {
         const left = st.fn === "none" ? bagTotal(st.remainingLoot) / Math.max(1, st.searchTotal) : 0;

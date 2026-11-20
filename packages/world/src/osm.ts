@@ -17,6 +17,7 @@ import {
 import type { BridgeDef, BuildingDef, CityMap, Landmark, MonumentDef, ParkDef, RailDef, RoadDef, WallDef, WaterDef } from "./city";
 import type { TerrainDef } from "./terrain";
 import { framePoint, latticeFrame } from "./landmarks";
+import { climateAt } from "./climate";
 import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
 
 /**
@@ -648,6 +649,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     ...(rawWalls.length ? { walls: rawWalls } : {}),
     ...(rawMonuments.length ? { monuments: rawMonuments } : {}),
     ...(opts.terrain ? { terrain: opts.terrain } : {}),
+    ...(climateAt(opts.lat, opts.lon) ? { climate: "arid" as const } : {}),
     spawnPoints,
     source: { kind: "osm", label: opts.label, lat: opts.lat, lon: opts.lon, size, attribution: OSM_ATTRIBUTION },
   };
@@ -802,6 +804,9 @@ function landmarkOf(tags: Record<string, string>): Landmark | undefined {
   // the piers stays open.
   if (tags["tower:construction"] === "lattice" && (tags.man_made === "tower" || tags.building === "tower")) return "lattice";
   if (tags.building === "amphitheatre" || tags.archaeological_site === "amphitheatre") return "amphitheatre";
+  // A tomb or a temple carved into a cliff (Petra's Treasury is tomb=rock-cut): a tall
+  // facade in the rock, not a shed of the footprint's size.
+  if (tags.tomb === "rock-cut" || tags["building:material"] === "rock" || tags.historic === "rock_cut") return "rockcut";
   // A pyramid tomb (Giza), or a pyramidal roof that is the whole of the building's height.
   // A house with a pyramidal roof has a roof a few metres tall over its walls.
   const roofHeight = parseFloat(tags["roof:height"] ?? "");
@@ -841,6 +846,12 @@ function floorsOf(tags: Record<string, string>, type: BuildingType, rng: Rng, po
     // 11 m on 10 m.
     const r = polygonBounds(poly);
     return Math.max(2, Math.min(8, Math.round((Math.min(r.w, r.h) * 1.15) / 3.2)));
+  }
+  if (landmark === "rockcut") {
+    // An untagged rock-cut facade stands about twice as tall as its footprint is long: the
+    // Treasury rises 39 m over an outline mapped 18 m deep, the Monastery 48 m over 25.
+    const r = polygonBounds(poly);
+    return Math.max(4, Math.min(15, Math.round((Math.max(r.w, r.h) * 2.2) / 3.2)));
   }
   if (landmark === "dome") {
     // An untagged domed hall rises about six tenths of its width: the Taj Mahal's 73 m over a

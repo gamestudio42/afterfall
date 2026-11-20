@@ -7,3 +7,4 @@ export * from "./chunks";
 export * from "./osm";
 export * from "./landmarks";
 export * from "./terrain";
+export * from "./climate";

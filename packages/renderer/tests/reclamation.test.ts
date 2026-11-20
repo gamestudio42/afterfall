@@ -14,6 +14,19 @@ describe("reclamation field", () => {
     expect(d[18]).toBeCloseTo(Math.SQRT2, 5);
   });
 
+  it("lets a desert keep a little of the growth, and its grass dry", () => {
+    const city = generateCity({ seed: 4242 });
+    const wet = buildReclamation(city);
+    const arid = { ...city, climate: "arid" as const };
+    const dry = buildReclamation(arid);
+    const sum = (a: Float32Array) => a.reduce((n, v) => n + v, 0);
+    expect(sum(dry.growth)).toBeLessThan(sum(wet.growth) * 0.45);
+    const lush = placeGrass(city, wet);
+    const scrub = placeGrass(arid, dry);
+    expect(scrub.length).toBeLessThan(lush.length * 0.2);
+    expect(scrub.every((t) => t.dry === 1)).toBe(true);
+  });
+
   it("is deterministic and keeps the middle of a carriageway clearer than its gutter and the walls", () => {
     const city = generateCity({ seed: 4242 });
     const f = buildReclamation(city);

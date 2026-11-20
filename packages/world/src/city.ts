@@ -5,9 +5,11 @@ import type { TerrainDef } from "./terrain";
 /**
  * Silhouettes the extruder draws instead of a block: towers, spires and obelisks; a
  * lattice tower on four piers; a pyramid to its apex (Giza); a stepped pyramid with a
- * temple on top (Chichén Itzá); an amphitheatre open to the sky (the Colosseum).
+ * temple on top (Chichén Itzá); an amphitheatre open to the sky (the Colosseum); a
+ * facade carved into a cliff (Petra's Treasury).
  */
-export type Landmark = "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre" | "dome" | "watchtower";
+export type Landmark =
+  "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre" | "dome" | "watchtower" | "rockcut";
 
 export interface BuildingDef {
   id: string;
@@ -163,6 +165,8 @@ export interface CityMap {
   monuments?: MonumentDef[];
   /** The ground's relief, on imported maps that have any (terrain.ts). */
   terrain?: TerrainDef;
+  /** Desert: bare ground where little grows back (climate.ts). Absent elsewhere. */
+  climate?: "arid";
   /** Road ends at the map border, where hordes enter. */
   spawnPoints: Vec2[];
   /** Set for imported maps; absent for procedural ones. */

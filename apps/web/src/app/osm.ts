@@ -56,29 +56,68 @@ export async function searchPlaces(query: string, lang: string, signal?: AbortSi
   return rows.map((r) => ({ label: r.display_name.split(",").slice(0, 3).join(","), lat: Number(r.lat), lon: Number(r.lon) }));
 }
 
+/** The steps of loading a place, in the order the player sees them. */
+export const LOAD_STEPS = ["map", "water", "relief", "city"] as const;
+export type LoadStep = (typeof LOAD_STEPS)[number];
+
+/**
+ * Where one step stands. `server` is the host being asked and `attempt` which try of how
+ * many; `retryIn` the seconds before the second round; `tiles` the elevation tiles in.
+ */
+export interface LoadProgress {
+  step: LoadStep;
+  state: "active" | "done" | "cached" | "skipped" | "failed";
+  server?: string;
+  attempt?: number;
+  attempts?: number;
+  retryIn?: number;
+  tiles?: [number, number];
+}
+export type OnProgress = (p: LoadProgress) => void;
+
+const host = (url: string) => new URL(url).host;
+
 /**
  * Builds the play map for a place: OpenStreetMap data from the browser
- * cache when present, otherwise from Overpass (then cached).
+ * cache when present, otherwise from Overpass (then cached). `onProgress` hears every
+ * step: which server is being asked, a retry, a step served from the cache.
  */
-export async function loadPlaceMap(place: Place, size: number, signal?: AbortSignal): Promise<CityMap> {
+export async function loadPlaceMap(place: Place, size: number, signal?: AbortSignal, onProgress: OnProgress = () => {}): Promise<CityMap> {
   const key = `${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
   let data = await cacheGet(key);
-  if (!data) {
-    data = await fetchOverpass(overpassQuery(place.lat, place.lon, size), signal);
+  if (data) onProgress({ step: "map", state: "cached" });
+  else {
+    try {
+      data = await fetchOverpass(overpassQuery(place.lat, place.lon, size), signal, (p) => onProgress({ step: "map", ...p }));
+    } catch (e) {
+      if (!signal?.aborted) onProgress({ step: "map", state: "failed" });
+      throw e;
+    }
+    onProgress({ step: "map", state: "done" });
     await cachePut(key, data).catch(() => undefined);
   }
   // Water and railways come in a second request of their own, kept under another key: a
   // river's outline can be large, and a slow or refused answer should cost the water, not
   // the map. An area saved before this existed simply fetches it the next time it loads.
-  const [terrain, relief] = await Promise.all([loadTerrain(place, size, signal), loadRelief(place, size, signal)]);
-  // The relief goes in before the import: its cliffs decide which doors can be reached.
-  return cityFromOverpass(terrain ? { elements: [...data.elements, ...terrain.elements] } : data, {
-    lat: place.lat,
-    lon: place.lon,
-    size,
-    label: place.label,
-    ...(relief ? { terrain: relief } : {}),
-  });
+  const [terrain, relief] = await Promise.all([loadTerrain(place, size, signal, onProgress), loadRelief(place, size, signal, onProgress)]);
+  onProgress({ step: "city", state: "active" });
+  // Let the list repaint before the import, which holds the main thread for a moment.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    // The relief goes in before the import: its cliffs decide which doors can be reached.
+    const city = cityFromOverpass(terrain ? { elements: [...data.elements, ...terrain.elements] } : data, {
+      lat: place.lat,
+      lon: place.lon,
+      size,
+      label: place.label,
+      ...(relief ? { terrain: relief } : {}),
+    });
+    onProgress({ step: "city", state: "done" });
+    return city;
+  } catch (e) {
+    onProgress({ step: "city", state: "failed" });
+    throw e;
+  }
 }
 
 /** `?terrain=0` turns the relief off: a flat map, as before it existed. */
@@ -94,36 +133,57 @@ function reliefWanted(): boolean {
  * The ground's relief, a third and optional request: open elevation tiles, kept in the
  * cache like the rest. A refused or slow answer costs the relief, never the map.
  */
-async function loadRelief(place: Place, size: number, signal?: AbortSignal): Promise<TerrainDef | null> {
-  if (!reliefWanted()) return null;
+async function loadRelief(place: Place, size: number, signal: AbortSignal | undefined, onProgress: OnProgress): Promise<TerrainDef | null> {
+  if (!reliefWanted()) {
+    onProgress({ step: "relief", state: "skipped" });
+    return null;
+  }
   const key = `relief:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
   const cached = (await cacheGet(key)) as unknown as { terrain: TerrainDef | null } | null;
-  if (cached) return cached.terrain;
+  if (cached) {
+    onProgress({ step: "relief", state: "cached" });
+    return cached.terrain;
+  }
+  onProgress({ step: "relief", state: "active" });
   try {
-    const terrain = await fetchTerrain(place.lat, place.lon, size, signal);
+    const terrain = await fetchTerrain(place.lat, place.lon, size, signal, (done, total) =>
+      onProgress({ step: "relief", state: "active", tiles: [done, total] }),
+    );
     await cachePut(key, { terrain } as unknown as OverpassResponse).catch(() => undefined);
+    onProgress({ step: "relief", state: "done" });
     return terrain;
   } catch (e) {
     if (signal?.aborted) throw e;
     console.warn("relief unavailable, loading the map flat", e);
+    onProgress({ step: "relief", state: "skipped" });
     return null;
   }
 }
 
-async function loadTerrain(place: Place, size: number, signal?: AbortSignal): Promise<OverpassResponse | null> {
+async function loadTerrain(
+  place: Place,
+  size: number,
+  signal: AbortSignal | undefined,
+  onProgress: OnProgress,
+): Promise<OverpassResponse | null> {
   // The version goes up whenever the request asks for more: "terrain2" added bridge decks,
   // "terrain3" city walls, "terrain4" statues and monuments. An answer cached before that
   // would keep a place without them.
   const key = `terrain4:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
   const cached = await cacheGet(key);
-  if (cached) return cached;
+  if (cached) {
+    onProgress({ step: "water", state: "cached" });
+    return cached;
+  }
   try {
-    const data = await fetchOverpass(overpassTerrainQuery(place.lat, place.lon, size), signal);
+    const data = await fetchOverpass(overpassTerrainQuery(place.lat, place.lon, size), signal, (p) => onProgress({ step: "water", ...p }));
     await cachePut(key, data).catch(() => undefined);
+    onProgress({ step: "water", state: "done" });
     return data;
   } catch (e) {
     if (signal?.aborted) throw e;
     console.warn("water and railways unavailable, loading the map without them", e);
+    onProgress({ step: "water", state: "skipped" });
     return null;
   }
 }
@@ -131,22 +191,35 @@ async function loadTerrain(place: Place, size: number, signal?: AbortSignal): Pr
 /** Pause before the second round: a busy server's 502 usually clears within seconds. */
 const RETRY_PAUSE_MS = 4_000;
 
-async function fetchOverpass(query: string, signal?: AbortSignal): Promise<OverpassResponse> {
+type Attempt = (p: Omit<LoadProgress, "step">) => void;
+
+async function fetchOverpass(query: string, signal?: AbortSignal, report: Attempt = () => {}): Promise<OverpassResponse> {
+  const second = OVERPASS.slice(0, 2);
+  const attempts = OVERPASS.length + second.length;
   try {
-    return await fetchRound(OVERPASS, query, signal);
+    return await fetchRound(OVERPASS, query, signal, (url, k) => report({ state: "active", server: host(url), attempt: k + 1, attempts }));
   } catch (e) {
     if (signal?.aborted) throw e;
     // A second round, after a pause, on the two servers that do answer when they are not
     // overloaded: on 2026-11-20 the main one went from 502 to 200 within minutes.
+    report({ state: "active", retryIn: Math.round(RETRY_PAUSE_MS / 1000) });
     await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
     if (signal?.aborted) throw e;
-    return fetchRound(OVERPASS.slice(0, 2), query, signal);
+    return fetchRound(second, query, signal, (url, k) =>
+      report({ state: "active", server: host(url), attempt: OVERPASS.length + k + 1, attempts }),
+    );
   }
 }
 
-async function fetchRound(servers: string[], query: string, signal?: AbortSignal): Promise<OverpassResponse> {
+async function fetchRound(
+  servers: string[],
+  query: string,
+  signal: AbortSignal | undefined,
+  asking: (url: string, k: number) => void,
+): Promise<OverpassResponse> {
   let last: unknown = null;
-  for (const url of servers) {
+  for (const [k, url] of servers.entries()) {
+    asking(url, k);
     try {
       const timeout = AbortSignal.timeout(SERVER_TIMEOUT_MS);
       const res = await fetch(url, {

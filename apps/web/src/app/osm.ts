@@ -29,8 +29,22 @@ export const PLACE_PRESETS: Place[] = [
 
 export const AREA_SIZES = [400, 480, 600];
 
-/** Public Overpass servers, tried in order. */
-const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
+/**
+ * Public Overpass servers, tried in order. The main one answers 502 when it is busy, and
+ * private.coffee then often did too; its error pages carry no CORS header, so the browser
+ * reports them as blocked. maps.mail.ru answered while both were down, with CORS open.
+ */
+const OVERPASS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+/**
+ * How long one server gets before the next is asked. A server that hangs (kumi.systems and
+ * private.coffee took over a minute without a byte) must not hold the whole queue.
+ */
+const SERVER_TIMEOUT_MS = 45_000;
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 
 /** Finds places by name (OpenStreetMap Nominatim). Call only on an explicit search. */
@@ -114,14 +128,31 @@ async function loadTerrain(place: Place, size: number, signal?: AbortSignal): Pr
   }
 }
 
+/** Pause before the second round: a busy server's 502 usually clears within seconds. */
+const RETRY_PAUSE_MS = 4_000;
+
 async function fetchOverpass(query: string, signal?: AbortSignal): Promise<OverpassResponse> {
+  try {
+    return await fetchRound(OVERPASS, query, signal);
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    // A second round, after a pause, on the two servers that do answer when they are not
+    // overloaded: on 2026-11-20 the main one went from 502 to 200 within minutes.
+    await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
+    if (signal?.aborted) throw e;
+    return fetchRound(OVERPASS.slice(0, 2), query, signal);
+  }
+}
+
+async function fetchRound(servers: string[], query: string, signal?: AbortSignal): Promise<OverpassResponse> {
   let last: unknown = null;
-  for (const url of OVERPASS) {
+  for (const url of servers) {
     try {
+      const timeout = AbortSignal.timeout(SERVER_TIMEOUT_MS);
       const res = await fetch(url, {
         method: "POST",
         body: new URLSearchParams({ data: query }),
-        signal,
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
       if (!res.ok) throw new Error(`overpass ${res.status}`);
       return (await res.json()) as OverpassResponse;

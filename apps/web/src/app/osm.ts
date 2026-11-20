@@ -111,9 +111,9 @@ async function loadRelief(place: Place, size: number, signal?: AbortSignal): Pro
 }
 
 async function loadTerrain(place: Place, size: number, signal?: AbortSignal): Promise<OverpassResponse | null> {
-  // "terrain2": the request now includes bridge decks, and an answer cached before that
-  // would keep a place without them for good.
-  const key = `terrain2:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
+  // The version goes up whenever the request asks for more: "terrain2" added bridge decks,
+  // "terrain3" city walls. An answer cached before that would keep a place without them.
+  const key = `terrain3:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
   try {

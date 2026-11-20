@@ -782,6 +782,11 @@ function buildLandmark(
     return;
   }
 
+  if (b.landmark === "dome") {
+    add("trim", (o) => domedHall(poly, h, b.minarets ?? [], o));
+    return;
+  }
+
   if (b.landmark === "spire") {
     const nave = 0.45;
     add(style, (o) => walls(poly, 0, h * nave, o, du, dv, MODULE, MODULE));
@@ -863,6 +868,97 @@ function steppedPyramid(poly: { x: number; y: number }[], h: number, out: Builde
     face(out, [fl, fr, hr, hl], [ax, 1, ay]);
     face(out, [fl, hl, [head.x - sx, 0, head.y - sy]], [-side.x, 0, -side.y]);
     face(out, [fr, hr, [head.x + sx, 0, head.y + sy]], [side.x, 0, side.y]);
+  }
+}
+
+/**
+ * Turns a profile of (radius, height) pairs round a vertical axis: a drum, a dome, a
+ * minaret. Flat-shaded quads, outward normals from the profile's own slope.
+ */
+function lathe(cx: number, cz: number, profile: [number, number][], segments: number, out: Builder): void {
+  for (let k = 0; k < profile.length - 1; k++) {
+    const [r0, y0] = profile[k];
+    const [r1, y1] = profile[k + 1];
+    if (y1 === y0 && r1 === r0) continue;
+    for (let s = 0; s < segments; s++) {
+      const a0 = (s / segments) * Math.PI * 2;
+      const a1 = ((s + 1) / segments) * Math.PI * 2;
+      const am = (a0 + a1) / 2;
+      // The normal leans up by how much the profile narrows as it rises.
+      const nx = Math.cos(am) * (y1 - y0);
+      const nz = Math.sin(am) * (y1 - y0);
+      const ny = r0 - r1;
+      const l = Math.hypot(nx, ny, nz) || 1;
+      const p = (r: number, a: number, y: number): [number, number, number] => [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r];
+      face(out, [p(r0, a0, y0), p(r0, a1, y0), p(r1, a1, y1), p(r1, a0, y1)], [nx / l, ny / l, nz / l]);
+    }
+  }
+}
+
+/**
+ * A domed hall: a platform the size of the footprint, a hall on it, a drum and an onion
+ * dome with its finial, and the minarets OSM maps on the platform (the Taj Mahal's four).
+ * A mosque without mapped minarets gets the hall and the dome.
+ */
+function domedHall(poly: { x: number; y: number }[], h: number, minarets: { x: number; y: number }[], out: Builder): void {
+  let cx = 0;
+  let cz = 0;
+  for (const p of poly) {
+    cx += p.x / poly.length;
+    cz += p.y / poly.length;
+  }
+  let reach = Infinity;
+  for (const p of poly) reach = Math.min(reach, Math.hypot(p.x - cx, p.y - cz));
+  const plinth = h * 0.1;
+  walls(poly, 0, plinth, out, 0, 0, 3, 3);
+  cap(poly, plinth, out, 3);
+  const hall = scalePoly(poly, 0.62);
+  const hallTop = h * 0.45;
+  walls(hall, plinth, hallTop, out, 0, 0, 3, 3);
+  cornice(hall, hallTop - 0.8, hallTop + 0.4, out);
+  cap(hall, hallTop, out, 3);
+  // The drum and the onion: it swells past the drum before it closes to the finial.
+  const rd = Math.max(1.5, reach * 0.62 * 0.62);
+  lathe(
+    cx,
+    cz,
+    [
+      [rd, hallTop],
+      [rd, h * 0.56],
+      [rd * 1.08, h * 0.6],
+      [rd * 1.16, h * 0.66],
+      [rd * 1.1, h * 0.73],
+      [rd * 0.86, h * 0.8],
+      [rd * 0.52, h * 0.87],
+      [rd * 0.18, h * 0.93],
+      [0.25, h * 0.96],
+      [0.12, h],
+      [0, h],
+    ],
+    24,
+    out,
+  );
+  for (const m of minarets) {
+    const rm = Math.max(1, reach * 0.055);
+    const top = h * 0.6;
+    lathe(
+      m.x,
+      m.y,
+      [
+        [rm * 1.15, 0],
+        [rm * 1.15, plinth],
+        [rm, plinth],
+        [rm * 0.85, top],
+        [rm * 1.25, top + 0.4],
+        [rm * 1.25, top + 2.6],
+        [rm * 0.9, top + 3.2],
+        [rm * 0.5, top + 4.4],
+        [0.1, top + 5.2],
+        [0, top + 5.2],
+      ],
+      12,
+      out,
+    );
   }
 }
 

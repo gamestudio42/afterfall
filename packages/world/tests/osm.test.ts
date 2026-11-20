@@ -322,6 +322,41 @@ describe("landmarks", () => {
     expect(a.height).toBeLessThan(80 * 0.35);
   });
 
+  it("domes a mausoleum, a mosque and a dome roof, and keeps the landmark's own colour", () => {
+    const taj = cityFromOverpass(
+      withWay(9210, { building: "yes", tomb: "mausoleum", "roof:colour": "white" }, ring(-60, 40, -60, 40)),
+      opts,
+    );
+    const t = taj.buildings.find((b) => b.id === "osm9210")!;
+    expect(t.landmark).toBe("dome");
+    expect(t.colour).toBe(0xece8de);
+    // A 100 m square platform: the Taj Mahal's four minarets at its corners.
+    expect(t.minarets).toHaveLength(4);
+    // An untagged dome rises about six tenths of its width.
+    expect(t.height).toBeGreaterThan(50);
+    const mosque = cityFromOverpass(withWay(9211, { building: "mosque" }, ring(-60, 40, -60, 40)), opts);
+    expect(mosque.buildings.find((b) => b.id === "osm9211")?.landmark).toBe("dome");
+    const roof = cityFromOverpass(
+      withWay(9212, { building: "yes", "roof:shape": "onion", "building:colour": "#a0b0c0" }, ring(-60, 0, -60, 0)),
+      opts,
+    );
+    const r = roof.buildings.find((b) => b.id === "osm9212")!;
+    expect(r.landmark).toBe("dome");
+    expect(r.colour).toBe(0xa0b0c0);
+    // Not a mausoleum, and too small a platform for the Taj Mahal's plan: no invented minarets.
+    expect(r.minarets).toBeUndefined();
+  });
+
+  it("keeps a watchtower a plain block and an ordinary building in the palette", () => {
+    const tower = cityFromOverpass(
+      withWay(9213, { building: "tower", man_made: "tower", "tower:type": "defensive", height: "11" }, ring(-60, -40, -60, -40)),
+      opts,
+    );
+    expect(tower.buildings.find((b) => b.id === "osm9213")?.landmark).toBeUndefined();
+    const plain = cityFromOverpass(withWay(9214, { building: "yes", "building:colour": "white" }, ring(-60, -40, -60, -40)), opts);
+    expect(plain.buildings.find((b) => b.id === "osm9214")?.colour).toBeUndefined();
+  });
+
   it("marks a church as a spire and a monument as an obelisk", () => {
     const church = cityFromOverpass(withWay(9202, { building: "church", "building:levels": "3" }, ring(20, 60, 20, 60)), opts);
     expect(church.buildings.some((b) => b.landmark === "spire")).toBe(true);

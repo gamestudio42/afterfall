@@ -14,8 +14,9 @@ import {
   type Rect,
   type Vec2,
 } from "@afterfall/shared";
-import type { BridgeDef, BuildingDef, CityMap, Landmark, ParkDef, RailDef, RoadDef, WaterDef } from "./city";
+import type { BridgeDef, BuildingDef, CityMap, Landmark, ParkDef, RailDef, RoadDef, WallDef, WaterDef } from "./city";
 import type { TerrainDef } from "./terrain";
+import { framePoint, latticeFrame } from "./landmarks";
 import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
 
 /**
@@ -209,6 +210,7 @@ export function overpassTerrainQuery(lat: number, lon: number, size: number): st
   way["waterway"~"^(river|canal)$"](${box});
   way["railway"~"^(rail|light_rail|narrow_gauge)$"](${box});
   way["man_made"="bridge"](${box});
+  way["barrier"="city_wall"](${box});
 );
 out geom;`;
 }
@@ -254,6 +256,13 @@ const TRAIL_WIDTH: Record<string, number> = { footway: 3, path: 2.5, steps: 3, b
  * player can see that before choosing it.
  */
 export const MIN_BUILDINGS = 5;
+
+/**
+ * Behind a defensive wall two buildings will do: the wall is the fortification the map is
+ * about, and its towers are the base. The Great Wall at Badaling has two watchtowers and
+ * nothing else in 480 m.
+ */
+export const MIN_BUILDINGS_WALLED = 2;
 
 /** Metres of street under which an area's footpaths are walked as streets too. */
 export const TRAIL_THRESHOLD = 1500;
@@ -399,6 +408,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   const rawWaters: WaterDef[] = [];
   const rawRails: RailDef[] = [];
   const rawBridges: BridgeDef[] = [];
+  const rawWalls: WallDef[] = [];
   // Rings get clipped to the play area; a hole is clipped on its own, and only a piece
   // that still has area is kept.
   const addWater = (id: string, polygon: Vec2[], holes: Vec2[][] = []) => {
@@ -433,6 +443,16 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     const pts = el.geometry.filter((g): g is { lat: number; lon: number } => !!g).map(project);
     if (pts.length < 2) continue;
     const closed = pts.length > 3 && Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 0.01;
+    // A defensive wall, mapped as a line (or a ring round a town). The Great Wall is also
+    // tagged as steps along its top; it is read as a wall, not as a path to walk.
+    if (tags.barrier === "city_wall" || tags.historic === "citywalls") {
+      if (rawWalls.some((w) => w.id.startsWith(`cw${el.id}_`))) continue;
+      const height = Math.max(3, Math.min(20, Number.parseFloat(tags.height ?? "") || 8));
+      const width = Math.max(1.5, Math.min(10, Number.parseFloat(tags.width ?? "") || 3));
+      for (const [k, piece] of clipPolylineToRect(pts, bounds).entries())
+        rawWalls.push({ id: `cw${el.id}_${k}`, path: piece, height, width });
+      continue;
+    }
     if (tags.building && closed) {
       if (tags.building === "no" || tags.building === "roof" || tags.location === "underground") continue;
       const poly = simplifyPolygon(pts.slice(0, -1));
@@ -479,15 +499,18 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   // the larger one's roof and out over the street — the slabs the fourth playtest report
   // showed. Keep the bigger of a pair and drop the one that sits inside it.
   const deduped: RawBuilding[] = [];
+  const minaretsOf = new Map<RawBuilding, Vec2[]>();
   for (const rb of rawBuildings) {
     const box = polygonBounds(rb.poly);
-    const swallowed = rawBuildings.some((other) => {
+    const swallowed = rawBuildings.find((other) => {
       if (other === rb || other.area <= rb.area) return false;
       const ob = polygonBounds(other.poly);
       if (box.x + box.w <= ob.x || ob.x + ob.w <= box.x || box.y + box.h <= ob.y || ob.y + ob.h <= box.y) return false;
       return insideFraction(rb.poly, other.poly) > 0.6;
     });
     if (!swallowed) deduped.push(rb);
+    // A minaret on a mausoleum's platform is part of it: drawn with it, not as a building.
+    else if (rb.tags["tower:type"] === "minaret") minaretsOf.set(swallowed, [...(minaretsOf.get(swallowed) ?? []), rb.centroid]);
   }
   // And a footprint that lies on a street is not a building the player can use: it would
   // swallow the road the survivors walk on. OSM has a few of these (a monument over a
@@ -532,7 +555,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   ensureEssentials(typed, size);
   const grid = new NavGrid(size, size, cellSize);
   typed.forEach((t, i) => grid.stampPolygon(t.rb.poly, i));
-  stampTerrain(grid, { roads, waters: rawWaters, rails: rawRails, bridges: rawBridges, terrain: opts.terrain });
+  stampTerrain(grid, { roads, waters: rawWaters, rails: rawRails, bridges: rawBridges, walls: rawWalls, terrain: opts.terrain });
 
   const kept: { rb: RawBuilding; type: BuildingType; entrance: Vec2; facing: Vec2 }[] = [];
   for (const t of typed) {
@@ -563,11 +586,13 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       floors,
       height: floors * 3.2 + 0.6,
       landmark: landmarkOf(k.rb.tags),
+      ...landmarkLook(k.rb.tags, minaretsOf.get(k.rb) ?? cornerMinarets(k.rb)),
       entrance: k.entrance,
       facing: k.facing,
     });
   }
-  if (buildings.length < MIN_BUILDINGS) throw new OsmImportError("tooFewBuildings", `Only ${buildings.length} usable buildings`);
+  const fewest = rawWalls.length ? MIN_BUILDINGS_WALLED : MIN_BUILDINGS;
+  if (buildings.length < fewest) throw new OsmImportError("tooFewBuildings", `Only ${buildings.length} usable buildings`);
 
   const parks: ParkDef[] = rawParks.map((p, i) => {
     const rng = new Rng(deriveSeed(p.id >>> 0, "trees"));
@@ -601,6 +626,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     ...(rawWaters.length ? { waters: rawWaters } : {}),
     ...(rawRails.length ? { rails: rawRails } : {}),
     ...(rawBridges.length ? { bridges: rawBridges } : {}),
+    ...(rawWalls.length ? { walls: rawWalls } : {}),
     ...(opts.terrain ? { terrain: opts.terrain } : {}),
     spawnPoints,
     source: { kind: "osm", label: opts.label, lat: opts.lat, lon: opts.lon, size, attribution: OSM_ATTRIBUTION },
@@ -681,6 +707,55 @@ function ensureEssentials(typed: { rb: RawBuilding; type: BuildingType }[], size
  * The Eiffel Tower is one way tagged `building=tower`, `height=330`: extruded like a
  * building it becomes the hall between its four legs, six floors tall.
  */
+/** Named colours OSM uses in `building:colour` and `roof:colour`, beside #rrggbb. */
+const NAMED_COLOUR: Record<string, number> = {
+  white: 0xece8de,
+  sand: 0xcdb48a,
+  beige: 0xd2c3a0,
+  grey: 0x8f8f8a,
+  gray: 0x8f8f8a,
+  brown: 0x7a5a40,
+  red: 0x9a4a38,
+  yellow: 0xc9a94e,
+  black: 0x2e2c2a,
+};
+
+export function parseColour(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const v = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(v)) return Number.parseInt(v.slice(1), 16);
+  if (/^#[0-9a-f]{3}$/.test(v))
+    return Number.parseInt(
+      v.slice(1).replace(/./g, (c) => c + c),
+      16,
+    );
+  return NAMED_COLOUR[v];
+}
+
+/**
+ * A great mausoleum's minarets when OSM does not map them: four, at the corners of a
+ * platform at least 60 m across and nearly square — the Taj Mahal's, whose own towers are
+ * mapped only as parts the request does not ask for.
+ */
+function cornerMinarets(rb: RawBuilding): Vec2[] | undefined {
+  if (rb.tags.tomb !== "mausoleum") return undefined;
+  const f = latticeFrame(rb.poly);
+  if (Math.min(f.a, f.b) < 30 || Math.max(f.a, f.b) / Math.min(f.a, f.b) > 1.25) return undefined;
+  return [
+    [1, 1],
+    [-1, 1],
+    [-1, -1],
+    [1, -1],
+  ].map(([s, t]) => framePoint(f, s * 0.9, t * 0.9));
+}
+
+/** A landmark's own colour and its minarets; nothing for an ordinary building. */
+function landmarkLook(tags: Record<string, string>, minarets: Vec2[] | undefined): { colour?: number; minarets?: Vec2[] } {
+  if (!landmarkOf(tags)) return {};
+  const colour = parseColour(tags["building:colour"]) ?? parseColour(tags["roof:colour"]);
+  return { ...(colour !== undefined ? { colour } : {}), ...(minarets?.length ? { minarets } : {}) };
+}
+
 function landmarkOf(tags: Record<string, string>): Landmark | undefined {
   // Iron you can see through, on four piers: drawn as a lattice, and the ground between
   // the piers stays open.
@@ -702,8 +777,13 @@ function landmarkOf(tags: Record<string, string>): Landmark | undefined {
     return "pyramid";
   // OSM's building=pyramid is mostly Mesoamerican: terraces and a temple on the top.
   if (tags.building === "pyramid") return "stepped";
+  // A dome: tagged as one, or a mausoleum (the Taj Mahal is tomb=mausoleum and nothing
+  // more), or a mosque, which had been drawn with a church's spire.
+  if (/^(dome|onion)$/.test(tags["roof:shape"] ?? "") || tags.tomb === "mausoleum" || tags.building === "mosque") return "dome";
+  // A watchtower on a wall is a block of masonry, not a tapering tower.
+  if (tags["tower:type"] === "defensive") return undefined;
   if (tags.man_made === "tower" || tags.building === "tower" || tags["tower:type"]) return "tower";
-  if (/^(cathedral|church|chapel|basilica|mosque|synagogue|temple|abbey)$/.test(tags.building ?? "")) return "spire";
+  if (/^(cathedral|church|chapel|basilica|synagogue|temple|abbey)$/.test(tags.building ?? "")) return "spire";
   if (tags.historic === "monument" || tags.historic === "memorial" || tags.man_made === "obelisk") return "obelisk";
   return undefined;
 }
@@ -714,6 +794,12 @@ function floorsOf(tags: Record<string, string>, type: BuildingType, rng: Rng, po
   // A landmark is a silhouette, not storeys: its height wins over a level count (the Great
   // Pyramid is tagged forty levels, which the twenty-floor cap turned into a 65 m block).
   if (landmark && Number.isFinite(height) && height > 2) return Math.max(1, Math.min(125, Math.round(height / 3.2)));
+  if (landmark === "dome") {
+    // An untagged domed hall rises about six tenths of its width: the Taj Mahal's 73 m over a
+    // 95 m platform, a mosque's dome over its prayer hall.
+    const r = polygonBounds(poly);
+    return Math.max(4, Math.min(30, Math.round((Math.min(r.w, r.h) * 0.6) / 3.2)));
+  }
   if (landmark === "amphitheatre") {
     // Untagged amphitheatres rise about a quarter of their width: the Colosseum 48 m over
     // 156, Verona's 30 over 109.

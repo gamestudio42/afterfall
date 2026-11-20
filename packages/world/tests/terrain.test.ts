@@ -248,3 +248,43 @@ describe("a bridge deck mapped as an area", () => {
     expect(length).toBeLessThan(110);
   });
 });
+
+describe("a city wall", () => {
+  const { lat, lon } = FIXTURE_CENTER;
+  const kLon = 111_320 * Math.cos((lat * Math.PI) / 180);
+  const geo = (x: number, y: number) => ({ lat: lat - y / 111_132, lon: lon + x / kLon });
+  // A wall north to south across the whole map, x = 100 (local), tagged as the Great Wall is:
+  // a city wall that is also steps along its top.
+  const line = Array.from({ length: 11 }, (_, k) => geo(100, -240 + k * 48));
+  const tags = { barrier: "city_wall", historic: "citywalls", highway: "steps", height: "6", width: "5" };
+  const walled = cityFromOverpass(
+    { elements: [...syntheticOverpass().elements, { type: "way" as const, id: 9301, tags, geometry: line }] },
+    opts,
+  );
+  const g = NavGrid.fromCity(walled);
+
+  it("asks for city walls with the water", () => {
+    expect(overpassTerrainQuery(FIXTURE_CENTER.lat, FIXTURE_CENTER.lon, 480)).toContain('"barrier"="city_wall"');
+  });
+
+  it("is read as a wall with its height and width, not as a path to walk", () => {
+    expect(walled.walls).toHaveLength(1);
+    expect(walled.walls![0]).toMatchObject({ height: 6, width: 5 });
+    expect(walled.roads.some((r) => r.id.startsWith("r9301"))).toBe(false);
+  });
+
+  it("blocks the grid along its line, but where a street goes through: a gate", () => {
+    let rampart = 0;
+    let gates = 0;
+    for (let y = 0; y < g.rows; y++) {
+      const i = g.index(g.cellOf(340, (y + 0.5) * g.cell) % g.cols, y);
+      if (g.kind[i] === CellKind.Rampart) rampart++;
+      else if (g.kind[i] === CellKind.Free || g.kind[i] === CellKind.Rail) gates++;
+    }
+    // Most of the line is wall; the fixture's buildings beside it and its streets open it.
+    expect(rampart).toBeGreaterThan(30);
+    // The fixture's streets cross the line: the wall opens there.
+    expect(gates).toBeGreaterThan(0);
+    expect(g.findPath(300, 240, 380, 240, "survivor")).not.toBeNull();
+  });
+});

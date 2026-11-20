@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { heightAt, type CityMap } from "@afterfall/world";
 import { pointInPolygon } from "@afterfall/shared";
 import { drape, groundGrid } from "./terrainMesh";
+import { buildMonuments } from "./monuments";
 import { buildReclamation, reclaimSurface, reclaimUniforms, reclamationTexture, type ReclamationField } from "./reclamation";
 import { bridgeGeometry, quayGeometry, shoreTexture, waterLevel, waterMaterial, WATER_DEPTH } from "./water";
 
@@ -514,13 +515,15 @@ export function buildCityGround(city: CityMap): {
     mesh.name = "city-walls";
     group.add(mesh);
   }
+  const monuments = buildMonuments(city);
+  if (monuments) group.add(monuments);
   // Everything above lies flat at its own few centimetres; on a hillside it is laid over the
   // relief in one pass, the base ground (already a grid) and the instanced trees excepted.
   if (city.terrain)
     for (const child of group.children) {
       if (!(child instanceof THREE.Mesh) || child instanceof THREE.InstancedMesh) continue;
       // Already at their heights: the base grid, the level water and the quays down to it.
-      if (child.name === "base-ground" || child.name === "water" || child.name === "quays" || child.name === "city-walls") continue;
+      if (["base-ground", "water", "quays", "city-walls", "monuments"].includes(child.name)) continue;
       child.geometry = drape(child.geometry, city.terrain);
     }
   return { group, materials, imported, reclamation: field, reclamationTexture: fieldTex };

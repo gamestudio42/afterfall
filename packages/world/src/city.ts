@@ -105,6 +105,21 @@ export interface WallDef {
   width: number;
 }
 
+/**
+ * A statue or a monument OSM maps as a point (Christ the Redeemer is one): drawn on its
+ * pedestal, and the pedestal is solid ground nobody walks through.
+ */
+export interface MonumentDef {
+  id: string;
+  x: number;
+  y: number;
+  /** A figure on a pedestal, the same with its arms open (a Christ), or a column. */
+  kind: "statue" | "open-arms" | "column";
+  /** The figure's (or the column's) height, and the pedestal's, in metres. */
+  height: number;
+  pedestal: number;
+}
+
 /** A railway line: walkable, but a track is not a place to build. */
 export interface RailDef {
   id: string;
@@ -144,6 +159,8 @@ export interface CityMap {
   bridges?: BridgeDef[];
   /** Defensive walls, on imported maps that have any. */
   walls?: WallDef[];
+  /** Statues and monuments mapped as points. */
+  monuments?: MonumentDef[];
   /** The ground's relief, on imported maps that have any (terrain.ts). */
   terrain?: TerrainDef;
   /** Road ends at the map border, where hordes enter. */

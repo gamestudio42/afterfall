@@ -3,7 +3,8 @@ import * as THREE from "three";
 import { heightAt, type BuildingDef, type CityMap, type TerrainDef } from "@afterfall/world";
 import { cityWallGeometry } from "../src/cityMeshes";
 import { buildMonuments } from "../src/monuments";
-import { drape, groundGrid, rayGround, terrainTop } from "../src/terrainMesh";
+import { drape, groundGrid, groundNormal, rayGround, terrainTop } from "../src/terrainMesh";
+import { orient } from "../src/props";
 import { BuildingBatch, buildingSeat } from "../src/buildingBatch";
 
 /** A 40 m slope over a 100 m map: the ground rises 0.4 m per metre of x. */
@@ -215,5 +216,25 @@ describe("monuments", () => {
 
   it("is nothing on a map without them", () => {
     expect(buildMonuments({} as CityMap)).toBeNull();
+  });
+});
+
+describe("a car on a slope", () => {
+  it("leans with the ground under it, and stands level on a flat map", () => {
+    const flat = groundNormal(undefined, 5, 5, 2);
+    expect(flat[1]).toBe(1);
+    expect(Math.abs(flat[0]) + Math.abs(flat[2])).toBe(0);
+    // 0.4 m up per metre of x: the normal leans back against the slope, 21.8 degrees.
+    const n = groundNormal(slope(), 50, 50, 2);
+    expect(Math.acos(n[1]) * (180 / Math.PI)).toBeCloseTo(21.8, 1);
+    expect(n[0]).toBeLessThan(0);
+    // A car turned along the street and leant onto it: its up axis is the ground's normal.
+    const q = orient({ x: 0, z: 0, rot: 0.7, scale: 1, up: n }, new THREE.Quaternion());
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    expect(up.x).toBeCloseTo(n[0], 6);
+    expect(up.y).toBeCloseTo(n[1], 6);
+    // Without a normal it only turns.
+    const level = new THREE.Vector3(0, 1, 0).applyQuaternion(orient({ x: 0, z: 0, rot: 0.7, scale: 1 }, new THREE.Quaternion()));
+    expect(level.y).toBeCloseTo(1, 6);
   });
 });

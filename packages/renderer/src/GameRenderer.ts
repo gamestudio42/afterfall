@@ -8,12 +8,21 @@ import { wallFrame } from "./structureLayout";
 import { BuildingBatch, buildingSeat, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
 import { heightAt } from "@afterfall/world";
-import { drape, rayGround, terrainTop } from "./terrainMesh";
+import { drape, groundNormal, rayGround, terrainTop } from "./terrainMesh";
 import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
 import { WATER_TIME } from "./water";
 import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
-import { loadProps, placeProps, placeRoofProps, type PropKind, type PropPlacement, type PropScene, type RoofKind } from "./props";
+import {
+  LIES_ON_GROUND,
+  loadProps,
+  placeProps,
+  placeRoofProps,
+  type PropKind,
+  type PropPlacement,
+  type PropScene,
+  type RoofKind,
+} from "./props";
 import { Vegetation } from "./vegetation";
 import { Grass } from "./grass";
 import { placeLitter, type LitterKind } from "./litter";
@@ -538,8 +547,20 @@ export class GameRenderer {
       ? placeLitter(sim.city, this.reclamation, [...street.values()].flat(), isSoftwareRenderer(this.gpuName) ? 0.35 : 1)
       : new Map<LitterKind, PropPlacement[]>();
     // On a hillside, what stands on the street stands on the ground under it.
-    const onGround = <K>(m: Map<K, PropPlacement[]>) =>
-      sim.city.terrain ? new Map([...m].map(([k, list]) => [k, list.map((p) => ({ ...p, y: (p.y ?? 0) + this.ground(p.x, p.z) }))])) : m;
+    // What lies on it (a car, a skip, rubble) leans with the slope.
+    const onGround = <K extends string>(m: Map<K, PropPlacement[]>) =>
+      sim.city.terrain
+        ? new Map(
+            [...m].map(([k, list]) => [
+              k,
+              list.map((p) => ({
+                ...p,
+                y: (p.y ?? 0) + this.ground(p.x, p.z),
+                ...(LIES_ON_GROUND.has(k) ? { up: this.groundNormal(p.x, p.z, 2 * p.scale) } : {}),
+              })),
+            ]),
+          )
+        : m;
     const placements = new Map<PropKind | RoofKind | LitterKind, PropPlacement[]>([
       ...onGround(street),
       ...placeRoofProps(sim.city.buildings, sim.city.seed ?? 1, (b) => this.baseOf(b)),
@@ -1108,6 +1129,11 @@ export class GameRenderer {
   /** Height of the ground at a map point: 0 on a flat map. */
   ground(x: number, z: number): number {
     return heightAt(this.sim?.city.terrain, x, z);
+  }
+
+  /** The ground's normal at a point, from its heights `reach` metres either side. */
+  groundNormal(x: number, z: number, reach: number): [number, number, number] {
+    return groundNormal(this.sim?.city.terrain, x, z, reach);
   }
 
   /** Highest ground on the map, where a pick starts marching down. */

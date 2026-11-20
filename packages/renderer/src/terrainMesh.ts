@@ -157,3 +157,11 @@ export function terrainTop(terrain: TerrainDef | undefined): number {
   for (const h of terrain.heights) max = Math.max(max, h);
   return (max / 10) * terrain.scale;
 }
+
+/** The ground's normal at a point, from its heights `reach` metres either side. Up on a flat map. */
+export function groundNormal(terrain: TerrainDef | undefined, x: number, z: number, reach: number): [number, number, number] {
+  const dx = heightAt(terrain, x + reach, z) - heightAt(terrain, x - reach, z);
+  const dz = heightAt(terrain, x, z + reach) - heightAt(terrain, x, z - reach);
+  const l = Math.hypot(dx, 2 * reach, dz);
+  return [-dx / l, (2 * reach) / l, -dz / l];
+}

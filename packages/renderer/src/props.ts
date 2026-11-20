@@ -22,6 +22,37 @@ export interface PropPlacement {
   rot: number;
   scale: number;
   doorOpen?: boolean;
+  /**
+   * The ground's normal under the piece, on a hillside: a car or a skip lies on the slope
+   * instead of level with one end in the air. Absent, the piece stands upright.
+   */
+  up?: [number, number, number];
+}
+
+/** What lies on the ground and so leans with it; a lamp, a sign or a fence stands upright. */
+export const LIES_ON_GROUND = new Set<string>([
+  "car",
+  "ambulance",
+  "container",
+  "dumpster",
+  "barrier",
+  "crates",
+  "litter_rubble",
+  "litter_bags",
+  "litter_tires",
+  "litter_planks",
+  "litter_mattress",
+]);
+
+const UP = new THREE.Vector3(0, 1, 0);
+const tilt = new THREE.Quaternion();
+const normal = new THREE.Vector3();
+
+/** The rotation of a piece: turned by its yaw, then leant onto the ground under it. */
+export function orient(p: PropPlacement, out: THREE.Quaternion): THREE.Quaternion {
+  out.setFromAxisAngle(UP, p.rot);
+  if (p.up) out.premultiply(tilt.setFromUnitVectors(UP, normal.set(p.up[0], p.up[1], p.up[2]).normalize()));
+  return out;
 }
 
 const MAX_PER_KIND = 70;
@@ -361,7 +392,7 @@ export async function loadProps(
         inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         list.forEach((p, i) => {
           pos.set(p.x, p.y ?? 0, p.z);
-          quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.rot);
+          orient(p, quat);
           scale.setScalar(p.scale);
           matrix.compose(pos, quat, scale);
           inst.setMatrixAt(i, matrix);
@@ -425,7 +456,7 @@ export async function loadProps(
       const localMatrix = new THREE.Matrix4().makeRotationY(yaw).setPosition(local[0], local[1], local[2]);
       openCars.forEach((p, i) => {
         matrix
-          .makeRotationY(p.rot)
+          .makeRotationFromQuaternion(orient(p, quat))
           .setPosition(p.x, p.y ?? 0, p.z)
           .multiply(localMatrix);
         part.setMatrixAt(i, matrix);

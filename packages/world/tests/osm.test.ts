@@ -238,6 +238,38 @@ describe("landmarks", () => {
     expect(blocked / all).toBeLessThan(0.25);
   });
 
+  it("draws a pyramid tomb to its apex, at its real height", () => {
+    // The Great Pyramid: tomb=pyramid, height 138.8, and also building:levels=40, which the
+    // twenty-floor cap used to turn into a 65 m block of flats.
+    const tags = { building: "yes", historic: "tomb", tomb: "pyramid", height: "138.8", "building:levels": "40" };
+    const city = cityFromOverpass(withWay(9205, tags, ring(-60, 40, -60, 40)), opts);
+    const p = city.buildings.find((b) => b.id === "osm9205")!;
+    expect(p.landmark).toBe("pyramid");
+    expect(p.height).toBeGreaterThan(130);
+  });
+
+  it("tells a pyramid roof that is the whole building from a house's pyramid roof", () => {
+    const whole = { building: "yes", "roof:shape": "pyramidal", height: "30", "roof:height": "30" };
+    const house = { building: "house", "roof:shape": "pyramidal", height: "9", "roof:height": "3" };
+    expect(cityFromOverpass(withWay(9206, whole, ring(-60, 40, -60, 40)), opts).buildings.find((b) => b.id === "osm9206")!.landmark).toBe(
+      "pyramid",
+    );
+    expect(
+      cityFromOverpass(withWay(9207, house, ring(-60, 40, -60, 40)), opts).buildings.find((b) => b.id === "osm9207")!.landmark,
+    ).toBeUndefined();
+  });
+
+  it("steps a building=pyramid, and opens an amphitheatre to its height", () => {
+    const stepped = cityFromOverpass(withWay(9208, { building: "pyramid", height: "30" }, ring(-60, 40, -60, 40)), opts);
+    expect(stepped.buildings.find((b) => b.id === "osm9208")!.landmark).toBe("stepped");
+    // An amphitheatre without a height rises about a quarter of its width.
+    const arena = cityFromOverpass(withWay(9209, { building: "amphitheatre" }, ring(-60, 40, -60, 20)), opts);
+    const a = arena.buildings.find((b) => b.id === "osm9209")!;
+    expect(a.landmark).toBe("amphitheatre");
+    expect(a.height).toBeGreaterThan(80 * 0.2);
+    expect(a.height).toBeLessThan(80 * 0.35);
+  });
+
   it("marks a church as a spire and a monument as an obelisk", () => {
     const church = cityFromOverpass(withWay(9202, { building: "church", "building:levels": "3" }, ring(20, 60, 20, 60)), opts);
     expect(church.buildings.some((b) => b.landmark === "spire")).toBe(true);

@@ -168,7 +168,7 @@ describe("landmarks", () => {
     return bands;
   }
 
-  function tower(landmark: "tower" | "lattice" | "spire" | "obelisk"): BuildingBatch {
+  function tower(landmark: NonNullable<BuildingDef["landmark"]>, height = 330): BuildingBatch {
     const b: BuildingDef = {
       id: "t1",
       index: 0,
@@ -182,8 +182,8 @@ describe("landmarks", () => {
         { x: 0, y: 100 },
       ],
       area: 10_000,
-      floors: 103,
-      height: 330,
+      floors: Math.round(height / 3.2),
+      height,
       landmark,
       entrance: { x: 50, y: -1 },
       facing: { x: 0, y: -1 },
@@ -246,6 +246,35 @@ describe("landmarks", () => {
       return cells.size;
     };
     expect(covered(tower("lattice"))).toBeLessThan(covered(tower("tower")) * 0.6);
+  });
+
+  it("a pyramid narrows to an apex", () => {
+    const bands = profile(tower("pyramid", 120), 120, 50, 50).filter((w) => w > 0);
+    expect(bands[bands.length - 1]).toBeLessThan(bands[0] * 0.15);
+  });
+
+  it("a stepped pyramid has terraces, a platform and a temple on it", () => {
+    const batch = tower("stepped", 30);
+    const pos = batch.mesh.geometry.getAttribute("position");
+    const nrm = batch.mesh.geometry.getAttribute("normal");
+    // Flat, upward faces at distinct heights: one per terrace, the platform and the roof.
+    const levels = new Set<number>();
+    for (let v = 0; v < pos.count; v++) if (nrm.getY(v) > 0.99) levels.add(Math.round(pos.getY(v) * 10));
+    expect(levels.size).toBeGreaterThanOrEqual(7);
+    // The temple: the top 15% of the height stands on a narrow part of the base.
+    const bands = profile(batch, 30, 50, 50);
+    expect(bands[9]).toBeLessThan(bands[0] * 0.3);
+  });
+
+  it("an amphitheatre is open over its arena", () => {
+    const batch = tower("amphitheatre", 40);
+    const pos = batch.mesh.geometry.getAttribute("position");
+    for (let v = 0; v < pos.count; v++) {
+      // Nothing above the arena floor's height in the middle of the bowl.
+      if (Math.hypot(pos.getX(v) - 50, pos.getZ(v) - 50) < 20) expect(pos.getY(v)).toBeLessThan(40 * 0.15);
+    }
+    // And the outer wall stands to the full height.
+    expect(Math.max(...Array.from({ length: pos.count }, (_, v) => pos.getY(v)))).toBeCloseTo(40, 3);
   });
 
   it("a spire is slender at the top, an obelisk narrows once", () => {

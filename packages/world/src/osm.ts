@@ -508,7 +508,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   for (const k of kept) {
     if (!reach[grid.cellOf(k.entrance.x, k.entrance.y)]) continue;
     const rng = new Rng(deriveSeed(k.rb.osmId >>> 0, "floors"));
-    const floors = floorsOf(k.rb.tags, k.type, rng);
+    const floors = floorsOf(k.rb.tags, k.type, rng, k.rb.poly);
     const index = buildings.length;
     buildings.push({
       id: `osm${k.rb.osmId}`,
@@ -643,22 +643,44 @@ function landmarkOf(tags: Record<string, string>): Landmark | undefined {
   // Iron you can see through, on four piers: drawn as a lattice, and the ground between
   // the piers stays open.
   if (tags["tower:construction"] === "lattice" && (tags.man_made === "tower" || tags.building === "tower")) return "lattice";
+  if (tags.building === "amphitheatre" || tags.archaeological_site === "amphitheatre") return "amphitheatre";
+  // A pyramid tomb (Giza), or a pyramidal roof that is the whole of the building's height.
+  // A house with a pyramidal roof has a roof a few metres tall over its walls.
+  const roofHeight = parseFloat(tags["roof:height"] ?? "");
+  const height = parseFloat(tags.height ?? "");
+  if (
+    tags.tomb === "pyramid" ||
+    (tags["roof:shape"] === "pyramidal" &&
+      roofHeight > 0 &&
+      height > 0 &&
+      roofHeight >= height * 0.8 &&
+      !tags.man_made &&
+      tags.building !== "tower")
+  )
+    return "pyramid";
+  // OSM's building=pyramid is mostly Mesoamerican: terraces and a temple on the top.
+  if (tags.building === "pyramid") return "stepped";
   if (tags.man_made === "tower" || tags.building === "tower" || tags["tower:type"]) return "tower";
   if (/^(cathedral|church|chapel|basilica|mosque|synagogue|temple|abbey)$/.test(tags.building ?? "")) return "spire";
   if (tags.historic === "monument" || tags.historic === "memorial" || tags.man_made === "obelisk") return "obelisk";
   return undefined;
 }
 
-function floorsOf(tags: Record<string, string>, type: BuildingType, rng: Rng): number {
+function floorsOf(tags: Record<string, string>, type: BuildingType, rng: Rng, poly: Vec2[] = []): number {
+  const landmark = landmarkOf(tags);
+  const height = parseFloat(tags.height ?? "");
+  // A landmark is a silhouette, not storeys: its height wins over a level count (the Great
+  // Pyramid is tagged forty levels, which the twenty-floor cap turned into a 65 m block).
+  if (landmark && Number.isFinite(height) && height > 2) return Math.max(1, Math.min(125, Math.round(height / 3.2)));
+  if (landmark === "amphitheatre") {
+    // Untagged amphitheatres rise about a quarter of their width: the Colosseum 48 m over
+    // 156, Verona's 30 over 109.
+    const r = polygonBounds(poly);
+    return Math.max(3, Math.min(16, Math.round((Math.min(r.w, r.h) * 0.27) / 3.2)));
+  }
   const levels = Number(tags["building:levels"]);
   if (Number.isFinite(levels) && levels >= 1) return Math.min(20, Math.round(levels));
-  const height = parseFloat(tags.height ?? "");
-  if (Number.isFinite(height) && height > 2) {
-    // A landmark keeps its real height: the twenty-floor cap is there so a downtown does
-    // not wall off the camera, and a tower is the one thing that should tower.
-    const cap = landmarkOf(tags) ? 125 : 20;
-    return Math.max(1, Math.min(cap, Math.round(height / 3.2)));
-  }
+  if (Number.isFinite(height) && height > 2) return Math.max(1, Math.min(20, Math.round(height / 3.2)));
   const [lo, hi] = BUILDING_TYPES[type].floors;
   return rng.int(lo, hi);
 }

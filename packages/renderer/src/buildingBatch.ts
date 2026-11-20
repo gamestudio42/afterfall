@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { BuildingDef } from "@afterfall/world";
+import { latticeFrame, type BuildingDef } from "@afterfall/world";
 import { latticeTower } from "./lattice";
 
 /** Outline of a building: its real footprint, or its rectangle. */
@@ -730,6 +730,23 @@ function buildLandmark(
     return;
   }
 
+  if (b.landmark === "pyramid") {
+    // Four faces to an apex; a sliver of a cap so the point is closed.
+    add("trim", (o) => frustumWalls(poly, ring(0.015), 0, h, o, du, dv, MODULE, MODULE));
+    add("trim", (o) => cap(ring(0.015), h, o, MODULE));
+    return;
+  }
+
+  if (b.landmark === "stepped") {
+    add("trim", (o) => steppedPyramid(poly, h, o));
+    return;
+  }
+
+  if (b.landmark === "amphitheatre") {
+    add("trim", (o) => amphitheatre(poly, h, o));
+    return;
+  }
+
   if (b.landmark === "spire") {
     const nave = 0.45;
     add(style, (o) => walls(poly, 0, h * nave, o, du, dv, MODULE, MODULE));
@@ -741,6 +758,112 @@ function buildLandmark(
   // Obelisk: a shaft that starts in the middle of itself and ends in a point.
   add(style, (o) => walls(poly, 0, h * 0.3, o, du, dv, MODULE, MODULE));
   wall(style, poly, ring(0.06), h * 0.3, h);
+}
+
+/** A flat band between two outlines of the same polygon (`ring` under another name). */
+function band(a: { x: number; y: number }[], b: { x: number; y: number }[], y: number, up: 1 | -1, out: Builder): void {
+  ring(a, b, y, up, out);
+}
+
+/** One flat-shaded quad or triangle, wound to face along `hint`. */
+function face(out: Builder, pts: [number, number, number][], hint: [number, number, number]): void {
+  const [a, b, c] = pts;
+  const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+  const l = Math.hypot(n[0], n[1], n[2]) || 1;
+  n = n.map((v) => v / l);
+  let order = pts.length === 4 ? [0, 1, 2, 0, 2, 3] : [0, 1, 2];
+  if (n[0] * hint[0] + n[1] * hint[1] + n[2] * hint[2] < 0) {
+    n = n.map((v) => -v);
+    order = pts.length === 4 ? [0, 2, 1, 0, 3, 2] : [0, 2, 1];
+  }
+  for (const k of order) {
+    const p = pts[k];
+    out.pos.push(p[0], p[1], p[2]);
+    out.nrm.push(n[0], n[1], n[2]);
+    out.uv.push((p[0] + p[2]) / 3, p[1] / 3);
+  }
+}
+
+/**
+ * A Mesoamerican pyramid: terraces stepping in to a platform, a stair up the middle of
+ * each face, and a temple on the top (El Castillo at Chichén Itzá has nine terraces under
+ * a temple a fifth of its height).
+ */
+function steppedPyramid(poly: { x: number; y: number }[], h: number, out: Builder): void {
+  const TOP = 0.36;
+  const platform = h * 0.8;
+  const n = Math.max(4, Math.min(12, Math.round(platform / 3.3)));
+  const at = (k: number) => 1 - ((1 - TOP) * k) / n;
+  for (let k = 0; k < n; k++) {
+    const y0 = (platform * k) / n;
+    const y1 = (platform * (k + 1)) / n;
+    walls(scalePoly(poly, at(k)), y0, y1, out, 0, 0, 3, 3);
+    band(scalePoly(poly, at(k)), scalePoly(poly, at(k + 1)), y1, 1, out);
+  }
+  cap(scalePoly(poly, TOP), platform, out, 3);
+  const temple = scalePoly(poly, TOP * 0.58);
+  walls(temple, platform, h, out, 0, 0, 3, 3);
+  cap(temple, h, out, 3);
+  // The stairs: a slab up the middle of each face, a little proud of the terraces, with
+  // its balustrades down to the ground.
+  const f = latticeFrame(poly);
+  const width = Math.min(f.a, f.b) * 0.32;
+  for (const [ax, ay, half, side] of [
+    [f.u.x, f.u.y, f.a, f.v],
+    [-f.u.x, -f.u.y, f.a, f.v],
+    [f.v.x, f.v.y, f.b, f.u],
+    [-f.v.x, -f.v.y, f.b, f.u],
+  ] as const) {
+    const foot = { x: f.centre.x + ax * half * 1.04, y: f.centre.y + ay * half * 1.04 };
+    const head = { x: f.centre.x + ax * half * TOP, y: f.centre.y + ay * half * TOP };
+    const sx = side.x * width * 0.5;
+    const sy = side.y * width * 0.5;
+    const lift = platform / n;
+    const fl: [number, number, number] = [foot.x - sx, 0, foot.y - sy];
+    const fr: [number, number, number] = [foot.x + sx, 0, foot.y + sy];
+    const hl: [number, number, number] = [head.x - sx, platform + lift * 0.3, head.y - sy];
+    const hr: [number, number, number] = [head.x + sx, platform + lift * 0.3, head.y + sy];
+    face(out, [fl, fr, hr, hl], [ax, 1, ay]);
+    face(out, [fl, hl, [head.x - sx, 0, head.y - sy]], [-side.x, 0, -side.y]);
+    face(out, [fr, hr, [head.x + sx, 0, head.y + sy]], [side.x, 0, side.y]);
+  }
+}
+
+/**
+ * An amphitheatre: the outer wall in four storeys, and inside it no roof but the bowl —
+ * tiers of seating stepping down to an arena floor. From an RTS camera the open oval is
+ * what makes it the Colosseum and not a stadium car park.
+ */
+function amphitheatre(poly: { x: number; y: number }[], h: number, out: Builder): void {
+  const RIM = 0.88;
+  const ARENA = 0.5;
+  walls(poly, 0, h, out, 0, 0, 3, 3);
+  // A cornice band at each storey, the shadow lines of its arcades.
+  const outer = inflate(poly, 0.35);
+  for (let k = 1; k <= 3; k++) {
+    const y = (h * k) / 4;
+    walls(outer, y - 0.45, y + 0.45, out, 0, 0, 3, 3);
+    band(poly, outer, y + 0.45, 1, out);
+    band(poly, outer, y - 0.45, -1, out);
+  }
+  band(poly, scalePoly(poly, RIM), h, 1, out);
+  const top = h * 0.82;
+  walls(scalePoly(poly, RIM), top, h, out, 0, 0, 3, 3, true);
+  const tiers = 6;
+  const floor = h * 0.1;
+  for (let k = 0; k < tiers; k++) {
+    const s0 = RIM - ((RIM - ARENA) * k) / tiers;
+    const s1 = RIM - ((RIM - ARENA) * (k + 1)) / tiers;
+    const y0 = top - ((top - floor) * k) / tiers;
+    const y1 = top - ((top - floor) * (k + 1)) / tiers;
+    band(scalePoly(poly, s0), scalePoly(poly, s1), y0, 1, out);
+    walls(scalePoly(poly, s1), y1, y0, out, 0, 0, 3, 3, true);
+  }
+  // The podium wall round the arena, and the arena floor.
+  walls(scalePoly(poly, ARENA), 0.6, floor, out, 0, 0, 3, 3, true);
+  cap(scalePoly(poly, ARENA), 0.6, out, 3);
 }
 
 /** Shrinks a polygon towards its centroid — the cross-section of a leaning wall. */

@@ -7,7 +7,7 @@ import type { TerrainDef } from "./terrain";
  * lattice tower on four piers; a pyramid to its apex (Giza); a stepped pyramid with a
  * temple on top (Chichén Itzá); an amphitheatre open to the sky (the Colosseum).
  */
-export type Landmark = "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre";
+export type Landmark = "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre" | "dome";
 
 export interface BuildingDef {
   id: string;
@@ -29,6 +29,13 @@ export interface BuildingDef {
   landmark?: Landmark;
   /** Ground area in m². */
   area: number;
+  /**
+   * A landmark's own colour from OSM (`building:colour`, else `roof:colour`), as 0xRRGGBB:
+   * the Taj Mahal's white, the Eiffel Tower's brown. Ordinary buildings keep the palette.
+   */
+  colour?: number;
+  /** Minarets standing on a domed landmark's platform, from OSM's own towers there. */
+  minarets?: Vec2[];
   floors: number;
   height: number;
   /** A walkable point just outside the door. */
@@ -86,6 +93,18 @@ export interface BridgeDef {
   polygon: Vec2[];
 }
 
+/**
+ * A defensive wall (`barrier=city_wall`): the Great Wall, a medieval town's ring. Nobody
+ * crosses it but where a street goes through, which is a gate.
+ */
+export interface WallDef {
+  id: string;
+  path: Vec2[];
+  /** Metres, from OSM's `height` and `width` or a typical town wall. */
+  height: number;
+  width: number;
+}
+
 /** A railway line: walkable, but a track is not a place to build. */
 export interface RailDef {
   id: string;
@@ -123,6 +142,8 @@ export interface CityMap {
   rails?: RailDef[];
   /** Bridge decks over that water. */
   bridges?: BridgeDef[];
+  /** Defensive walls, on imported maps that have any. */
+  walls?: WallDef[];
   /** The ground's relief, on imported maps that have any (terrain.ts). */
   terrain?: TerrainDef;
   /** Road ends at the map border, where hordes enter. */

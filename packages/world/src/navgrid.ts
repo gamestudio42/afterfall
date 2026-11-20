@@ -1,5 +1,5 @@
 import { pointInPolygon, polygonBounds, polygonCentroid, type Vec2 } from "@afterfall/shared";
-import type { BridgeDef, CityMap, RailDef, RoadDef, WaterDef } from "./city";
+import type { BridgeDef, CityMap, RailDef, RoadDef, WallDef, WaterDef } from "./city";
 import { latticeLegs } from "./landmarks";
 import { heightAt, type TerrainDef } from "./terrain";
 import { BALANCE } from "@afterfall/content";
@@ -21,6 +21,8 @@ export const enum CellKind {
   Rail = 6,
   /** Ground too steep to climb (decision 58): nobody crosses it, nothing is built on it. */
   Cliff = 7,
+  /** A defensive wall from the map (`WallDef`): nobody crosses it but through a gate. */
+  Rampart = 8,
 }
 
 /** Whether an agent can stand on a cell of this kind, gates aside. */
@@ -512,9 +514,9 @@ const RAIL_REACH = 1.7;
  */
 export function stampTerrain(
   g: NavGrid,
-  t: { roads: RoadDef[]; waters?: WaterDef[]; rails?: RailDef[]; bridges?: BridgeDef[]; terrain?: TerrainDef },
+  t: { roads: RoadDef[]; waters?: WaterDef[]; rails?: RailDef[]; bridges?: BridgeDef[]; walls?: WallDef[]; terrain?: TerrainDef },
 ): void {
-  if (!t.waters?.length && !t.rails?.length && !t.terrain) return;
+  if (!t.waters?.length && !t.rails?.length && !t.walls?.length && !t.terrain) return;
   const n = g.cols * g.rows;
   const road = new Uint8Array(n);
   const near = (path: Vec2[], reach: number, mark: (i: number) => void) => {
@@ -589,6 +591,23 @@ export function stampTerrain(
       }
   }
   for (const r of t.rails ?? []) near(r.path, RAIL_REACH, (i) => stamp(i, CellKind.Rail, [CellKind.Free, CellKind.Water]));
+  // A town wall is solid but where a street runs through it, which is its gate, and next to
+  // a building on it: a watchtower on the Great Wall is how the wall is crossed, and its
+  // door opens onto the wall-walk.
+  const byBuilding = (i: number) => {
+    const x = i % g.cols;
+    const y = (i - x) / g.cols;
+    for (let dy = -2; dy <= 2; dy++)
+      for (let dx = -2; dx <= 2; dx++) {
+        if (!g.inBounds(x + dx, y + dy)) continue;
+        if (g.kind[g.index(x + dx, y + dy)] === CellKind.Building) return true;
+      }
+    return false;
+  };
+  for (const w of t.walls ?? [])
+    near(w.path, w.width / 2, (i) => {
+      if (!byBuilding(i)) stamp(i, CellKind.Rampart, [CellKind.Free, CellKind.Rail]);
+    });
   if (t.terrain) stampRelief(g, t.terrain, road);
 }
 

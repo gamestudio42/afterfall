@@ -915,11 +915,13 @@ export class GameRenderer {
       const st = sim.state.buildings[i];
       // A lattice tower is painted iron whatever the shops under it sell.
       tmpC.setHex(
-        def.landmark === "lattice"
-          ? LATTICE_IRON
-          : def.landmark && ANCIENT_STONE.has(def.landmark)
-            ? WORN_STONE
-            : BUILDING_TYPES[def.type].color,
+        def.colour !== undefined
+          ? def.colour
+          : def.landmark === "lattice"
+            ? LATTICE_IRON
+            : def.landmark && ANCIENT_STONE.has(def.landmark)
+              ? WORN_STONE
+              : BUILDING_TYPES[def.type].color,
       );
       if (this.overlay === "resources") {
         const left = st.fn === "none" ? bagTotal(st.remainingLoot) / Math.max(1, st.searchTotal) : 0;

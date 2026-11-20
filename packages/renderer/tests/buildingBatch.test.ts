@@ -277,6 +277,18 @@ describe("landmarks", () => {
     expect(Math.max(...Array.from({ length: pos.count }, (_, v) => pos.getY(v)))).toBeCloseTo(40, 3);
   });
 
+  it("a dome rises from a hall on a platform to a finial", () => {
+    const batch = tower("dome", 60);
+    const bands = profile(batch, 60, 50, 50);
+    // The platform is the whole footprint; the dome near the top is much narrower.
+    expect(bands[0]).toBeGreaterThan(60);
+    expect(bands[8]).toBeLessThan(bands[0] * 0.4);
+    const pos = batch.mesh.geometry.getAttribute("position");
+    let top = 0;
+    for (let v = 0; v < pos.count; v++) top = Math.max(top, pos.getY(v));
+    expect(top).toBeCloseTo(60, 3);
+  });
+
   it("a spire is slender at the top, an obelisk narrows once", () => {
     const spire = profile(tower("spire"), 330, 50, 50).filter((w) => w > 0);
     expect(spire[spire.length - 1]).toBeLessThan(spire[0] * 0.1);

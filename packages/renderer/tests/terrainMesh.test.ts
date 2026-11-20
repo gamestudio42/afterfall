@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { heightAt, type BuildingDef, type TerrainDef } from "@afterfall/world";
+import { heightAt, type BuildingDef, type CityMap, type TerrainDef } from "@afterfall/world";
+import { cityWallGeometry } from "../src/cityMeshes";
 import { drape, groundGrid, rayGround, terrainTop } from "../src/terrainMesh";
 import { BuildingBatch, buildingSeat } from "../src/buildingBatch";
 
@@ -141,5 +142,51 @@ describe("a building on a steep slope", () => {
       base: 0,
       foot: 0,
     });
+  });
+});
+
+describe("a city wall", () => {
+  const city = {
+    walls: [
+      {
+        id: "w",
+        path: [
+          { x: 10, y: 50 },
+          { x: 90, y: 50 },
+        ],
+        height: 6,
+        width: 5,
+      },
+    ],
+  } as unknown as CityMap;
+
+  it("stands its height with merlons above the walk, from below the ground", () => {
+    const g = cityWallGeometry(city)!;
+    const p = g.getAttribute("position");
+    let low = Infinity;
+    let high = -Infinity;
+    let merlonTops = 0;
+    for (let i = 0; i < p.count; i++) {
+      low = Math.min(low, p.getY(i));
+      high = Math.max(high, p.getY(i));
+      if (p.getY(i) > 6.5) merlonTops++;
+    }
+    expect(low).toBeCloseTo(-0.6, 3);
+    expect(high).toBeCloseTo(6 + 1.1, 3);
+    // About one merlon every 2.4 m on each side over 80 m.
+    expect(merlonTops).toBeGreaterThan(30 * 2 * 6);
+  });
+
+  it("rides the ground on a hillside", () => {
+    const g = cityWallGeometry({ ...city, terrain: slope() } as CityMap)!;
+    const p = g.getAttribute("position");
+    let eastTop = -Infinity;
+    for (let i = 0; i < p.count; i++) if (p.getX(i) > 85) eastTop = Math.max(eastTop, p.getY(i));
+    // At x = 90 the ground is 36 m up: the wall stands on it.
+    expect(eastTop).toBeGreaterThan(36 + 6);
+  });
+
+  it("is nothing on a map without walls", () => {
+    expect(cityWallGeometry({} as CityMap)).toBeNull();
   });
 });

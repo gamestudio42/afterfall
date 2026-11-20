@@ -507,13 +507,20 @@ export function buildCityGround(city: CityMap): {
     fallback.add(trunks, crowns);
     group.add(fallback);
   }
+  const walls = cityWallGeometry(city);
+  if (walls) {
+    const mesh = new THREE.Mesh(walls, new THREE.MeshStandardMaterial({ color: 0x8c857a, roughness: 0.95 }));
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.name = "city-walls";
+    group.add(mesh);
+  }
   // Everything above lies flat at its own few centimetres; on a hillside it is laid over the
   // relief in one pass, the base ground (already a grid) and the instanced trees excepted.
   if (city.terrain)
     for (const child of group.children) {
       if (!(child instanceof THREE.Mesh) || child instanceof THREE.InstancedMesh) continue;
       // Already at their heights: the base grid, the level water and the quays down to it.
-      if (child.name === "base-ground" || child.name === "water" || child.name === "quays") continue;
+      if (child.name === "base-ground" || child.name === "water" || child.name === "quays" || child.name === "city-walls") continue;
       child.geometry = drape(child.geometry, city.terrain);
     }
   return { group, materials, imported, reclamation: field, reclamationTexture: fieldTex };
@@ -559,4 +566,101 @@ function distToSegment(x: number, z: number, a: { x: number; y: number }, b: { x
   const l2 = dx * dx + dz * dz || 1;
   const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.y) * dz) / l2));
   return Math.hypot(x - a.x - dx * t, z - a.y - dz * t);
+}
+
+/**
+ * Defensive walls (`WallDef`): a band of masonry along the line, its walk on top, and a row
+ * of merlons along each edge. Every metre of it stands on the ground under it, so the Great
+ * Wall rides its ridge; it is built at those heights and not draped again.
+ */
+export function cityWallGeometry(city: CityMap): THREE.BufferGeometry | null {
+  if (!city.walls?.length) return null;
+  const pos: number[] = [];
+  const nrm: number[] = [];
+  const t = city.terrain;
+  const quad = (a: number[], b: number[], c: number[], d: number[], n: number[]) => {
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const f = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const order = f[0] * n[0] + f[1] * n[1] + f[2] * n[2] >= 0 ? [a, b, c, a, c, d] : [a, c, b, a, d, c];
+    for (const p of order) {
+      pos.push(p[0], p[1], p[2]);
+      nrm.push(n[0], n[1], n[2]);
+    }
+  };
+  const MERLON = 1.2;
+  const GAP = 1.2;
+  const RISE = 1.1;
+  for (const w of city.walls) {
+    const half = w.width / 2;
+    let run = 0;
+    for (let i = 1; i < w.path.length; i++) {
+      const a = w.path[i - 1];
+      const b = w.path[i];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len < 0.05) continue;
+      const dx = (b.x - a.x) / len;
+      const dz = (b.y - a.y) / len;
+      const nx = -dz;
+      const nz = dx;
+      const steps = Math.max(1, Math.ceil(len / 2));
+      for (let s = 0; s < steps; s++) {
+        const t0 = (s / steps) * len;
+        const t1 = ((s + 1) / steps) * len;
+        const x0 = a.x + dx * t0;
+        const z0 = a.y + dz * t0;
+        const x1 = a.x + dx * t1;
+        const z1 = a.y + dz * t1;
+        const g0 = heightAt(t, x0, z0);
+        const g1 = heightAt(t, x1, z1);
+        const top0 = g0 + w.height;
+        const top1 = g1 + w.height;
+        for (const side of [1, -1]) {
+          const ox = nx * half * side;
+          const oz = nz * half * side;
+          // The face, from below the ground to the walk.
+          quad(
+            [x0 + ox, g0 - 0.6, z0 + oz],
+            [x1 + ox, g1 - 0.6, z1 + oz],
+            [x1 + ox, top1, z1 + oz],
+            [x0 + ox, top0, z0 + oz],
+            [nx * side, 0, nz * side],
+          );
+        }
+        // The walk.
+        quad(
+          [x0 + nx * half, top0, z0 + nz * half],
+          [x1 + nx * half, top1, z1 + nz * half],
+          [x1 - nx * half, top1, z1 - nz * half],
+          [x0 - nx * half, top0, z0 - nz * half],
+          [0, 1, 0],
+        );
+      }
+      // Merlons along both edges, at one pitch along the whole wall.
+      for (let d = MERLON + GAP - (run % (MERLON + GAP)); d + MERLON <= len; d += MERLON + GAP) {
+        const xa = a.x + dx * d;
+        const za = a.y + dz * d;
+        const xb = a.x + dx * (d + MERLON);
+        const zb = a.y + dz * (d + MERLON);
+        const ga = heightAt(t, xa, za) + w.height;
+        const gb = heightAt(t, xb, zb) + w.height;
+        for (const side of [1, -1]) {
+          const o = half * side;
+          const ii = (half - 0.5) * side;
+          const P = (x: number, z: number, off: number, y: number) => [x + nx * off, y, z + nz * off];
+          quad(P(xa, za, o, ga), P(xb, zb, o, gb), P(xb, zb, o, gb + RISE), P(xa, za, o, ga + RISE), [nx * side, 0, nz * side]);
+          quad(P(xa, za, ii, ga), P(xb, zb, ii, gb), P(xb, zb, ii, gb + RISE), P(xa, za, ii, ga + RISE), [-nx * side, 0, -nz * side]);
+          quad(P(xa, za, o, ga + RISE), P(xb, zb, o, gb + RISE), P(xb, zb, ii, gb + RISE), P(xa, za, ii, ga + RISE), [0, 1, 0]);
+          quad(P(xa, za, ii, ga), P(xa, za, o, ga), P(xa, za, o, ga + RISE), P(xa, za, ii, ga + RISE), [-dx, 0, -dz]);
+          quad(P(xb, zb, ii, gb), P(xb, zb, o, gb), P(xb, zb, o, gb + RISE), P(xb, zb, ii, gb + RISE), [dx, 0, dz]);
+        }
+      }
+      run += len;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+  worldUv(g, 3);
+  return g;
 }

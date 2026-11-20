@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CityMap } from "@afterfall/world";
 import { buildReclamation, reclaimSurface, reclaimUniforms, reclamationTexture, type ReclamationField } from "./reclamation";
+import { bridgeGeometry, quayGeometry, shoreTexture, waterMaterial } from "./water";
 
 function plane(x: number, z: number, w: number, d: number, y: number): THREE.BufferGeometry {
   const g = new THREE.PlaneGeometry(w, d);
@@ -399,11 +400,34 @@ export function buildCityGround(city: CityMap): {
   if (waters.length) {
     const mesh = new THREE.Mesh(
       mergeGeometries(waters.map((g) => (g.index ? g.toNonIndexed() : g))),
-      new THREE.MeshStandardMaterial({ color: 0x2b4a56, roughness: 0.28, metalness: 0.05 }),
+      waterMaterial(field, shoreTexture(field, city)),
     );
     mesh.receiveShadow = true;
     mesh.name = "water";
     group.add(mesh);
+    // Dressed stone: the quays along the banks and the bridge decks, one material.
+    const stone = new THREE.MeshStandardMaterial({ color: 0x7d7a72, roughness: 0.92 });
+    const quay = quayGeometry(city, field);
+    if (quay) {
+      const q = new THREE.Mesh(quay, stone);
+      q.receiveShadow = true;
+      q.name = "quays";
+      group.add(q);
+    }
+    const bridges = bridgeGeometry(city, field);
+    if (bridges) {
+      // The deck is paved like the sidewalks it continues, and wears their slabs.
+      const deck = new THREE.Mesh(bridges.deck, materials.blocks ?? stone);
+      deck.receiveShadow = true;
+      deck.name = "bridge-decks";
+      group.add(deck);
+      if (bridges.parapet) {
+        const parapet = new THREE.Mesh(bridges.parapet, stone);
+        parapet.castShadow = parapet.receiveShadow = true;
+        parapet.name = "bridge-parapets";
+        group.add(parapet);
+      }
+    }
   }
   const lines = (city.rails ?? []).map((r) => railway(r.path));
   if (lines.length) {

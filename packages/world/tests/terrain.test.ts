@@ -191,3 +191,60 @@ describe("water and railways on an imported map", () => {
     expect(JSON.stringify(again.rails)).toBe(JSON.stringify(wet.rails));
   });
 });
+
+describe("a bridge deck mapped as an area", () => {
+  const { lat, lon } = FIXTURE_CENTER;
+  const kLon = 111_320 * Math.cos((lat * Math.PI) / 180);
+  const geo = (x: number, y: number) => ({ lat: lat - y / 111_132, lon: lon + x / kLon });
+  // Across the river (which runs from y 30 to 70), where nothing else stands in it.
+  const x0 = -229,
+    x1 = -219;
+  const deck = [geo(x0, 20), geo(x1, 20), geo(x1, 80), geo(x0, 80), geo(x0, 20)];
+  const bridged = cityFromOverpass(
+    {
+      elements: [
+        ...syntheticOverpass().elements,
+        ...syntheticTerrain(),
+        { type: "way", id: 9101, tags: { man_made: "bridge", name: "Test bridge" }, geometry: deck },
+      ],
+    },
+    opts,
+  );
+  const g = NavGrid.fromCity(bridged);
+
+  it("asks for bridge decks with the water", () => {
+    expect(overpassTerrainQuery(FIXTURE_CENTER.lat, FIXTURE_CENTER.lon, 480)).toContain('"man_made"="bridge"');
+  });
+
+  it("dries the river under the deck and nowhere else", () => {
+    expect(bridged.bridges).toHaveLength(1);
+    let dried = 0;
+    for (let i = 0; i < g.kind.length; i++) {
+      // A building standing in the river may now keep a dry door on the deck; that is the
+      // importer's call, not the deck's footprint, so buildings are left out of the count.
+      if (grid.kind[i] === g.kind[i] || grid.kind[i] === CellKind.Building || g.kind[i] === CellKind.Building) continue;
+      // The only change the deck makes: water under it becomes open ground.
+      expect(grid.kind[i]).toBe(CellKind.Water);
+      expect(g.kind[i]).toBe(CellKind.Free);
+      const c = g.centerOf(i);
+      expect(c.x - 240).toBeGreaterThan(x0 - 1);
+      expect(c.x - 240).toBeLessThan(x1 + 1);
+      dried++;
+    }
+    // A 10 m deck across a 40 m river.
+    expect(dried).toBeGreaterThan(40);
+  });
+
+  it("lets a survivor walk straight across the river on it", () => {
+    const path = g.findPath(-224 + 240, 14 + 240, -224 + 240, 86 + 240, "survivor");
+    expect(path).not.toBeNull();
+    // Over the deck, not round by the street bridge further along.
+    let length = 0;
+    for (let k = 1; k < path!.points.length; k++) {
+      const a = path!.points[k - 1];
+      const b = path!.points[k];
+      length += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    expect(length).toBeLessThan(110);
+  });
+});

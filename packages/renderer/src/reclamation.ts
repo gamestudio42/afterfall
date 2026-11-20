@@ -32,6 +32,8 @@ export interface ReclamationField {
   building: Uint8Array;
   /** 1 on open water: nothing grows there. */
   water: Uint8Array;
+  /** The water before streets and bridges were laid over it: where the river runs. */
+  wet?: Uint8Array;
 }
 
 /** Texels per side at most; a generated city fits at one metre a texel. */
@@ -223,9 +225,15 @@ export function buildReclamation(city: CityMap): ReclamationField {
       growth[i] = Math.max(0, Math.min(1, g));
       wear[i] = fbm(x, z, 1 / 37, seed + 11);
     }
+  // A bridge deck is paving over the water, and nothing grows on it.
+  for (const br of city.bridges ?? []) {
+    const b = polygonBounds(br.polygon);
+    fillRect(road, b.x, b.y, b.w, b.h, (x, z) => pointInPolygon(x, z, br.polygon));
+  }
+  const wet = water.slice();
   // A street across water is a bridge: it stays a street.
   for (let i = 0; i < n; i++) if (road[i]) water[i] = 0;
-  return { x0, z0, cell, cols, rows, growth, wear, road, building, water };
+  return { x0, z0, cell, cols, rows, growth, wear, road, building, water, wet };
 }
 
 function index(f: ReclamationField, x: number, z: number): number {

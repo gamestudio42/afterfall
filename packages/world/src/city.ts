@@ -65,6 +65,16 @@ export interface WaterDef {
   width?: number;
 }
 
+/**
+ * A bridge deck as OSM maps it (`man_made=bridge`): the outline of the whole crossing,
+ * footways included. The roads on it may be narrow service lanes with water between them
+ * on the map; the deck closes that gap, and nobody falls in.
+ */
+export interface BridgeDef {
+  id: string;
+  polygon: Vec2[];
+}
+
 /** A railway line: walkable, but a track is not a place to build. */
 export interface RailDef {
   id: string;
@@ -100,6 +110,8 @@ export interface CityMap {
   waters?: WaterDef[];
   /** Railways, on imported maps that have any. */
   rails?: RailDef[];
+  /** Bridge decks over that water. */
+  bridges?: BridgeDef[];
   /** Road ends at the map border, where hordes enter. */
   spawnPoints: Vec2[];
   /** Set for imported maps; absent for procedural ones. */

@@ -59,7 +59,7 @@ export function placeGrass(city: CityMap, field: ReclamationField, density = 1):
         z,
         height: (0.3 + 0.7 * h) * (0.55 + 0.5 * g) * (road ? 0.7 : 1),
         yaw: hash2(c, r, seed + 4) * Math.PI,
-        dry: 0.75 * smooth(0.3, 0.8, hash2(Math.floor(c / 6), Math.floor(r / 6), seed + 5) * 0.7 + h * 0.3),
+        dry: city.climate === "arid" ? 1 : 0.75 * smooth(0.3, 0.8, hash2(Math.floor(c / 6), Math.floor(r / 6), seed + 5) * 0.7 + h * 0.3),
         shade: 0.78 + hash2(c, r, seed + 6) * 0.3,
       });
     }

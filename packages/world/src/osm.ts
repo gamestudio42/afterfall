@@ -17,6 +17,7 @@ import {
 import type { BridgeDef, BuildingDef, CityMap, Landmark, MonumentDef, ParkDef, RailDef, RoadDef, WallDef, WaterDef } from "./city";
 import type { TerrainDef } from "./terrain";
 import { framePoint, latticeFrame } from "./landmarks";
+import { climateAt } from "./climate";
 import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
 
 /**
@@ -648,6 +649,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     ...(rawWalls.length ? { walls: rawWalls } : {}),
     ...(rawMonuments.length ? { monuments: rawMonuments } : {}),
     ...(opts.terrain ? { terrain: opts.terrain } : {}),
+    ...(climateAt(opts.lat, opts.lon) ? { climate: "arid" as const } : {}),
     spawnPoints,
     source: { kind: "osm", label: opts.label, lat: opts.lat, lon: opts.lon, size, attribution: OSM_ATTRIBUTION },
   };

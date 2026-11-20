@@ -9,7 +9,7 @@ import { BuildingBatch, buildingSeat, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
 import { heightAt } from "@afterfall/world";
 import { drape, groundNormal, rayGround, terrainTop } from "./terrainMesh";
-import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
+import { ARID_GROUND_TINT, buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
 import { WATER_TIME } from "./water";
 import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
@@ -593,7 +593,11 @@ export class GameRenderer {
         mat.needsUpdate = true;
       };
       // An imported map has no blocks, so its base is street-level paving, not a lawn.
-      set("ground", this.groundImported ? art.concrete : art.grass, this.groundImported ? URBAN_GROUND_TINT : TEXTURED_TINT.ground);
+      set(
+        "ground",
+        this.groundImported || this.groundArid ? art.concrete : art.grass,
+        this.groundArid ? ARID_GROUND_TINT : this.groundImported ? URBAN_GROUND_TINT : TEXTURED_TINT.ground,
+      );
       set("blocks", art.sidewalk);
       set("curbs", art.concrete);
       set("roads", art.asphalt);
@@ -621,6 +625,7 @@ export class GameRenderer {
 
   private groundMats: GroundMaterials | null = null;
   private groundImported = false;
+  private groundArid = false;
   private vegetation: Vegetation | null = null;
   private reclamationTex: THREE.DataTexture | null = null;
   private reclamation: ReclamationField | null = null;
@@ -845,6 +850,7 @@ export class GameRenderer {
     void this.vegetation.load(city, this.artBase, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.16 : 1);
     this.groundMats = ground.materials;
     this.groundImported = ground.imported;
+    this.groundArid = city.climate === "arid";
     this.applyArt(this.art);
     this.scene.add(this.cityGroup);
 

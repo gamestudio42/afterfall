@@ -101,7 +101,9 @@ export function placeVegetation(city: CityMap, field: ReclamationField = buildRe
       if (city.parks.some((p) => inPark(p, x, z)) || inWater(field, x, z)) continue;
       if (nearBuilding(x, z, 2.5) || nearRoad(x, z, 1.5) || nearDoor(x, z, 6)) continue;
       urban++;
-      out.push(tree(++index, x, z, 1.25));
+      const t = tree(++index, x, z, 1.25);
+      // In a desert, what took root outside a garden mostly died back to a snag.
+      out.push(city.climate === "arid" && index % 4 !== 0 ? { ...t, species: "dead" } : t);
     }
 
   // Brush against the walls, where the field is thickest.

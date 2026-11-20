@@ -36,6 +36,9 @@ export interface ReclamationField {
   wet?: Uint8Array;
 }
 
+/** How much of the growth a desert keeps. */
+export const ARID_GROWTH = 0.4;
+
 /** Texels per side at most; a generated city fits at one metre a texel. */
 const MAX_TEXELS = 512;
 /** Margin past the map edge, so the ground under the outskirts is covered too. */
@@ -119,6 +122,8 @@ export function buildReclamation(city: CityMap): ReclamationField {
   const park = new Uint8Array(n);
   const water = new Uint8Array(n);
   const seed = deriveSeed(city.seed >>> 0, "reclamation");
+  // In a desert little grows back: a weed in a wall's shade, not a meadow on the plaza.
+  const dryness = city.climate === "arid" ? ARID_GROWTH : 1;
 
   const cx = (c: number) => x0 + (c + 0.5) * cell;
   const cz = (r: number) => z0 + (r + 0.5) * cell;
@@ -222,7 +227,7 @@ export function buildReclamation(city: CityMap): ReclamationField {
         // of a plaza in patches a few metres across.
         if (!park[i]) g += Math.max(0, fbm(x, z, 1 / 9, seed + 13) - 0.52) * 1.5;
       }
-      growth[i] = Math.max(0, Math.min(1, g));
+      growth[i] = Math.max(0, Math.min(1, g * dryness));
       wear[i] = fbm(x, z, 1 / 37, seed + 11);
     }
   // A bridge deck is paving over the water, and nothing grows on it.
@@ -292,10 +297,13 @@ export interface ReclaimUniforms {
   uReclaim: { value: THREE.Texture | null };
   /** x0, z0, 1 / width, 1 / depth in metres. */
   uReclaimRect: { value: THREE.Vector4 };
+  /** 1 in a desert: the soil is blown sand and what grows is dry scrub. */
+  uArid: { value: number };
 }
 
-export function reclaimUniforms(f: ReclamationField, tex: THREE.Texture): ReclaimUniforms {
+export function reclaimUniforms(f: ReclamationField, tex: THREE.Texture, arid = false): ReclaimUniforms {
   return {
+    uArid: { value: arid ? 1 : 0 },
     uReclaim: { value: tex },
     uReclaimRect: { value: new THREE.Vector4(f.x0, f.z0, 1 / (f.cols * f.cell), 1 / (f.rows * f.cell)) },
   };
@@ -304,6 +312,7 @@ export function reclaimUniforms(f: ReclamationField, tex: THREE.Texture): Reclai
 const COMMON = /* glsl */ `
 uniform sampler2D uReclaim;
 uniform vec4 uReclaimRect;
+uniform float uArid;
 varying vec3 vReclaimPos;
 float rcHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float rcNoise(vec2 p) {
@@ -348,6 +357,9 @@ const FRAGMENT = (kind: ReclaimKind) => /* glsl */ `
   vec3 rcMoss = vec3(0.06, 0.078, 0.022);
   vec3 rcStraw = vec3(0.17, 0.14, 0.055);
   vec3 rcGreen = mix(rcMoss, rcStraw, smoothstep(0.35, 0.75, rcNoise(rcP * 0.21 + 7.0)));
+  // A desert's drift is pale blown sand, and its growth thorn and dry grass.
+  rcSoil = mix(rcSoil, vec3(0.42, 0.29, 0.17) * (0.85 + 0.3 * rcGrain), uArid);
+  rcGreen = mix(rcGreen, vec3(0.2, 0.16, 0.08), uArid);
   float rcDirt = smoothstep(0.32, 0.56, rcField) * rcDirtK;
   float rcGrow = smoothstep(0.52, 0.8, rcField) * rcGreenK;
   rcReclaimed = max(rcDirt, rcGrow);
@@ -378,6 +390,7 @@ export function reclaimSurface(material: THREE.MeshStandardMaterial, kind: Recla
     previous(shader, renderer);
     shader.uniforms.uReclaim = uniforms.uReclaim;
     shader.uniforms.uReclaimRect = uniforms.uReclaimRect;
+    shader.uniforms.uArid = uniforms.uArid;
     shader.vertexShader = "varying vec3 vReclaimPos;\n" + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace(
       "#include <begin_vertex>",
@@ -399,5 +412,5 @@ export function reclaimSurface(material: THREE.MeshStandardMaterial, kind: Recla
       "#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 1.0, rcReclaimed);",
     );
   };
-  material.customProgramCacheKey = () => `${previousKey()}|reclaim-${kind}-v2`;
+  material.customProgramCacheKey = () => `${previousKey()}|reclaim-${kind}-v3`;
 }

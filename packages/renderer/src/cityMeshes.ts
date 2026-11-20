@@ -139,6 +139,8 @@ function flatPolygon(poly: { x: number; y: number }[], y: number): THREE.BufferG
  * lot read as pavement — buildings looked like they had been built on the road.
  */
 export const URBAN_GROUND_TINT = 0x77736b;
+/** A desert's base: the concrete map tinted to sandstone and dust (Petra, Giza). */
+export const ARID_GROUND_TINT = 0xa47e60;
 
 export const TEXTURED_TINT: Record<keyof GroundMaterials, number> = {
   roads: 0xa2a5aa,
@@ -242,11 +244,12 @@ export function buildCityGround(city: CityMap): {
   group.name = "ground";
   const field = buildReclamation(city);
   const fieldTex = reclamationTexture(field);
-  const reclaim = reclaimUniforms(field, fieldTex);
+  const arid = city.climate === "arid";
+  const reclaim = reclaimUniforms(field, fieldTex, arid);
 
   const imported = city.blocksX === 0 || city.blockSize <= 0;
   const margin = 400;
-  const groundMat = new THREE.MeshStandardMaterial({ color: imported ? 0x6f6d66 : 0x4a4d40, roughness: 1 });
+  const groundMat = new THREE.MeshStandardMaterial({ color: arid ? ARID_GROUND_TINT : imported ? 0x6f6d66 : 0x4a4d40, roughness: 1 });
   layeredSurface(groundMat);
   reclaimSurface(groundMat, "ground", reclaim);
   const materials: GroundMaterials = { ground: groundMat, blocks: null, curbs: null, roads: null, parks: null };

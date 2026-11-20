@@ -165,6 +165,8 @@ export interface CityMap {
   monuments?: MonumentDef[];
   /** The ground's relief, on imported maps that have any (terrain.ts). */
   terrain?: TerrainDef;
+  /** Desert: bare ground where little grows back (climate.ts). Absent elsewhere. */
+  climate?: "arid";
   /** Road ends at the map border, where hordes enter. */
   spawnPoints: Vec2[];
   /** Set for imported maps; absent for procedural ones. */

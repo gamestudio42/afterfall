@@ -782,6 +782,11 @@ function buildLandmark(
     return;
   }
 
+  if (b.landmark === "watchtower") {
+    add("trim", (o) => watchtower(poly, h, o));
+    return;
+  }
+
   if (b.landmark === "dome") {
     add("trim", (o) => domedHall(poly, h, b.minarets ?? [], o));
     return;
@@ -868,6 +873,49 @@ function steppedPyramid(poly: { x: number; y: number }[], h: number, out: Builde
     face(out, [fl, fr, hr, hl], [ax, 1, ay]);
     face(out, [fl, hl, [head.x - sx, 0, head.y - sy]], [-side.x, 0, -side.y]);
     face(out, [fr, hr, [head.x + sx, 0, head.y + sy]], [side.x, 0, side.y]);
+  }
+}
+
+/**
+ * A watchtower: a block of masonry without windows, a flat roof behind a parapet, and
+ * merlons along every edge of it — the Great Wall's towers, a castle's keep.
+ */
+function watchtower(poly: { x: number; y: number }[], h: number, out: Builder): void {
+  const PARAPET = 0.7;
+  const MERLON_H = 0.9;
+  const MERLON_W = 0.9;
+  const PITCH = 1.8;
+  const THICK = 0.55;
+  walls(poly, 0, h + PARAPET, out, 0, 0, 3, 3);
+  const inner = inflate(poly, -THICK);
+  walls(inner, h, h + PARAPET, out, 0, 0, 3, 3, true);
+  cap(inner, h, out, 3);
+  band(poly, inner, h + PARAPET, 1, out);
+  const ccw = isCcw(poly);
+  const top = h + PARAPET;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < MERLON_W + 0.4) continue;
+    const dx = (b.x - a.x) / len;
+    const dz = (b.y - a.y) / len;
+    // Outward normal, and the inward offset to the parapet's inner face.
+    const nx = ccw ? dz : -dz;
+    const nz = ccw ? -dx : dx;
+    const count = Math.max(1, Math.floor((len - 0.4) / PITCH));
+    const start = (len - (count - 1) * PITCH - MERLON_W) / 2;
+    for (let k = 0; k < count; k++) {
+      const d0 = start + k * PITCH;
+      const d1 = d0 + MERLON_W;
+      const p = (d: number, off: number, y: number): [number, number, number] => [a.x + dx * d - nx * off, y, a.y + dz * d - nz * off];
+      const y1 = top + MERLON_H;
+      face(out, [p(d0, 0, top), p(d1, 0, top), p(d1, 0, y1), p(d0, 0, y1)], [nx, 0, nz]);
+      face(out, [p(d0, THICK, top), p(d1, THICK, top), p(d1, THICK, y1), p(d0, THICK, y1)], [-nx, 0, -nz]);
+      face(out, [p(d0, 0, y1), p(d1, 0, y1), p(d1, THICK, y1), p(d0, THICK, y1)], [0, 1, 0]);
+      face(out, [p(d0, 0, top), p(d0, THICK, top), p(d0, THICK, y1), p(d0, 0, y1)], [-dx, 0, -dz]);
+      face(out, [p(d1, 0, top), p(d1, THICK, top), p(d1, THICK, y1), p(d1, 0, y1)], [dx, 0, dz]);
+    }
   }
 }
 

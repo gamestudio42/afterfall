@@ -113,6 +113,8 @@ export function placeRoofProps(
 ): Map<RoofKind, PropPlacement[]> {
   const out = new Map<RoofKind, PropPlacement[]>();
   for (const b of buildings) {
+    // A pyramid, a dome or a watchtower has no air conditioner on top.
+    if (b.landmark) continue;
     const poly = outlineOf(b);
     const a = poly[0];
     const c = poly[1];

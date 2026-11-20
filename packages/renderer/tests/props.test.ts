@@ -192,3 +192,24 @@ describe("district props", () => {
     expect(placeProps(plain, grid(CellKind.Free), 7).has("ambulance")).toBe(false);
   });
 });
+
+describe("landmarks' roofs", () => {
+  it("carry no air conditioner, tank or antenna", () => {
+    const b = {
+      id: "p",
+      index: 0,
+      type: "office",
+      zone: "downtown",
+      rect: { x: 0, y: 0, w: 40, h: 40 },
+      area: 1600,
+      floors: 9,
+      height: 29,
+      landmark: "stepped",
+      entrance: { x: 20, y: -1 },
+      facing: { x: 0, y: -1 },
+    } as unknown as BuildingDef;
+    // The same block without the landmark gets its roof kit; with it, nothing.
+    expect([...placeRoofProps([{ ...b, landmark: undefined }], 3).values()].flat().length).toBeGreaterThan(0);
+    expect([...placeRoofProps([b], 3).values()].flat()).toHaveLength(0);
+  });
+});

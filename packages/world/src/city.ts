@@ -7,7 +7,7 @@ import type { TerrainDef } from "./terrain";
  * lattice tower on four piers; a pyramid to its apex (Giza); a stepped pyramid with a
  * temple on top (Chichén Itzá); an amphitheatre open to the sky (the Colosseum).
  */
-export type Landmark = "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre" | "dome";
+export type Landmark = "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre" | "dome" | "watchtower";
 
 export interface BuildingDef {
   id: string;

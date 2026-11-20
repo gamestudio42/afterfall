@@ -84,7 +84,7 @@ const SELECTED_STRUCTURE = new THREE.Color(0xffd34d);
 /** The Eiffel Tower's own brown (OSM `building:colour=#706550`), a touch lifted for the grade. */
 const LATTICE_IRON = 0x7a6b55;
 /** Pyramids and amphitheatres are dressed stone, sand and travertine, whatever is sold in them. */
-const ANCIENT_STONE = new Set(["pyramid", "stepped", "amphitheatre"]);
+const ANCIENT_STONE = new Set(["pyramid", "stepped", "amphitheatre", "watchtower"]);
 const WORN_STONE = 0xc9b48e;
 const SUN_DAY = new THREE.Color(0xffe9c8);
 const SUN_DUSK = new THREE.Color(0xff9a50);

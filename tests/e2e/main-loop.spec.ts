@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { expectPopulation } from "./helpers";
 
@@ -255,6 +256,14 @@ test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }
     const body = terrain ? { elements: syntheticTerrain() } : syntheticOverpass();
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
+  // The relief is a third request, to open elevation tiles: answered with a synthetic tile
+  // of rolling ground (10 to 30 m), so the whole relief path runs offline.
+  let tiles = 0;
+  const tile = await readFile(new URL("./fixtures/terrarium-rolling.png", import.meta.url));
+  await page.route("**/elevation-tiles-prod/**", async (route) => {
+    tiles++;
+    await route.fulfill({ contentType: "image/png", body: tile });
+  });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.goto("/");
@@ -286,6 +295,15 @@ test("start a game on a real place from OpenStreetMap (mocked)", async ({ page }
   expect(terrain.waters).toBeGreaterThan(0);
   expect(terrain.rails).toBeGreaterThan(0);
   expect(terrain.wet).toBeGreaterThan(100);
+  // The relief reached the map: rolling ground, drawn at half its height.
+  const relief = await page.evaluate(() => {
+    const t = (window as unknown as Win).__afterfall.sim.city.terrain;
+    return t ? { span: Math.max(...t.heights) / 10, scale: t.scale } : null;
+  });
+  expect(tiles).toBeGreaterThan(0);
+  expect(relief).not.toBeNull();
+  expect(relief!.span).toBeGreaterThan(2);
+  expect(relief!.span).toBeLessThan(21);
 
   // Choose a base by clicking an imported building.
   const target = await page.evaluate(() => {

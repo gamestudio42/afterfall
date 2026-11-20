@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { CityMap } from "@afterfall/world";
+import { heightAt, type CityMap } from "@afterfall/world";
+import { drape, groundGrid } from "./terrainMesh";
 import { buildReclamation, reclaimSurface, reclaimUniforms, reclamationTexture, type ReclamationField } from "./reclamation";
 import { bridgeGeometry, quayGeometry, shoreTexture, waterMaterial } from "./water";
 
@@ -247,10 +248,12 @@ export function buildCityGround(city: CityMap): {
   layeredSurface(groundMat);
   reclaimSurface(groundMat, "ground", reclaim);
   const materials: GroundMaterials = { ground: groundMat, blocks: null, curbs: null, roads: null, parks: null };
-  const groundGeo = plane(-margin, -margin, city.width + margin * 2, city.height + margin * 2, -0.05);
+  // On a hillside the base is a grid that follows the relief; on a flat map, one quad.
+  const groundGeo = groundGrid(-margin, -margin, city.width + margin * 2, city.height + margin * 2, -0.05, city.terrain);
   worldUv(groundGeo, 12);
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
+  ground.name = "base-ground";
   group.add(ground);
 
   // Blocks are slightly raised sidewalks.
@@ -490,7 +493,7 @@ export function buildCityGround(city: CityMap): {
     const m = new THREE.Matrix4();
     trees.forEach((t, i) => {
       const s = 0.8 + ((i * 37) % 10) / 20;
-      m.makeScale(s, s, s).setPosition(t.x, 0, t.y);
+      m.makeScale(s, s, s).setPosition(t.x, heightAt(city.terrain, t.x, t.y), t.y);
       trunks.setMatrixAt(i, m);
       crowns.setMatrixAt(i, m);
     });
@@ -500,5 +503,12 @@ export function buildCityGround(city: CityMap): {
     fallback.add(trunks, crowns);
     group.add(fallback);
   }
+  // Everything above lies flat at its own few centimetres; on a hillside it is laid over the
+  // relief in one pass, the base ground (already a grid) and the instanced trees excepted.
+  if (city.terrain)
+    for (const child of group.children) {
+      if (!(child instanceof THREE.Mesh) || child instanceof THREE.InstancedMesh || child.name === "base-ground") continue;
+      child.geometry = drape(child.geometry, city.terrain);
+    }
   return { group, materials, imported, reclamation: field, reclamationTexture: fieldTex };
 }

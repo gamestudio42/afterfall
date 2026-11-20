@@ -106,7 +106,11 @@ function edgeDistance(poly: { x: number; y: number }[], x: number, y: number): n
  * stay inside the parapet, keep clear of each other and turn with the
  * building's first wall, so they line up with it. Deterministic per seed.
  */
-export function placeRoofProps(buildings: BuildingDef[], seed = 1): Map<RoofKind, PropPlacement[]> {
+export function placeRoofProps(
+  buildings: BuildingDef[],
+  seed = 1,
+  baseOf: (b: BuildingDef) => number = () => 0,
+): Map<RoofKind, PropPlacement[]> {
   const out = new Map<RoofKind, PropPlacement[]>();
   for (const b of buildings) {
     const poly = outlineOf(b);
@@ -140,7 +144,13 @@ export function placeRoofProps(buildings: BuildingDef[], seed = 1): Map<RoofKind
         if (!insidePolygon(poly, x, y) || edgeDistance(poly, x, y) < r + ROOF_MARGIN) continue;
         if (placed.some((p) => Math.hypot(p.x - x, p.y - y) < p.r + r + 0.3)) continue;
         placed.push({ x, y, r });
-        list.push({ x, z: y, y: b.height, rot: yaw + Math.floor(h(60 + n) * 4) * (Math.PI / 2), scale: 0.92 + h(80 + n) * 0.16 });
+        list.push({
+          x,
+          z: y,
+          y: b.height + baseOf(b),
+          rot: yaw + Math.floor(h(60 + n) * 4) * (Math.PI / 2),
+          scale: 0.92 + h(80 + n) * 0.16,
+        });
         out.set(kind, list);
         return;
       }
@@ -412,7 +422,10 @@ export async function loadProps(
       part.castShadow = part.receiveShadow = true;
       const localMatrix = new THREE.Matrix4().makeRotationY(yaw).setPosition(local[0], local[1], local[2]);
       openCars.forEach((p, i) => {
-        matrix.makeRotationY(p.rot).setPosition(p.x, 0, p.z).multiply(localMatrix);
+        matrix
+          .makeRotationY(p.rot)
+          .setPosition(p.x, p.y ?? 0, p.z)
+          .multiply(localMatrix);
         part.setMatrixAt(i, matrix);
       });
       part.instanceMatrix.needsUpdate = true;

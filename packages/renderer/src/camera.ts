@@ -17,6 +17,8 @@ export class RtsCamera {
   bounds = { minX: 0, maxX: 400, minZ: 0, maxZ: 400 };
   minDistance = 22;
   maxDistance = 320;
+  /** The ground's height under the target on a hillside; null on a flat map. */
+  groundHeight: ((x: number, z: number) => number) | null = null;
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(42, aspect, 0.5, 2000);
@@ -29,6 +31,7 @@ export class RtsCamera {
   jumpTo(x: number, z: number): void {
     this.goalTarget.set(x, 0, z);
     this.target.copy(this.goalTarget);
+    if (this.groundHeight) this.target.y = this.groundHeight(x, z);
   }
 
   focus(x: number, z: number): void {
@@ -64,6 +67,9 @@ export class RtsCamera {
 
   update(dt: number): void {
     const k = 1 - Math.exp(-dt * 10);
+    // On a hillside the camera looks at the ground under its target, not at sea level:
+    // it rises with the hill instead of looking into it.
+    this.goalTarget.y = this.groundHeight ? this.groundHeight(this.goalTarget.x, this.goalTarget.z) : 0;
     this.target.lerp(this.goalTarget, k);
     this.yaw += (this.goalYaw - this.yaw) * k;
     this.pitch += (this.goalPitch - this.pitch) * k;
@@ -71,7 +77,7 @@ export class RtsCamera {
     const horiz = Math.cos(this.pitch) * this.distance;
     this.camera.position.set(
       this.target.x + Math.sin(this.yaw) * horiz,
-      Math.sin(this.pitch) * this.distance,
+      this.target.y + Math.sin(this.pitch) * this.distance,
       this.target.z + Math.cos(this.yaw) * horiz,
     );
     this.camera.lookAt(this.target);

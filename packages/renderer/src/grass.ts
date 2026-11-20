@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { CityMap } from "@afterfall/world";
+import { heightAt, type CityMap } from "@afterfall/world";
 import { deriveSeed } from "@afterfall/shared";
 import { growthAt, hash2, inBuilding, inWater, onRoad, type ReclamationField } from "./reclamation";
 
@@ -197,7 +197,7 @@ export class Grass {
       // and, the cards leaning outward, the clump shows a square of bare ground at its
       // heart, outlined by the dark feet: the "strokes" seen under a low sun. A park is
       // 1 cm higher and asphalt 4 cm lower, where the clear foot rows of the mask hide the gap.
-      m.compose(v.set(t.x, ROOT_Y, t.z), q.setFromAxisAngle(up, t.yaw), s.set(width, t.height, width));
+      m.compose(v.set(t.x, ROOT_Y + heightAt(city.terrain, t.x, t.z), t.z), q.setFromAxisAngle(up, t.yaw), s.set(width, t.height, width));
       this.mesh.setMatrixAt(i, m);
       this.mesh.setColorAt(i, color.copy(green).lerp(straw, t.dry).multiplyScalar(t.shade));
     });

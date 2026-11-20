@@ -21,6 +21,8 @@ test("captures the ground of an imported map", async ({ page }) => {
       body: JSON.stringify(terrain ? { elements: syntheticTerrain() } : syntheticOverpass()),
     });
   });
+  // Flat, as the capture was made: the relief would move the camera's framing.
+  await page.route("**/elevation-tiles-prod/**", (route) => route.abort());
   await page.goto("/");
   await page.getByTestId("new-game").click();
   await page.getByTestId("map-real").click();

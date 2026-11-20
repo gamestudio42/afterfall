@@ -15,20 +15,23 @@ export function outlineOf(b: BuildingDef): { x: number; y: number }[] {
 }
 
 /**
- * Where a building sits on a hillside: `foot` is the lowest ground under its outline, `base`
- * where its walls start. A building stands on its foot, the uphill wall running into the
- * hill, unless the hill would reach past its roof: then it is raised until the roof clears
- * the highest ground by a storey's worth, on a stone plinth down to the foot.
+ * Where a building sits on a hillside and how tall it is drawn. It stands on the lowest
+ * ground under its outline (`base`), the uphill wall running into the hill; when the hill
+ * would reach past its roof, it grows taller rather than rising: the downhill side gains
+ * storeys, as a building cut into a slope does, so its roof clears the highest ground by a
+ * storey's worth. Raising it instead put a low warehouse on a 6 m plinth with its door
+ * hanging off the top (decision 63). A landmark keeps its own height.
  */
-export function buildingSeat(b: BuildingDef, terrain: TerrainDef | undefined): { base: number; foot: number } {
-  if (!terrain) return { base: 0, foot: 0 };
+export function buildingSeat(b: BuildingDef, terrain: TerrainDef | undefined): { base: number; foot: number; height: number } {
+  if (!terrain) return { base: 0, foot: 0, height: b.height };
   const r = heightRange(terrain, [...outlineOf(b), { x: b.rect.x + b.rect.w / 2, y: b.rect.y + b.rect.h / 2 }]);
+  if (b.landmark) return { base: r.min, foot: r.min, height: b.height };
   const clear = Math.min(2.5, b.height * 0.5);
-  return { foot: r.min, base: Math.max(r.min, r.max + clear - b.height) };
+  // Whole storeys, so the facade's last row of windows meets the cornice.
+  const need = r.max + clear - r.min;
+  const height = need > b.height ? b.height + Math.ceil((need - b.height) / FLOOR) * FLOOR : b.height;
+  return { base: r.min, foot: r.min, height };
 }
-
-/** How far a plinth reaches under the foot, so it never shows a gap at the low corner. */
-const PLINTH_SINK = 0.4;
 
 /** Facade families, each one baked module (`tools/blender/facades.py`). */
 export type FacadeStyle = "residential" | "office" | "industrial";
@@ -164,7 +167,11 @@ export class BuildingBatch {
     const parts = Object.fromEntries(GROUPS.map((g) => [g, new Builder()])) as Record<Group, Builder>;
     const local: { group: Group; start: number; count: number }[][] = [];
     const seats = buildings.map((b) => buildingSeat(b, terrain));
-    for (const b of buildings) {
+    for (const placed of buildings) {
+      // Drawn at its seat's height: a building cut into a slope is taller downhill.
+      const seat = seats[placed.index];
+      const b =
+        seat && seat.height !== placed.height ? { ...placed, height: seat.height, floors: Math.round(seat.height / FLOOR) } : placed;
       const mine: { group: Group; start: number; count: number }[] = [];
       const add = (group: Group, fn: (out: Builder) => void) => {
         const out = parts[group];
@@ -176,10 +183,6 @@ export class BuildingBatch {
       };
       const poly = outlineOf(b);
       const holes = holesOf(b);
-      // A raised building's plinth, in the building's own frame (below its base at 0).
-      const seat = seats[b.index] ?? { base: 0, foot: 0 };
-      if (seat.base - seat.foot > 0.1 && b.landmark !== "lattice")
-        add("trim", (o) => walls(poly, seat.foot - seat.base - PLINTH_SINK, 0, o, 0, 0, 3, 3));
       const top = Math.max(FLOOR * 0.5, b.height - TOP);
       const style = facadeStyle(b.type);
       // Shift each building by whole bays and floors, so neighbours do not

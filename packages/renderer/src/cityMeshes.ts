@@ -264,7 +264,7 @@ export function buildCityGround(city: CityMap): {
   // Imported maps: the sidewalk is a ribbon wider than the road, laid just under it.
   // The gap is deliberately generous — at five millimetres the two surfaces fought in the
   // depth buffer at distance and the ribbon striped through the asphalt (playtest video).
-  for (const r of city.roads) if (r.path) blocks.push(...sidewalk(r.path, r.width ?? 8, SIDEWALK_WIDTH, 0.02));
+  for (const r of city.roads) if (r.path && !r.trail) blocks.push(...sidewalk(r.path, r.width ?? 8, SIDEWALK_WIDTH, 0.02));
   if (blocks.length) {
     const blockGeo = mergeGeometries(blocks.map((g) => (g.index ? g.toNonIndexed() : g)));
     worldUv(blockGeo, SIDEWALK_TILE);
@@ -290,9 +290,28 @@ export function buildCityGround(city: CityMap): {
     group.add(curbMesh);
   }
 
-  const roads = city.roads.flatMap((r) =>
-    r.path ? ribbon(r.path, r.width ?? 8, 0.03) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.03)],
-  );
+  const roads = city.roads
+    .filter((r) => !r.trail)
+    .flatMap((r) => (r.path ? ribbon(r.path, r.width ?? 8, 0.03) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.03)]));
+  // A site's footpaths, walked as streets where it has none: packed earth and worn stone,
+  // with no kerb, no sidewalk and no asphalt.
+  const trails = city.roads.filter((r) => r.trail && r.path).flatMap((r) => ribbon(r.path!, r.width ?? 3, 0.045));
+  if (trails.length) {
+    const trailGeo = mergeGeometries(trails.map((g) => (g.index ? g.toNonIndexed() : g)));
+    worldUv(trailGeo, 4);
+    const earth = new THREE.MeshStandardMaterial({
+      color: 0x8a7556,
+      roughness: 1,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    reclaimSurface(earth, "ground", reclaim);
+    const trailMesh = new THREE.Mesh(trailGeo, earth);
+    trailMesh.receiveShadow = true;
+    trailMesh.name = "trails";
+    group.add(trailMesh);
+  }
   // A map with no roads at all (a fixture, or a save from one) used to crash here:
   // `mergeGeometries([])` reads `geometries[0].index` without checking.
   if (roads.length) {

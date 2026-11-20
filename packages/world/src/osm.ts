@@ -235,6 +235,29 @@ const ROAD_WIDTH: Record<string, number> = {
   tertiary_link: 8,
 };
 
+/**
+ * Ways on foot, read only where an area has no street at all: a heritage site reached by
+ * paths and steps (Machu Picchu, the Great Wall at Badaling) is still a place to play.
+ */
+const TRAIL_WIDTH: Record<string, number> = { footway: 3, path: 2.5, steps: 3, bridleway: 3, cycleway: 3 };
+
+/**
+ * The fewest buildings a map needs: a headquarters, and a few to search and to adapt.
+ * It was twelve, which ruled out every site that stands alone (the Taj Mahal has nine
+ * buildings around it, Christ the Redeemer ten). Fewer buildings is a poorer map, and the
+ * player can see that before choosing it.
+ */
+export const MIN_BUILDINGS = 5;
+
+/** Metres of street under which an area's footpaths are walked as streets too. */
+export const TRAIL_THRESHOLD = 1500;
+
+function polylineLength(line: Vec2[]): number {
+  let n = 0;
+  for (let i = 1; i < line.length; i++) n += Math.hypot(line[i].x - line[i - 1].x, line[i].y - line[i - 1].y);
+  return n;
+}
+
 /** Classes busy enough for hordes to arrive along. */
 const MAJOR_ROADS = new Set(["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential"]);
 
@@ -364,7 +387,8 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
 
   const pois: { p: Vec2; tags: Record<string, string> }[] = [];
   const rawBuildings: RawBuilding[] = [];
-  const rawRoads: { id: number; kind: string; line: Vec2[]; width: number }[] = [];
+  const rawRoads: { id: number; kind: string; line: Vec2[]; width: number; trail?: boolean }[] = [];
+  const rawTrails: { id: number; kind: string; line: Vec2[]; width: number; trail: true }[] = [];
   const rawParks: { id: number; poly: Vec2[] }[] = [];
   const rawWaters: WaterDef[] = [];
   const rawRails: RailDef[] = [];
@@ -416,6 +440,10 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       for (const piece of clipPolylineToRect(pts, bounds)) {
         rawRoads.push({ id: el.id, kind: tags.highway, line: piece, width: roadWidth(tags, tags.highway) });
       }
+    } else if (tags.highway && TRAIL_WIDTH[tags.highway] && tags.tunnel !== "yes" && tags.area !== "yes") {
+      const width = Math.min(6, Number.parseFloat(tags.width ?? "") || TRAIL_WIDTH[tags.highway]);
+      for (const piece of clipPolylineToRect(pts, bounds))
+        rawTrails.push({ id: el.id, kind: tags.highway, line: piece, width, trail: true });
     } else if (tags.railway && RAIL_KINDS.has(tags.railway) && tags.tunnel !== "yes") {
       for (const [k, piece] of clipPolylineToRect(pts, bounds).entries()) rawRails.push({ id: `rail${el.id}_${k}`, path: piece });
     } else if (tags.waterway && WATERWAY_WIDTH[tags.waterway] && tags.tunnel !== "yes" && tags.tunnel !== "culvert" && !closed) {
@@ -432,6 +460,12 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     }
   }
 
+  // A site with few or no streets is walked on its own paths. Measured on 480 m areas: the
+  // Eiffel Tower and the Colosseum have over 5 km of streets, the Taj Mahal 0.2 km, Christ
+  // the Redeemer 0.8, Giza 1.1, Machu Picchu and Chichén Itzá none. Below the threshold
+  // the paths join the streets, so the buildings they reach are kept.
+  const streetLength = rawRoads.reduce((n, r) => n + polylineLength(r.line), 0);
+  if (streetLength < TRAIL_THRESHOLD) rawRoads.push(...rawTrails);
   if (rawRoads.length === 0) throw new OsmImportError("noStreets", "No streets in this area");
 
   // OSM sometimes maps one volume twice: a tower over its annex, or a building drawn again
@@ -482,6 +516,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       horizontal: b.w >= b.h,
       path: r.line,
       width,
+      ...(r.trail ? { trail: true } : {}),
     };
   });
   const streets = rawRoads.filter((r) => r.kind !== "pedestrian" && r.kind !== "track");
@@ -526,7 +561,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
       facing: k.facing,
     });
   }
-  if (buildings.length < 12) throw new OsmImportError("tooFewBuildings", `Only ${buildings.length} usable buildings`);
+  if (buildings.length < MIN_BUILDINGS) throw new OsmImportError("tooFewBuildings", `Only ${buildings.length} usable buildings`);
 
   const parks: ParkDef[] = rawParks.map((p, i) => {
     const rng = new Rng(deriveSeed(p.id >>> 0, "trees"));

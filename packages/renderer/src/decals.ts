@@ -78,6 +78,8 @@ export function placeDecals(
   // Sample actual centerline segments. An imported road's rectangle is only
   // a bounding box: filling it stamps courtyards and the inside of every bend.
   for (const road of city.roads) {
+    // Potholes and tyre marks belong to asphalt, not to a footpath.
+    if (road.trail) continue;
     const r = road.rect;
     const path =
       road.path ??

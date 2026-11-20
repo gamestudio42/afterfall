@@ -432,7 +432,7 @@ export class GameRenderer {
       // by the building it belongs to, which is exactly how the first cut failed.
       const x = def.entrance.x + def.facing.x * 0.6;
       const z = def.entrance.y + def.facing.y * 0.6;
-      const base = def.height + 0.05 + this.baseOf(def);
+      const base = this.topOf(def) + 0.05;
       tmpM.compose(new THREE.Vector3(x, base + 2.1, z), tmpQ.setFromAxisAngle(up, 0), tmpS.set(1, 1, 1));
       poles.setMatrixAt(i, tmpM);
       // The face turned to the street, not the edge: a flag seen edge-on is four pixels
@@ -542,7 +542,7 @@ export class GameRenderer {
       sim.city.terrain ? new Map([...m].map(([k, list]) => [k, list.map((p) => ({ ...p, y: (p.y ?? 0) + this.ground(p.x, p.z) }))])) : m;
     const placements = new Map<PropKind | RoofKind | LitterKind, PropPlacement[]>([
       ...onGround(street),
-      ...placeRoofProps(sim.city.buildings, sim.city.seed ?? 1, (b) => this.baseOf(b)),
+      ...placeRoofProps(sim.city.buildings, sim.city.seed ?? 1, (b) => this.topOf(b)),
       ...onGround(litter),
     ]);
     void loadProps(this.artBase, placements, (kit) => {
@@ -827,7 +827,9 @@ export class GameRenderer {
 
     this.buildings = new BuildingBatch(city.buildings, city.terrain);
     this.groundTop = terrainTop(city.terrain);
-    this.buildingBases = new Float32Array(city.buildings.map((b) => buildingSeat(b, city.terrain).base));
+    const seats = city.buildings.map((b) => buildingSeat(b, city.terrain));
+    this.buildingBases = new Float32Array(seats.map((s) => s.base));
+    this.buildingTops = new Float32Array(seats.map((s) => s.base + s.height));
     this.rts.groundHeight = city.terrain ? (x, z) => heightAt(city.terrain, x, z) : null;
     this.vfx?.setGround(city.terrain);
     // Textures may already have arrived before the city existed: apply the
@@ -1115,6 +1117,13 @@ export class GameRenderer {
   /** The ground each building stands on: the lowest under its outline (BuildingBatch does the same). */
   private buildingBases: Float32Array = new Float32Array(0);
 
+  /** Where a building's roof is drawn: its base plus its drawn height. */
+  private buildingTops: Float32Array = new Float32Array(0);
+
+  topOf(b: { index: number; height: number }): number {
+    return this.buildingTops[b.index] ?? b.height;
+  }
+
   baseOf(b: { index: number }): number {
     return this.buildingBases[b.index] ?? 0;
   }
@@ -1307,7 +1316,7 @@ export class GameRenderer {
       const cy = b.rect.y + b.rect.h / 2;
       const d = Math.hypot(cx - corner.x, cy - corner.y) || 1;
       const k = Math.min(1.5, d * 0.4) / d;
-      this.hqMarker.position.set(corner.x + (cx - corner.x) * k, b.height + 0.2 + this.baseOf(b), corner.y + (cy - corner.y) * k);
+      this.hqMarker.position.set(corner.x + (cx - corner.x) * k, this.topOf(b) + 0.2, corner.y + (cy - corner.y) * k);
     } else {
       this.hqMarker.visible = false;
       this.hqLight.intensity = 0;
@@ -1604,7 +1613,7 @@ export class GameRenderer {
         // corners. Uprights on every vertex read as a forest of lines on a curved footprint.
         const b = sim.city.buildings[i];
         this.selectionBox.geometry.dispose();
-        this.selectionBox.geometry = selectionGeometry(outlineOf(b), b.height);
+        this.selectionBox.geometry = selectionGeometry(outlineOf(b), this.topOf(b) - this.baseOf(b));
         this.selectionBox.position.y = this.baseOf(b);
         this.selectionOutlineOf = i;
       }

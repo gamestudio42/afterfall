@@ -108,7 +108,7 @@ describe("a building on a slope", () => {
 });
 
 describe("a building on a steep slope", () => {
-  it("is raised until its roof clears the hill, on a plinth down to the foot", () => {
+  it("stands on its foot and grows taller downhill until its roof clears the hill", () => {
     // 1 m of rise per metre of x: across a 10 m house the ground climbs 10 m, past its 7 m roof.
     const cell = 4;
     const cols = 26;
@@ -128,21 +128,28 @@ describe("a building on a steep slope", () => {
       facing: { x: 0, y: -1 },
     };
     const seat = buildingSeat(b, t);
+    // On the lowest ground, never raised above it: no plinth, no door in the air.
+    expect(seat.base).toBeCloseTo(40, 3);
     expect(seat.foot).toBeCloseTo(40, 3);
-    // The roof (base + 7) clears the highest ground (50) by 2.5 m.
-    expect(seat.base + 7).toBeCloseTo(52.5, 3);
+    // Taller by whole storeys, until the roof clears the highest ground (50) by 2.5 m.
+    expect(seat.base + seat.height).toBeGreaterThanOrEqual(52.5);
+    expect(seat.base + seat.height).toBeLessThan(52.5 + 3.2);
+    expect((seat.height - 7) / 3.2).toBeCloseTo(Math.round((seat.height - 7) / 3.2), 6);
     const p = new BuildingBatch([b], t).mesh.geometry.getAttribute("position");
     let min = Infinity;
-    for (let i = 0; i < p.count; i++) min = Math.min(min, p.getY(i));
-    // The plinth reaches below the foot.
-    expect(min).toBeLessThan(seat.foot);
+    let max = -Infinity;
+    for (let i = 0; i < p.count; i++) {
+      min = Math.min(min, p.getY(i));
+      max = Math.max(max, p.getY(i));
+    }
+    expect(min).toBeCloseTo(40, 3);
+    expect(max).toBeGreaterThan(52.5);
   });
 
-  it("stands on its foot when the slope is gentle", () => {
-    expect(buildingSeat({ ...({} as BuildingDef), rect: { x: 0, y: 0, w: 10, h: 10 }, height: 7 } as BuildingDef, undefined)).toEqual({
-      base: 0,
-      foot: 0,
-    });
+  it("keeps its own height on a gentle slope and on a flat map", () => {
+    const b = { rect: { x: 0, y: 0, w: 10, h: 10 }, height: 7 } as BuildingDef;
+    expect(buildingSeat(b, undefined)).toEqual({ base: 0, foot: 0, height: 7 });
+    expect(buildingSeat(b, slope()).height).toBe(7);
   });
 });
 

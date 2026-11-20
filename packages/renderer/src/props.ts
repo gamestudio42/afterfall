@@ -109,7 +109,8 @@ function edgeDistance(poly: { x: number; y: number }[], x: number, y: number): n
 export function placeRoofProps(
   buildings: BuildingDef[],
   seed = 1,
-  baseOf: (b: BuildingDef) => number = () => 0,
+  /** Where a building's roof is drawn: its height, or more on a hillside. */
+  roofOf: (b: BuildingDef) => number = (b) => b.height,
 ): Map<RoofKind, PropPlacement[]> {
   const out = new Map<RoofKind, PropPlacement[]>();
   for (const b of buildings) {
@@ -149,7 +150,7 @@ export function placeRoofProps(
         list.push({
           x,
           z: y,
-          y: b.height + baseOf(b),
+          y: roofOf(b),
           rot: yaw + Math.floor(h(60 + n) * 4) * (Math.PI / 2),
           scale: 0.92 + h(80 + n) * 0.16,
         });

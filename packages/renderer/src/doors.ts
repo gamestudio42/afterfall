@@ -88,9 +88,9 @@ export class Doors {
     placed.forEach((s, i) => {
       // Local +Z is the door's front: turn it to the wall's outward normal.
       q.setFromAxisAngle(up, Math.atan2(s.nx, s.ny));
-      // At the ground in front of the door, wherever on the slope the wall stands; on the
-      // plinth when the building was raised above that ground.
-      p.set(s.x + s.nx * 0.02, Math.max(heightAt(terrain, s.x + s.nx, s.y + s.ny), s.base ?? 0), s.y + s.ny * 0.02);
+      // On the ground where the door meets the wall: the building stands on its lowest
+      // ground, so its wall reaches down to wherever that is.
+      p.set(s.x + s.nx * 0.02, Math.max(heightAt(terrain, s.x, s.y), s.base ?? 0), s.y + s.ny * 0.02);
       m.compose(p, q, one);
       door.setMatrixAt(i, m);
       canopy.setMatrixAt(i, m);

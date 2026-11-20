@@ -95,6 +95,8 @@ const LATTICE_IRON = 0x7a6b55;
 /** Pyramids and amphitheatres are dressed stone, sand and travertine, whatever is sold in them. */
 const ANCIENT_STONE = new Set(["pyramid", "stepped", "amphitheatre", "watchtower"]);
 const WORN_STONE = 0xc9b48e;
+/** Petra's rose-red sandstone, for a facade carved in the rock. */
+const ROSE_SANDSTONE = 0xc4836a;
 const SUN_DAY = new THREE.Color(0xffe9c8);
 const SUN_DUSK = new THREE.Color(0xff9a50);
 const MOON = new THREE.Color(0x8ea6e6);
@@ -942,9 +944,11 @@ export class GameRenderer {
           ? def.colour
           : def.landmark === "lattice"
             ? LATTICE_IRON
-            : def.landmark && ANCIENT_STONE.has(def.landmark)
-              ? WORN_STONE
-              : BUILDING_TYPES[def.type].color,
+            : def.landmark === "rockcut"
+              ? ROSE_SANDSTONE
+              : def.landmark && ANCIENT_STONE.has(def.landmark)
+                ? WORN_STONE
+                : BUILDING_TYPES[def.type].color,
       );
       if (this.overlay === "resources") {
         const left = st.fn === "none" ? bagTotal(st.remainingLoot) / Math.max(1, st.searchTotal) : 0;

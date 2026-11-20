@@ -790,6 +790,12 @@ function buildLandmark(
     return;
   }
 
+  if (b.landmark === "rockcut") {
+    add("trim", (o) => rockCut(poly, h, b.facing, o));
+    add("roof", (o) => rockCutDoor(poly, h, b.facing, o));
+    return;
+  }
+
   if (b.landmark === "dome") {
     add("trim", (o) => domedHall(poly, h, b.minarets ?? [], o));
     return;
@@ -920,6 +926,180 @@ function watchtower(poly: { x: number; y: number }[], h: number, out: Builder): 
       face(out, [p(d1, 0, top), p(d1, THICK, top), p(d1, THICK, y1), p(d1, 0, y1)], [dx, 0, dz]);
     }
   }
+}
+
+/** The footprint's edge facing most nearly along `facing`: where a carved facade goes. */
+function frontEdge(poly: { x: number; y: number }[], facing: { x: number; y: number }) {
+  const ccw = isCcw(poly);
+  let best = { a: poly[0], tx: 1, tz: 0, nx: 0, nz: 1, len: 1 };
+  let bestScore = -Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 1) continue;
+    const tx = (b.x - a.x) / len;
+    const tz = (b.y - a.y) / len;
+    const nx = ccw ? tz : -tz;
+    const nz = ccw ? -tx : tx;
+    // Long edges win a near tie: a facade wants the width.
+    const score = nx * facing.x + nz * facing.y + len * 0.01;
+    if (score > bestScore) {
+      bestScore = score;
+      best = { a, tx, tz, nx, nz, len };
+    }
+  }
+  return best;
+}
+
+/** A frame on a facade: `s` along it from its middle, `d` out from it, `y` up. */
+function facadeFrame(poly: { x: number; y: number }[], facing: { x: number; y: number }) {
+  const e = frontEdge(poly, facing);
+  const mx = e.a.x + (e.tx * e.len) / 2;
+  const mz = e.a.y + (e.tz * e.len) / 2;
+  const at = (s: number, d: number, y: number): [number, number, number] => [mx + e.tx * s + e.nx * d, y, mz + e.tz * s + e.nz * d];
+  return { ...e, at };
+}
+
+/**
+ * A facade carved into a cliff, as at Petra: the temple front cut out of a wall of
+ * sandstone, in two orders, on the side the door faces. Below, six columns, an entablature
+ * and a pediment; above, a round kiosk between two half-pavilions under broken pediments,
+ * and an urn on the kiosk's cone.
+ *
+ * The cliff is wider and deeper than the outline OSM maps (the carving's own footprint):
+ * drawn on the outline alone, the Treasury stood alone on the plain like a brick tower.
+ * The rock round it is scenery; the ground rules still read the outline.
+ */
+function rockCut(poly: { x: number; y: number }[], h: number, facing: { x: number; y: number }, out: Builder): void {
+  const f = facadeFrame(poly, facing);
+  // The facade is about two thirds as wide as it is tall (the Treasury 25 m by 39).
+  const W = h * 0.64;
+  const half = W / 2;
+  // How far the outline runs back from the facade.
+  let depth = 4;
+  for (const p of poly) depth = Math.max(depth, -((p.x - f.at(0, 0, 0)[0]) * f.nx + (p.y - f.at(0, 0, 0)[2]) * f.nz));
+  // A block in the facade's frame, all six faces.
+  const block = (s0: number, s1: number, y0: number, y1: number, d0: number, d1: number) => {
+    const n: [number, number, number] = [f.nx, 0, f.nz];
+    const t: [number, number, number] = [f.tx, 0, f.tz];
+    face(out, [f.at(s0, d1, y0), f.at(s1, d1, y0), f.at(s1, d1, y1), f.at(s0, d1, y1)], n);
+    face(out, [f.at(s0, d0, y0), f.at(s1, d0, y0), f.at(s1, d0, y1), f.at(s0, d0, y1)], [-n[0], 0, -n[2]]);
+    face(out, [f.at(s0, d0, y1), f.at(s1, d0, y1), f.at(s1, d1, y1), f.at(s0, d1, y1)], [0, 1, 0]);
+    face(out, [f.at(s0, d0, y0), f.at(s1, d0, y0), f.at(s1, d1, y0), f.at(s0, d1, y0)], [0, -1, 0]);
+    face(out, [f.at(s0, d0, y0), f.at(s0, d1, y0), f.at(s0, d1, y1), f.at(s0, d0, y1)], [-t[0], 0, -t[2]]);
+    face(out, [f.at(s1, d0, y0), f.at(s1, d1, y0), f.at(s1, d1, y1), f.at(s1, d0, y1)], t);
+  };
+  const slab = block;
+  // The cliff: the wall the facade is cut into, then its shoulders on either side standing
+  // proud of the carving, each a few uneven blocks, so its top reads as rock.
+  const back = -depth - W * 0.3;
+  const jag = [1.12, 1.24, 1.08, 1.3, 1.16, 1.2, 1.06];
+  block(-half, half, 0, h * 1.08, back, 0);
+  const side = W * 0.55;
+  for (const sgn of [-1, 1]) {
+    for (let k = 0; k < 3; k++) {
+      const s0 = sgn * (half + (side * k) / 3);
+      const s1 = sgn * (half + (side * (k + 1)) / 3);
+      const top = h * jag[(k + (sgn > 0 ? 3 : 0)) % jag.length] * (1 - k * 0.12);
+      block(Math.min(s0, s1), Math.max(s0, s1), 0, top, back + k * 2, 2.2 - k * 0.6);
+    }
+  }
+  // Behind the facade the rock goes on rising.
+  block(-half * 0.8, half * 0.8, h * 1.08, h * 1.3, back, -W * 0.18);
+
+  // A triangular pediment from s0 to s1, rising from y0 to its apex at `apexAt`.
+  const pediment = (s0: number, s1: number, y0: number, rise: number, apexAt: number, d: number) => {
+    const n: [number, number, number] = [f.nx, 0, f.nz];
+    const a = f.at(s0, d, y0);
+    const b = f.at(s1, d, y0);
+    const c = f.at(apexAt, d, y0 + rise);
+    face(out, [a, b, c], n);
+    const a0 = f.at(s0, 0, y0);
+    const b0 = f.at(s1, 0, y0);
+    const c0 = f.at(apexAt, 0, y0 + rise);
+    face(out, [a, c, c0, a0], [f.nx * 0.2 - f.tx, 0.8, f.nz * 0.2 - f.tz]);
+    face(out, [c, b, b0, c0], [f.nx * 0.2 + f.tx, 0.8, f.nz * 0.2 + f.tz]);
+  };
+  const column = (s: number, d: number, y0: number, y1: number, r: number) => {
+    const [cx, , cz] = f.at(s, d, 0);
+    lathe(
+      cx,
+      cz,
+      [
+        [r * 1.25, y0],
+        [r * 1.25, y0 + r],
+        [r, y0 + r],
+        [r, y1 - r * 1.4],
+        [r * 1.35, y1],
+      ],
+      10,
+      out,
+    );
+  };
+
+  const D = 1.2;
+  const lowTop = h * 0.4;
+  const entab = h * 0.06;
+  // Lower order: a step, six columns, the entablature over them, a pediment on the middle four.
+  slab(-half - 0.4, half + 0.4, 0, 0.6, 0, D + 0.6);
+  const r = Math.max(0.35, W * 0.03);
+  for (let k = 0; k < 6; k++) column(-half + r * 1.5 + ((W - r * 3) * k) / 5, D * 0.6, 0.6, lowTop, r);
+  slab(-half, half, lowTop, lowTop + entab, 0, D);
+  const ped = (W - r * 3) * 0.3 + r * 1.5;
+  pediment(-ped, ped, lowTop + entab, h * 0.09, 0, D);
+  // Upper order: two half-pavilions at the ends and the kiosk in the middle.
+  const up0 = lowTop + entab + h * 0.07;
+  const upTop = h * 0.86;
+  const wing = W * 0.24;
+  slab(-half, half, up0 - 0.6, up0, 0, D * 0.8);
+  for (const side of [-1, 1]) {
+    const outer = side * half;
+    const inner = side * (half - wing);
+    const lo = Math.min(outer, inner);
+    const hi = Math.max(outer, inner);
+    column(lo + r * 1.4, D * 0.5, up0, upTop - entab * 0.8, r * 0.85);
+    column(hi - r * 1.4, D * 0.5, up0, upTop - entab * 0.8, r * 0.85);
+    slab(lo, hi, upTop - entab * 0.8, upTop, 0, D * 0.8);
+    // Half a pediment, rising toward the kiosk.
+    pediment(lo, hi, upTop, h * 0.05, inner, D * 0.8);
+  }
+  // The kiosk is half sunk in the rock: it stands out about as far as the columns do.
+  const R = W * 0.09;
+  const kd = -R * 0.3;
+  const [kx, , kz] = f.at(0, kd, 0);
+  lathe(
+    kx,
+    kz,
+    [
+      [R * 1.1, up0],
+      [R, up0 + 0.3],
+      [R, upTop - entab * 0.5],
+      [R * 1.12, upTop],
+      [R * 1.12, upTop + 0.4],
+      [R * 0.25, upTop + h * 0.07],
+      [R * 0.3, upTop + h * 0.075],
+      [R * 0.32, upTop + h * 0.1],
+      [0, upTop + h * 0.11],
+    ],
+    12,
+    out,
+  );
+  for (let k = 0; k < 4; k++) {
+    const a = -Math.PI / 2 + (k / 3 - 0.5) * 2.2;
+    // Columns round the kiosk's front half.
+    const s = Math.cos(a) * R * 0.95;
+    const d = kd + Math.sin(-a) * R * 0.95;
+    column(s, d, up0, upTop - entab * 0.5, r * 0.7);
+  }
+}
+
+/** The dark doorway behind the Treasury's columns, drawn in the darker roof tone. */
+function rockCutDoor(poly: { x: number; y: number }[], h: number, facing: { x: number; y: number }, out: Builder): void {
+  const f = facadeFrame(poly, facing);
+  const w = h * 0.64 * 0.14;
+  const top = h * 0.3;
+  face(out, [f.at(-w / 2, 0.05, 0.6), f.at(w / 2, 0.05, 0.6), f.at(w / 2, 0.05, top), f.at(-w / 2, 0.05, top)], [f.nx, 0, f.nz]);
 }
 
 /**

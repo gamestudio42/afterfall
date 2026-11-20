@@ -5,9 +5,11 @@ import type { TerrainDef } from "./terrain";
 /**
  * Silhouettes the extruder draws instead of a block: towers, spires and obelisks; a
  * lattice tower on four piers; a pyramid to its apex (Giza); a stepped pyramid with a
- * temple on top (Chichén Itzá); an amphitheatre open to the sky (the Colosseum).
+ * temple on top (Chichén Itzá); an amphitheatre open to the sky (the Colosseum); a
+ * facade carved into a cliff (Petra's Treasury).
  */
-export type Landmark = "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre" | "dome" | "watchtower";
+export type Landmark =
+  "tower" | "lattice" | "spire" | "obelisk" | "pyramid" | "stepped" | "amphitheatre" | "dome" | "watchtower" | "rockcut";
 
 export interface BuildingDef {
   id: string;

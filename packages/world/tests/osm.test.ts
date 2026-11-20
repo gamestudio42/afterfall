@@ -347,6 +347,16 @@ describe("landmarks", () => {
     expect(r.minarets).toBeUndefined();
   });
 
+  it("makes a rock-cut tomb a carved facade, about twice as tall as it is long", () => {
+    // Petra's Treasury: building=yes, historic=tomb, tomb=rock-cut, on an outline 18 m long
+    // that rises 39 m. A 20 m one comes out a little over 40.
+    const t = cityFromOverpass(withWay(9216, { building: "yes", historic: "tomb", tomb: "rock-cut" }, ring(-60, -40, -60, -48)), opts);
+    const b = t.buildings.find((x) => x.id === "osm9216")!;
+    expect(b.landmark).toBe("rockcut");
+    expect(b.height).toBeGreaterThan(40);
+    expect(b.height).toBeLessThan(50);
+  });
+
   it("makes a defensive tower a watchtower, and keeps an ordinary building in the palette", () => {
     const tower = cityFromOverpass(
       withWay(9213, { building: "tower", man_made: "tower", "tower:type": "defensive", height: "11" }, ring(-60, -40, -60, -40)),

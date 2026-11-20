@@ -288,3 +288,56 @@ describe("a city wall", () => {
     expect(g.findPath(300, 240, 380, 240, "survivor")).not.toBeNull();
   });
 });
+
+describe("statues and monuments mapped as points", () => {
+  const { lat, lon } = FIXTURE_CENTER;
+  const kLon = 111_320 * Math.cos((lat * Math.PI) / 180);
+  const node = (id: number, x: number, y: number, tags: Record<string, string>) => ({
+    type: "node" as const,
+    id,
+    lat: lat - y / 111_132,
+    lon: lon + x / kLon,
+    tags,
+  });
+  const city = cityFromOverpass(
+    {
+      elements: [
+        ...syntheticOverpass().elements,
+        // Christ the Redeemer as OSM has it: a monument point about Jesus, and nothing else.
+        node(9401, -30, -30, { man_made: "monument", "subject:wikidata": "Q302", landmark: "1", name: "Cristo Redentor" }),
+        node(9402, 30, -30, { man_made: "statue" }),
+        node(9403, 30, 30, { memorial: "statue", height: "11" }),
+        node(9404, -30, 30, { man_made: "monument" }),
+        node(9405, 900, 900, { man_made: "statue" }),
+      ],
+    },
+    opts,
+  );
+  const by = (id: string) => city.monuments?.find((m) => m.id === id);
+
+  it("asks for them with the water", () => {
+    expect(overpassTerrainQuery(FIXTURE_CENTER.lat, FIXTURE_CENTER.lon, 480)).toContain('"man_made"~"^(statue|monument)$"');
+  });
+
+  it("opens a Christ's arms at Christ the Redeemer's proportions", () => {
+    expect(by("mo9401")).toMatchObject({ kind: "open-arms", height: 30, pedestal: 8 });
+  });
+
+  it("keeps a statue a few metres tall, splits a tagged height, and makes a plain monument a column", () => {
+    expect(by("mo9402")).toMatchObject({ kind: "statue", height: 3.5, pedestal: 2 });
+    const tall = by("mo9403")!;
+    expect(tall.kind).toBe("statue");
+    expect(tall.height + tall.pedestal).toBeCloseTo(11, 6);
+    expect(by("mo9404")?.kind).toBe("column");
+    // Off the map, not drawn.
+    expect(by("mo9405")).toBeUndefined();
+  });
+
+  it("makes the pedestal solid ground", () => {
+    const g = NavGrid.fromCity(city);
+    const m = by("mo9401")!;
+    const i = g.cellOf(m.x, m.y);
+    // A building may stand there in the fixture; if not, the pedestal does.
+    expect([CellKind.Rampart, CellKind.Building]).toContain(g.kind[i]);
+  });
+});

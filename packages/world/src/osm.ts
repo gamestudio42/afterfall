@@ -14,7 +14,7 @@ import {
   type Rect,
   type Vec2,
 } from "@afterfall/shared";
-import type { BridgeDef, BuildingDef, CityMap, Landmark, ParkDef, RailDef, RoadDef, WallDef, WaterDef } from "./city";
+import type { BridgeDef, BuildingDef, CityMap, Landmark, MonumentDef, ParkDef, RailDef, RoadDef, WallDef, WaterDef } from "./city";
 import type { TerrainDef } from "./terrain";
 import { framePoint, latticeFrame } from "./landmarks";
 import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
@@ -211,6 +211,8 @@ export function overpassTerrainQuery(lat: number, lon: number, size: number): st
   way["railway"~"^(rail|light_rail|narrow_gauge)$"](${box});
   way["man_made"="bridge"](${box});
   way["barrier"="city_wall"](${box});
+  node["man_made"~"^(statue|monument)$"](${box});
+  node["memorial"="statue"](${box});
 );
 out geom;`;
 }
@@ -409,6 +411,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   const rawRails: RailDef[] = [];
   const rawBridges: BridgeDef[] = [];
   const rawWalls: WallDef[] = [];
+  const rawMonuments: MonumentDef[] = [];
   // Rings get clipped to the play area; a hole is clipped on its own, and only a piece
   // that still has area is kept.
   const addWater = (id: string, polygon: Vec2[], holes: Vec2[][] = []) => {
@@ -421,7 +424,15 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   for (const el of data.elements) {
     const tags = el.tags ?? {};
     if (el.type === "node") {
-      if (el.lat !== undefined && el.lon !== undefined) pois.push({ p: project({ lat: el.lat, lon: el.lon }), tags });
+      if (el.lat === undefined || el.lon === undefined) continue;
+      const p = project({ lat: el.lat, lon: el.lon });
+      const monument = monumentOf(tags);
+      if (monument) {
+        if (p.x > 2 && p.y > 2 && p.x < size - 2 && p.y < size - 2 && !rawMonuments.some((m) => m.id === `mo${el.id}`))
+          rawMonuments.push({ id: `mo${el.id}`, x: p.x, y: p.y, ...monument });
+        continue;
+      }
+      pois.push({ p, tags });
       continue;
     }
     if (el.type === "relation") {
@@ -555,7 +566,15 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   ensureEssentials(typed, size);
   const grid = new NavGrid(size, size, cellSize);
   typed.forEach((t, i) => grid.stampPolygon(t.rb.poly, i));
-  stampTerrain(grid, { roads, waters: rawWaters, rails: rawRails, bridges: rawBridges, walls: rawWalls, terrain: opts.terrain });
+  stampTerrain(grid, {
+    roads,
+    waters: rawWaters,
+    rails: rawRails,
+    bridges: rawBridges,
+    walls: rawWalls,
+    monuments: rawMonuments,
+    terrain: opts.terrain,
+  });
 
   const kept: { rb: RawBuilding; type: BuildingType; entrance: Vec2; facing: Vec2 }[] = [];
   for (const t of typed) {
@@ -627,6 +646,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     ...(rawRails.length ? { rails: rawRails } : {}),
     ...(rawBridges.length ? { bridges: rawBridges } : {}),
     ...(rawWalls.length ? { walls: rawWalls } : {}),
+    ...(rawMonuments.length ? { monuments: rawMonuments } : {}),
     ...(opts.terrain ? { terrain: opts.terrain } : {}),
     spawnPoints,
     source: { kind: "osm", label: opts.label, lat: opts.lat, lon: opts.lon, size, attribution: OSM_ATTRIBUTION },
@@ -707,6 +727,27 @@ function ensureEssentials(typed: { rb: RawBuilding; type: BuildingType }[], size
  * The Eiffel Tower is one way tagged `building=tower`, `height=330`: extruded like a
  * building it becomes the hall between its four legs, six floors tall.
  */
+/**
+ * What a statue or monument point is drawn as, or nothing. A statue of Christ
+ * (`subject:wikidata=Q302`) opens its arms, at Christ the Redeemer's proportions unless
+ * OSM gives a height (30 m on an 8 m pedestal); any other statue is a figure a few metres
+ * tall; a monument that is not a statue is a column.
+ */
+function monumentOf(tags: Record<string, string>): Omit<MonumentDef, "id" | "x" | "y"> | null {
+  const statue = tags.man_made === "statue" || tags.memorial === "statue";
+  if (!statue && tags.man_made !== "monument") return null;
+  const total = Number.parseFloat(tags.height ?? "");
+  const christ = tags["subject:wikidata"] === "Q302";
+  const kind: MonumentDef["kind"] = christ ? "open-arms" : statue ? "statue" : "column";
+  const [figure, pedestal] = christ ? [30, 8] : statue ? [3.5, 2] : [9, 1.5];
+  if (Number.isFinite(total) && total > 1) {
+    // The tagged height is the whole: the pedestal keeps its share of it.
+    const share = pedestal / (figure + pedestal);
+    return { kind, height: total * (1 - share), pedestal: total * share };
+  }
+  return { kind, height: figure, pedestal };
+}
+
 /** Named colours OSM uses in `building:colour` and `roof:colour`, beside #rrggbb. */
 const NAMED_COLOUR: Record<string, number> = {
   white: 0xece8de,

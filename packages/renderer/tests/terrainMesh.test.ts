@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { heightAt, type BuildingDef, type CityMap, type TerrainDef } from "@afterfall/world";
 import { cityWallGeometry } from "../src/cityMeshes";
+import { buildMonuments } from "../src/monuments";
 import { drape, groundGrid, rayGround, terrainTop } from "../src/terrainMesh";
 import { BuildingBatch, buildingSeat } from "../src/buildingBatch";
 
@@ -188,5 +189,31 @@ describe("a city wall", () => {
 
   it("is nothing on a map without walls", () => {
     expect(cityWallGeometry({} as CityMap)).toBeNull();
+  });
+});
+
+describe("monuments", () => {
+  it("stand a figure on its pedestal, and Christ's arms span nearly its height", () => {
+    const city = {
+      monuments: [{ id: "c", x: 50, y: 50, kind: "open-arms", height: 30, pedestal: 8 }],
+      terrain: slope(),
+    } as unknown as CityMap;
+    const mesh = buildMonuments(city)!;
+    const p = mesh.geometry.getAttribute("position");
+    let top = -Infinity;
+    let west = Infinity;
+    let east = -Infinity;
+    for (let i = 0; i < p.count; i++) {
+      top = Math.max(top, p.getY(i));
+      west = Math.min(west, p.getX(i));
+      east = Math.max(east, p.getX(i));
+    }
+    const ground = heightAt(slope(), 50, 50);
+    expect(top).toBeCloseTo(ground + 8 + 30, 3);
+    expect(east - west).toBeGreaterThan(30 * 0.9);
+  });
+
+  it("is nothing on a map without them", () => {
+    expect(buildMonuments({} as CityMap)).toBeNull();
   });
 });

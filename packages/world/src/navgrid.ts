@@ -1,5 +1,5 @@
 import { pointInPolygon, polygonBounds, polygonCentroid, type Vec2 } from "@afterfall/shared";
-import type { BridgeDef, CityMap, RailDef, RoadDef, WallDef, WaterDef } from "./city";
+import type { BridgeDef, CityMap, MonumentDef, RailDef, RoadDef, WallDef, WaterDef } from "./city";
 import { latticeLegs } from "./landmarks";
 import { heightAt, type TerrainDef } from "./terrain";
 import { BALANCE } from "@afterfall/content";
@@ -514,9 +514,17 @@ const RAIL_REACH = 1.7;
  */
 export function stampTerrain(
   g: NavGrid,
-  t: { roads: RoadDef[]; waters?: WaterDef[]; rails?: RailDef[]; bridges?: BridgeDef[]; walls?: WallDef[]; terrain?: TerrainDef },
+  t: {
+    roads: RoadDef[];
+    waters?: WaterDef[];
+    rails?: RailDef[];
+    bridges?: BridgeDef[];
+    walls?: WallDef[];
+    monuments?: MonumentDef[];
+    terrain?: TerrainDef;
+  },
 ): void {
-  if (!t.waters?.length && !t.rails?.length && !t.walls?.length && !t.terrain) return;
+  if (!t.waters?.length && !t.rails?.length && !t.walls?.length && !t.monuments?.length && !t.terrain) return;
   const n = g.cols * g.rows;
   const road = new Uint8Array(n);
   const near = (path: Vec2[], reach: number, mark: (i: number) => void) => {
@@ -608,7 +616,22 @@ export function stampTerrain(
     near(w.path, w.width / 2, (i) => {
       if (!byBuilding(i)) stamp(i, CellKind.Rampart, [CellKind.Free, CellKind.Rail]);
     });
+  // A pedestal is solid, a square about a quarter of the figure's height across.
+  for (const m of t.monuments ?? [])
+    near(
+      [
+        { x: m.x, y: m.y },
+        { x: m.x + 0.01, y: m.y },
+      ],
+      pedestalSide(m) / 2,
+      (i) => stamp(i, CellKind.Rampart, [CellKind.Free]),
+    );
   if (t.terrain) stampRelief(g, t.terrain, road);
+}
+
+/** Side of a monument's pedestal, in metres. */
+export function pedestalSide(m: MonumentDef): number {
+  return m.kind === "open-arms" ? Math.max(4, m.pedestal) : Math.max(1.6, (m.height + m.pedestal) * 0.28);
 }
 
 /**

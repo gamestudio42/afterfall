@@ -271,24 +271,20 @@ interface RawBuilding {
  * was stamped solid.
  */
 function relationRings(el: OverpassElement, project: (p: { lat: number; lon: number }) => Vec2): { outer: Vec2[]; holes: Vec2[][] } | null {
-  const ring = (member: { geometry?: ({ lat: number; lon: number } | null)[] }): Vec2[] | null => {
-    const pts = (member.geometry ?? []).filter((g): g is { lat: number; lon: number } => !!g).map(project);
-    if (pts.length < 4) return null;
-    const closed = Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 0.01;
-    const ringPts = simplifyPolygon(closed ? pts.slice(0, -1) : pts);
-    return ringPts.length >= 3 ? ringPts : null;
-  };
+  // An outline is often several ways end to end (the Colosseum's is four, the pyramid at
+  // Chichén Itzá seventy-four): join them first. Read one at a time, each piece was closed
+  // by a straight chord, and the building became a sliver of itself or nothing at all.
+  const pieces = (inner: boolean): Vec2[][] =>
+    (el.members ?? [])
+      .filter((m) => m.type === "way" && (m.role === "inner") === inner)
+      .map((m) => (m.geometry ?? []).filter((g): g is { lat: number; lon: number } => !!g).map(project));
+  const rings = (inner: boolean) =>
+    joinRings(pieces(inner))
+      .map((r) => simplifyPolygon(r))
+      .filter((r) => r.length >= 3);
   let best: Vec2[] | null = null;
   let bestArea = 0;
-  const holes: Vec2[][] = [];
-  for (const m of el.members ?? []) {
-    if (m.type !== "way") continue;
-    const r = ring(m);
-    if (!r) continue;
-    if (m.role === "inner") {
-      if (polygonArea(r) > 20) holes.push(r);
-      continue;
-    }
+  for (const r of rings(false)) {
     const area = polygonArea(r);
     if (area > bestArea) {
       bestArea = area;
@@ -297,8 +293,12 @@ function relationRings(el: OverpassElement, project: (p: { lat: number; lon: num
   }
   if (!best) return null;
   // A hole that is not inside the outer ring is not a courtyard.
-  const inside = holes.filter((h) => polygonCentroid(h) && pointInPolygon(polygonCentroid(h).x, polygonCentroid(h).y, best!));
-  return { outer: best, holes: inside };
+  const holes = rings(true).filter((h) => {
+    if (polygonArea(h) <= 20) return false;
+    const c = polygonCentroid(h);
+    return pointInPolygon(c.x, c.y, best!);
+  });
+  return { outer: best, holes };
 }
 
 /**

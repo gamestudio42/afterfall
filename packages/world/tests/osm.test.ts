@@ -286,6 +286,32 @@ describe("a building with a courtyard", () => {
     expect(block!.area).toBeGreaterThan(50 * 50 - 26 * 26 - 100);
   });
 
+  it("joins an outline mapped as several ways before reading it", () => {
+    // The Colosseum's outline is four ways end to end, the pyramid at Chichén Itzá's
+    // seventy-four. Read one by one, each piece was closed by a chord: the Colosseum lost
+    // half its footprint and the pyramid vanished.
+    const sq = ring(-90, -40, -90, -40);
+    const pieces = [sq.slice(0, 2), sq.slice(1, 3), sq.slice(2, 4).reverse(), sq.slice(3, 5)];
+    const data = syntheticOverpass();
+    const city = cityFromOverpass(
+      {
+        elements: [
+          ...data.elements,
+          {
+            type: "relation" as const,
+            id: 9502,
+            tags: { type: "multipolygon", building: "yes" },
+            members: pieces.map((geometry, k) => ({ type: "way", ref: 10 + k, role: "outer", geometry })),
+          },
+        ],
+      },
+      opts,
+    );
+    const block = city.buildings.find((b) => b.id === "osm9502");
+    expect(block).toBeDefined();
+    expect(block!.area).toBeGreaterThan(50 * 50 - 60);
+  });
+
   it("leaves the courtyard walkable in the navigation grid", () => {
     const city = cityFromOverpass(withCourtyard(), opts);
     const block = city.buildings.find((b) => b.holes?.length)!;

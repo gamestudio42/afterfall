@@ -15,6 +15,7 @@ import {
   type Vec2,
 } from "@afterfall/shared";
 import type { BridgeDef, BuildingDef, CityMap, Landmark, ParkDef, RailDef, RoadDef, WaterDef } from "./city";
+import type { TerrainDef } from "./terrain";
 import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
 
 /**
@@ -49,6 +50,11 @@ export interface OsmMapOptions {
   label: string;
   /** Upper bound on buildings kept, nearest to the center first. */
   maxBuildings?: number;
+  /**
+   * The ground's relief, when the caller has it: its cliffs shape the grid the doors and
+   * the reachable buildings are chosen on, and it is kept with the map.
+   */
+  terrain?: TerrainDef;
 }
 
 export class OsmImportError extends Error {
@@ -526,7 +532,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   ensureEssentials(typed, size);
   const grid = new NavGrid(size, size, cellSize);
   typed.forEach((t, i) => grid.stampPolygon(t.rb.poly, i));
-  stampTerrain(grid, { roads, waters: rawWaters, rails: rawRails, bridges: rawBridges });
+  stampTerrain(grid, { roads, waters: rawWaters, rails: rawRails, bridges: rawBridges, terrain: opts.terrain });
 
   const kept: { rb: RawBuilding; type: BuildingType; entrance: Vec2; facing: Vec2 }[] = [];
   for (const t of typed) {
@@ -595,6 +601,7 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     ...(rawWaters.length ? { waters: rawWaters } : {}),
     ...(rawRails.length ? { rails: rawRails } : {}),
     ...(rawBridges.length ? { bridges: rawBridges } : {}),
+    ...(opts.terrain ? { terrain: opts.terrain } : {}),
     spawnPoints,
     source: { kind: "osm", label: opts.label, lat: opts.lat, lon: opts.lon, size, attribution: OSM_ATTRIBUTION },
   };

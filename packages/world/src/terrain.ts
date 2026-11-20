@@ -51,20 +51,50 @@ export function buildTerrain(
   const cols = Math.round(size / cell) + 1;
   const rows = cols;
   const raw = new Float64Array(cols * rows);
-  let min = Infinity;
-  let max = -Infinity;
   for (let r = 0; r < rows; r++)
     for (let c = 0; c < cols; c++) {
       const p = mapToLatLon(center, size, c * cell, r * cell);
       const h = elevation(p.lat, p.lon);
       if (!Number.isFinite(h)) return null;
       raw[r * cols + c] = h;
-      min = Math.min(min, h);
-      max = Math.max(max, h);
     }
+  despike(raw, cols, rows);
+  let min = Infinity;
+  let max = -Infinity;
+  for (const h of raw) {
+    min = Math.min(min, h);
+    max = Math.max(max, h);
+  }
   if (max - min < TERRAIN_MIN_RELIEF) return null;
   const heights = Array.from(raw, (h) => Math.round((h - min) * 10));
   return { cell, cols, rows, heights, scale: options.scale ?? TERRAIN_SCALE, base: Math.round(min * 10) / 10 };
+}
+
+/** How far a node may sit from its neighbours' median before it is taken for a void. */
+const SPIKE = 25;
+
+/**
+ * Removes the holes the elevation source has where its survey had no return: near the Taj
+ * Mahal a few pixels read -233 m in ground that runs from 147 to 185. A node that differs
+ * from the median of its eight neighbours by more than `SPIKE` metres takes that median.
+ */
+function despike(h: Float64Array, cols: number, rows: number): void {
+  const src = h.slice();
+  const near: number[] = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      near.length = 0;
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue;
+          const rr = r + dr;
+          const cc = c + dc;
+          if (rr >= 0 && cc >= 0 && rr < rows && cc < cols) near.push(src[rr * cols + cc]);
+        }
+      near.sort((a, b) => a - b);
+      const median = near[near.length >> 1];
+      if (Math.abs(src[r * cols + c] - median) > SPIKE) h[r * cols + c] = median;
+    }
 }
 
 /** The drawn height of the ground at a map point, in metres: 0 on a flat map. */

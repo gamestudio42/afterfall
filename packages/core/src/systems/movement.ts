@@ -1,4 +1,5 @@
-import { CARRY_CAPACITY, bagWeight } from "@afterfall/content";
+import { BALANCE, CARRY_CAPACITY, bagWeight } from "@afterfall/content";
+import { heightAt } from "@afterfall/world";
 import { TICK_SECONDS } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
 import type { Entity } from "../state";
@@ -47,6 +48,16 @@ export function movementSystem(sim: Simulation): void {
       speed *= 1 - 0.25 * Math.min(1, load);
       if (e.health && e.health.hp < 30) speed *= 0.75;
     }
+    // Uphill is slow: speed / (1 + k * rise) toward the next waypoint. Downhill is not faster.
+    const terrain = sim.city.terrain;
+    if (terrain && m.path.length > 0) {
+      const next = m.path[0];
+      const run = Math.hypot(next.x - t.x, next.y - t.y);
+      if (run > 0.05) {
+        const rise = (heightAt(terrain, next.x, next.y) - heightAt(terrain, t.x, t.y)) / run;
+        speed = climbSpeed(speed, rise);
+      }
+    }
     let budget = speed * TICK_SECONDS;
     while (budget > 0 && m.path.length > 0) {
       const target = m.path[0];
@@ -90,6 +101,11 @@ export function movementSystem(sim: Simulation): void {
     }
     separate(sim, e);
   }
+}
+
+/** Walking speed up a slope of `rise` (rise over run): slower uphill, never faster downhill. */
+export function climbSpeed(speed: number, rise: number): number {
+  return rise > 0 ? speed / (1 + BALANCE.terrainClimbCost * rise) : speed;
 }
 
 /**

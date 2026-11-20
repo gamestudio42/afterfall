@@ -1,6 +1,8 @@
 import { pointInPolygon, polygonBounds, polygonCentroid, type Vec2 } from "@afterfall/shared";
 import type { BridgeDef, CityMap, RailDef, RoadDef, WaterDef } from "./city";
 import { latticeLegs } from "./landmarks";
+import { heightAt, type TerrainDef } from "./terrain";
+import { BALANCE } from "@afterfall/content";
 import { MinHeap } from "./heap";
 import { abandonedVehicles, vehicleContains } from "./vehicles";
 
@@ -17,6 +19,8 @@ export const enum CellKind {
   Water = 5,
   /** A railway track: walkable, but not a place to build. */
   Rail = 6,
+  /** Ground too steep to climb (decision 58): nobody crosses it, nothing is built on it. */
+  Cliff = 7,
 }
 
 /** Whether an agent can stand on a cell of this kind, gates aside. */
@@ -49,6 +53,12 @@ export class NavGrid {
   readonly structureAt: Int32Array;
   /** Incremented whenever passability changes; consumers cache by it. */
   version = 0;
+  /**
+   * Drawn ground height at each cell's centre, and the steepest rise to a neighbour (rise
+   * over run), on a map with relief; null on a flat one.
+   */
+  elev: Float32Array | null = null;
+  steep: Float32Array | null = null;
 
   private gScore: Float64Array;
   private cameFrom: Int32Array;
@@ -368,7 +378,14 @@ export class NavGrid {
         if (!this.passableIndex(ni, agent)) continue;
         if (d >= 4 && (!this.passableIndex(cy * cols + nx, agent) || !this.passableIndex(ny * cols + cx, agent))) continue;
         if (this.closed[ni] === search) continue;
-        const ng = g + DC[d];
+        // A climb costs what it costs a walker in time: going up a 1:2 slope is slower than
+        // walking round it on the level, so the path takes the switchback.
+        let step = DC[d];
+        if (this.elev) {
+          const rise = (this.elev[ni] - this.elev[cur]) / (DC[d] * this.cell);
+          if (rise > 0) step *= 1 + BALANCE.terrainClimbCost * rise;
+        }
+        const ng = g + step;
         if (this.stamp[ni] === search && this.gScore[ni] <= ng) continue;
         this.stamp[ni] = search;
         this.gScore[ni] = ng;
@@ -393,13 +410,33 @@ export class NavGrid {
     let i = 0;
     while (i < raw.length - 1) {
       let j = raw.length - 1;
-      while (j > i + 1 && !this.walkable(anchor.x, anchor.y, raw[j].x, raw[j].y, agent)) j--;
+      while (j > i + 1 && !(this.walkable(anchor.x, anchor.y, raw[j].x, raw[j].y, agent) && this.noHigher(anchor, raw[j], cells, i, j)))
+        j--;
       points.push(raw[j]);
       anchor = raw[j];
       i = j;
     }
     if (points.length === 0) points.push(end);
     return { points, expanded };
+  }
+
+  /**
+   * Whether the straight line from a to b stays as low as the searched path between the
+   * same two waypoints. On a hillside a shortcut that is walkable may still go over the
+   * hill the search walked round; it is refused, or string pulling would undo the detour.
+   */
+  private noHigher(a: Vec2, b: Vec2, cells: number[], i: number, j: number): boolean {
+    const elev = this.elev;
+    if (!elev) return true;
+    let top = -Infinity;
+    for (let k = i; k <= j; k++) top = Math.max(top, elev[cells[k]]);
+    const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / this.cell);
+    for (let s = 1; s < steps; s++) {
+      const x = a.x + ((b.x - a.x) * s) / steps;
+      const y = a.y + ((b.y - a.y) * s) / steps;
+      if (elev[this.cellOf(x, y)] > top + 0.5) return false;
+    }
+    return true;
   }
 
   /**
@@ -473,8 +510,11 @@ const RAIL_REACH = 1.7;
  * and the rails after it, so a railway bridge keeps its deck. A bridge deck mapped as an
  * area (`BridgeDef`) is dry ground wherever it covers water.
  */
-export function stampTerrain(g: NavGrid, t: { roads: RoadDef[]; waters?: WaterDef[]; rails?: RailDef[]; bridges?: BridgeDef[] }): void {
-  if (!t.waters?.length && !t.rails?.length) return;
+export function stampTerrain(
+  g: NavGrid,
+  t: { roads: RoadDef[]; waters?: WaterDef[]; rails?: RailDef[]; bridges?: BridgeDef[]; terrain?: TerrainDef },
+): void {
+  if (!t.waters?.length && !t.rails?.length && !t.terrain) return;
   const n = g.cols * g.rows;
   const road = new Uint8Array(n);
   const near = (path: Vec2[], reach: number, mark: (i: number) => void) => {
@@ -549,4 +589,33 @@ export function stampTerrain(g: NavGrid, t: { roads: RoadDef[]; waters?: WaterDe
       }
   }
   for (const r of t.rails ?? []) near(r.path, RAIL_REACH, (i) => stamp(i, CellKind.Rail, [CellKind.Free, CellKind.Water]));
+  if (t.terrain) stampRelief(g, t.terrain, road);
+}
+
+/**
+ * Heights and steepness per cell, and cliffs where the ground is too steep to climb.
+ * Streets and paths win over a cliff as they win over water: a road up a hill is how it is
+ * climbed, whatever the elevation data says about its cut.
+ */
+function stampRelief(g: NavGrid, terrain: TerrainDef, road: Uint8Array): void {
+  const n = g.cols * g.rows;
+  const elev = new Float32Array(n);
+  for (let y = 0; y < g.rows; y++)
+    for (let x = 0; x < g.cols; x++) elev[y * g.cols + x] = heightAt(terrain, (x + 0.5) * g.cell, (y + 0.5) * g.cell);
+  const steep = new Float32Array(n);
+  for (let y = 0; y < g.rows; y++)
+    for (let x = 0; x < g.cols; x++) {
+      const i = y * g.cols + x;
+      let worst = 0;
+      for (let d = 0; d < 8; d++) {
+        const nx = x + DX[d];
+        const ny = y + DY[d];
+        if (nx < 0 || ny < 0 || nx >= g.cols || ny >= g.rows) continue;
+        worst = Math.max(worst, Math.abs(elev[ny * g.cols + nx] - elev[i]) / (DC[d] * g.cell));
+      }
+      steep[i] = worst;
+      if (worst > BALANCE.terrainCliffGrade && !road[i] && g.kind[i] === CellKind.Free) g.kind[i] = CellKind.Cliff;
+    }
+  g.elev = elev;
+  g.steep = steep;
 }

@@ -22,6 +22,19 @@ export const BALANCE = {
    * maps are cut.
    */
   maxBuildingLoot: 600,
+  /**
+   * Relief (decision 58), all on the drawn heights the player sees. A slope steeper than
+   * this (rise over run: 1 is 45 degrees) is a cliff nobody climbs. On Corcovado that is
+   * the hill's flanks, about a fifth of the map; on Machu Picchu's terraces, nothing.
+   */
+  terrainCliffGrade: 1,
+  /** How much a climb slows a walker and costs a path: speed / (1 + k * grade) uphill. */
+  terrainClimbCost: 1.5,
+  /** Range gained per metre a shooter stands above the target, up to the cap. */
+  highGroundRangePerMetre: 0.02,
+  highGroundRangeMax: 0.3,
+  /** Steepest ground a wall, tower, farm or well can be built on. */
+  terrainBuildGrade: 0.5,
   /** Search points per worker-minute at skill 1. */
   searchRate: 1.2,
   /** Food produced per worker-minute on a farm. */

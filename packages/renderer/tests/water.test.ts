@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cityFromOverpass, type CityMap } from "@afterfall/world";
-import { buildReclamation } from "../src/reclamation";
+import { buildReclamation, reclamationTexture } from "../src/reclamation";
 import { bridgeGeometry, quayGeometry, shoreDistance, SHORE_REACH } from "../src/water";
 import { FIXTURE_CENTER, syntheticOverpass, syntheticTerrain } from "../../world/tests/fixtures/osm";
 
@@ -75,10 +75,20 @@ describe("quays", () => {
   it("line the banks, but not the edge where the map cuts the river", () => {
     expect(pos.count).toBeGreaterThan(0);
     // No triangle lies along the map's west border, where the river was cut.
+    // Coping along the 40 m of river at the west border would be some 60 m² of stone at
+    // x below 1.5; what is there is only the ends of the two banks, mitred into the corner.
+    const nrm = q.getAttribute("normal");
+    let area = 0;
     for (let i = 0; i < pos.count; i += 3) {
-      const xs = [pos.getX(i), pos.getX(i + 1), pos.getX(i + 2)];
-      expect(Math.max(...xs)).toBeGreaterThan(0.75);
+      if (nrm.getY(i) < 0.5) continue;
+      if (Math.max(pos.getX(i), pos.getX(i + 1), pos.getX(i + 2)) > 1.5) continue;
+      const ax = pos.getX(i + 1) - pos.getX(i),
+        az = pos.getZ(i + 1) - pos.getZ(i);
+      const bx = pos.getX(i + 2) - pos.getX(i),
+        bz = pos.getZ(i + 2) - pos.getZ(i);
+      area += Math.abs(ax * bz - az * bx) / 2;
     }
+    expect(area).toBeLessThan(10);
   });
 
   it("never pave over a street or the bridge", () => {
@@ -125,5 +135,22 @@ describe("a map without water", () => {
     const f = buildReclamation(dry);
     expect(quayGeometry(dry, f)).toBeNull();
     expect(bridgeGeometry(dry, f)).toBeNull();
+  });
+});
+
+describe("a pond inside a park", () => {
+  it("is marked in the field texture, so the lawn drawn over it steps aside", () => {
+    const tex = reclamationTexture(field);
+    const data = tex.image.data as Uint8Array;
+    const alpha = (x: number, y: number) => {
+      const c = Math.floor((x + 240 - field.x0) / field.cell);
+      const r = Math.floor((y + 240 - field.z0) / field.cell);
+      return data[(r * field.cols + c) * 4 + 3];
+    };
+    // The fixture's pond, a plain closed way, and dry land beside it.
+    expect(alpha(170, -165)).toBe(0);
+    expect(alpha(170, -200)).toBe(255);
+    // Under the bridge deck the river still runs: no lawn there either.
+    expect(alpha(-224, 50)).toBe(0);
   });
 });

@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { heightAt, type CityMap } from "@afterfall/world";
+import { pointInPolygon } from "@afterfall/shared";
 import { drape, groundGrid } from "./terrainMesh";
 import { buildReclamation, reclaimSurface, reclaimUniforms, reclamationTexture, type ReclamationField } from "./reclamation";
-import { bridgeGeometry, quayGeometry, shoreTexture, waterMaterial } from "./water";
+import { bridgeGeometry, quayGeometry, shoreTexture, waterLevel, waterMaterial, WATER_DEPTH } from "./water";
 
 function plane(x: number, z: number, w: number, d: number, y: number): THREE.BufferGeometry {
   const g = new THREE.PlaneGeometry(w, d);
@@ -415,10 +416,13 @@ export function buildCityGround(city: CityMap): {
     group.add(parkMesh);
   }
   // Water, below the street surfaces so a bridge reads as a deck over it.
-  const waters = (city.waters ?? []).flatMap((w) => [
-    ...(w.polygon ? [waterArea(w.polygon, w.holes ?? [], -0.02)] : []),
-    ...(w.path ? ribbon(w.path, w.width ?? 12, -0.02) : []),
+  // Each body of water lies level, at the lowest ground on its shore (0 on a flat map).
+  const levels = (city.waters ?? []).map((w) => waterLevel(w, city.terrain));
+  const waters = (city.waters ?? []).flatMap((w, k) => [
+    ...(w.polygon ? [waterArea(w.polygon, w.holes ?? [], levels[k] - 0.02)] : []),
+    ...(w.path ? ribbon(w.path, w.width ?? 12, levels[k] - 0.02) : []),
   ]);
+  if (city.terrain && waters.length) carveWater(groundGeo, city, field, levels);
   if (waters.length) {
     const mesh = new THREE.Mesh(
       mergeGeometries(waters.map((g) => (g.index ? g.toNonIndexed() : g))),
@@ -507,8 +511,52 @@ export function buildCityGround(city: CityMap): {
   // relief in one pass, the base ground (already a grid) and the instanced trees excepted.
   if (city.terrain)
     for (const child of group.children) {
-      if (!(child instanceof THREE.Mesh) || child instanceof THREE.InstancedMesh || child.name === "base-ground") continue;
+      if (!(child instanceof THREE.Mesh) || child instanceof THREE.InstancedMesh) continue;
+      // Already at their heights: the base grid, the level water and the quays down to it.
+      if (child.name === "base-ground" || child.name === "water" || child.name === "quays") continue;
       child.geometry = drape(child.geometry, city.terrain);
     }
   return { group, materials, imported, reclamation: field, reclamationTexture: fieldTex };
+}
+
+/**
+ * Cuts the base ground down under water, to `WATER_DEPTH` below the body's own level, so a
+ * river on a hillside lies in a bed instead of being covered by the ground it runs through.
+ * The cut follows the field's water mask; a grid vertex on the shore line slopes the bank.
+ */
+function carveWater(geo: THREE.BufferGeometry, city: CityMap, field: ReclamationField, levels: number[]): void {
+  const level = new Float32Array(field.cols * field.rows).fill(Infinity);
+  const wet = field.wet ?? field.water;
+  (city.waters ?? []).forEach((w, k) => {
+    const inside = (x: number, z: number) =>
+      w.polygon
+        ? pointInPolygon(x, z, w.polygon) && !(w.holes ?? []).some((h) => pointInPolygon(x, z, h))
+        : (w.path ?? []).some((p, i, a) => i > 0 && distToSegment(x, z, a[i - 1], p) <= (w.width ?? 12) / 2 + 1);
+    for (let r = 0; r < field.rows; r++)
+      for (let c = 0; c < field.cols; c++) {
+        const i = r * field.cols + c;
+        if (!wet[i]) continue;
+        const x = field.x0 + (c + 0.5) * field.cell;
+        const z = field.z0 + (r + 0.5) * field.cell;
+        if (inside(x, z)) level[i] = Math.min(level[i], levels[k]);
+      }
+  });
+  const p = geo.getAttribute("position");
+  for (let v = 0; v < p.count; v++) {
+    const c = Math.floor((p.getX(v) - field.x0) / field.cell);
+    const r = Math.floor((p.getZ(v) - field.z0) / field.cell);
+    if (c < 0 || r < 0 || c >= field.cols || r >= field.rows) continue;
+    const l = level[r * field.cols + c];
+    if (l < Infinity) p.setY(v, Math.min(p.getY(v), l - WATER_DEPTH));
+  }
+  p.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+function distToSegment(x: number, z: number, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const dx = b.x - a.x;
+  const dz = b.y - a.y;
+  const l2 = dx * dx + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.y) * dz) / l2));
+  return Math.hypot(x - a.x - dx * t, z - a.y - dz * t);
 }

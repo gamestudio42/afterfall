@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { CityMap } from "@afterfall/world";
+import { heightAt, type CityMap, type WaterDef } from "@afterfall/world";
 import { inflate } from "./buildingBatch";
 import { distanceField, type ReclamationField } from "./reclamation";
 
@@ -135,6 +135,10 @@ const QUAY_WIDTH = 1.5;
  * water, and not along an island's shore — only the outer banks are quays.
  */
 export function quayGeometry(city: CityMap, f: ReclamationField): THREE.BufferGeometry | null {
+  // On a hillside the coping follows the bank and its face drops to the water's own level;
+  // the geometry is built at those heights and is not draped again.
+  const t = city.terrain;
+  const ground = (x: number, z: number) => heightAt(t, x, z);
   const pos: number[] = [];
   const nrm: number[] = [];
   const at = (x: number, z: number) => {
@@ -168,6 +172,7 @@ export function quayGeometry(city: CityMap, f: ReclamationField): THREE.BufferGe
   for (const w of city.waters ?? []) {
     if (!w.polygon) continue;
     const ring = w.polygon;
+    const level = waterLevel(w, t);
     // The outer edge of the coping is the outline grown by the quay's width, mitred at
     // every corner, so the stones of two edges meet instead of leaving a notch between them.
     const outer = inflate(ring, QUAY_WIDTH);
@@ -198,13 +203,13 @@ export function quayGeometry(city: CityMap, f: ReclamationField): THREE.BufferGe
         const cx = (p0.x + p1.x + q0.x + q1.x) / 4;
         const cz = (p0.y + p1.y + q0.y + q1.y) / 4;
         if (isRoad(cx, cz) || isWater(cx + nx * QUAY_WIDTH, cz + nz * QUAY_WIDTH)) continue;
-        const o0 = [q0.x, QUAY_TOP, q0.y];
-        const o1 = [q1.x, QUAY_TOP, q1.y];
-        const e0 = [p0.x, QUAY_TOP, p0.y];
-        const e1 = [p1.x, QUAY_TOP, p1.y];
+        const o0 = [q0.x, QUAY_TOP + ground(q0.x, q0.y), q0.y];
+        const o1 = [q1.x, QUAY_TOP + ground(q1.x, q1.y), q1.y];
+        const e0 = [p0.x, QUAY_TOP + ground(p0.x, p0.y), p0.y];
+        const e1 = [p1.x, QUAY_TOP + ground(p1.x, p1.y), p1.y];
         quad(windUp([e0, e1, o1, o0]), [0, 1, 0]);
         // The face down to the water, looking out over it.
-        quad(windTo([e0, e1, [p1.x, -0.05, p1.y], [p0.x, -0.05, p0.y]], [-nx, 0, -nz]), [-nx, 0, -nz]);
+        quad(windTo([e0, e1, [p1.x, level - 0.05, p1.y], [p0.x, level - 0.05, p0.y]], [-nx, 0, -nz]), [-nx, 0, -nz]);
       }
     }
   }
@@ -353,3 +358,19 @@ function signedArea(poly: Pt[]): number {
   }
   return s / 2;
 }
+
+/**
+ * The height a body of water lies at: the lowest ground on its shore. A lake or a river is
+ * level; the ground under it is cut down below this (cityMeshes) and its quays drop to it.
+ * On a flat map, 0.
+ */
+export function waterLevel(w: WaterDef, terrain: CityMap["terrain"]): number {
+  if (!terrain) return 0;
+  const pts = w.polygon ?? w.path ?? [];
+  let low = Infinity;
+  for (const p of pts) low = Math.min(low, heightAt(terrain, p.x, p.y));
+  return Number.isFinite(low) ? low : 0;
+}
+
+/** How far below its own level the ground under water is cut, so the surface shows. */
+export const WATER_DEPTH = 1.5;

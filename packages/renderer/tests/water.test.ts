@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type * as THREE from "three";
 import { cityFromOverpass, type CityMap } from "@afterfall/world";
 import { buildReclamation, reclamationTexture } from "../src/reclamation";
-import { bridgeGeometry, quayGeometry, shoreDistance, SHORE_REACH } from "../src/water";
+import { bridgeGeometry, quayGeometry, shoreDistance, SHORE_REACH, waterLevel, WATER_DEPTH } from "../src/water";
+import { buildCityGround } from "../src/cityMeshes";
+import type { TerrainDef } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass, syntheticTerrain } from "../../world/tests/fixtures/osm";
 
 const { lat, lon } = FIXTURE_CENTER;
@@ -152,5 +155,46 @@ describe("a pond inside a park", () => {
     expect(alpha(170, -200)).toBe(255);
     // Under the bridge deck the river still runs: no lawn there either.
     expect(alpha(-224, 50)).toBe(0);
+  });
+});
+
+describe("water on a hillside", () => {
+  // The fixture's map with ground rising 0.1 m per metre to the east (x).
+  const cols = 121;
+  const heights: number[] = [];
+  for (let r = 0; r < cols; r++) for (let c = 0; c < cols; c++) heights.push(c * 4 * 0.1 * 10);
+  const terrain: TerrainDef = { cell: 4, cols, rows: cols, heights, scale: 1, base: 0 };
+  const hilly = { ...city, terrain };
+
+  it("lies level, at the lowest ground on its shore", () => {
+    const river = hilly.waters!.find((w) => w.id.startsWith("w9001"))!;
+    // The river runs the whole width of the map: its west end is at the bottom of the slope.
+    expect(waterLevel(river, terrain)).toBeCloseTo(0, 1);
+    expect(waterLevel(river, undefined)).toBe(0);
+  });
+
+  it("cuts the ground under it below its level, and drops its quays to it", () => {
+    const g = buildCityGround(hilly);
+    const base = g.group.getObjectByName("base-ground") as THREE.Mesh;
+    const p = base.geometry.getAttribute("position");
+    let under = 0;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i) - 240;
+      const z = p.getZ(i) - 240;
+      // Well inside the river (y 30 to 70) and on the map.
+      if (z > 38 && z < 62 && x > -200 && x < 200 && Math.abs(x + 145) > 25) {
+        expect(p.getY(i)).toBeLessThanOrEqual(-WATER_DEPTH + 0.01);
+        under++;
+      }
+    }
+    expect(under).toBeGreaterThan(50);
+    const water = g.group.getObjectByName("water") as THREE.Mesh;
+    const w = water.geometry.getAttribute("position");
+    for (let i = 0; i < w.count; i += 37) expect(w.getY(i)).toBeCloseTo(-0.02, 2);
+    // The quays' lowest edge is the water's level, wherever the bank stands on the slope.
+    const q = (g.group.getObjectByName("quays") as THREE.Mesh).geometry.getAttribute("position");
+    let low = Infinity;
+    for (let i = 0; i < q.count; i++) low = Math.min(low, q.getY(i));
+    expect(low).toBeCloseTo(-0.05, 2);
   });
 });

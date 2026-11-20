@@ -136,6 +136,7 @@ export function Banner() {
           <Bag bag={cost} />
           {short && <small>{t("banner.buildShort")}</small>}
           {info?.capped && <small>{t("banner.buildCapped")}</small>}
+          {info?.steep && <small data-testid="build-steep">{t("banner.buildSteep")}</small>}
         </div>
       </div>
     );

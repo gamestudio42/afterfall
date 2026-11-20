@@ -206,6 +206,7 @@ export const ptBR: Record<string, string> = {
   "banner.buildCount": "{count} peça(s)",
   "banner.buildShort": "falta material em estoque",
   "banner.buildCapped": "máximo de 200 por traçado",
+  "banner.buildSteep": "encosta íngreme demais para construir",
 
   "outcome.victory": "Vocês sobreviveram",
   "outcome.victoryText": "Doze noites se passaram e a comunidade continua de pé. A reconstrução pode começar.",

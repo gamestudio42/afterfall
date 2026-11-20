@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { heightAt, type BuildingDef, type TerrainDef } from "@afterfall/world";
-import { outlineOf } from "./buildingBatch";
+import { buildingSeat, outlineOf } from "./buildingBatch";
 
 /** Where a door sits: a point on the wall and the wall's outward normal (map x, y). */
 export interface DoorSpot {
@@ -8,6 +8,8 @@ export interface DoorSpot {
   y: number;
   nx: number;
   ny: number;
+  /** Where the building's walls start: 0 on a flat map. */
+  base?: number;
 }
 
 /** The door map frames 2.4 m by 3.2 m: the door, its surround and the canopy's edge. */
@@ -59,7 +61,10 @@ export class Doors {
 
   constructor(buildings: BuildingDef[], terrain?: TerrainDef) {
     this.group.name = "doors";
-    this.spots = buildings.map(doorSpot);
+    this.spots = buildings.map((b) => {
+      const spot = doorSpot(b);
+      return spot && { ...spot, base: buildingSeat(b, terrain).base };
+    });
     const placed = this.spots.filter((s): s is DoorSpot => s !== null);
 
     const doorGeo = new THREE.PlaneGeometry(DOOR_W, DOOR_H);
@@ -83,8 +88,9 @@ export class Doors {
     placed.forEach((s, i) => {
       // Local +Z is the door's front: turn it to the wall's outward normal.
       q.setFromAxisAngle(up, Math.atan2(s.nx, s.ny));
-      // At the ground in front of the door, wherever on the slope the wall stands.
-      p.set(s.x + s.nx * 0.02, heightAt(terrain, s.x + s.nx, s.y + s.ny), s.y + s.ny * 0.02);
+      // At the ground in front of the door, wherever on the slope the wall stands; on the
+      // plinth when the building was raised above that ground.
+      p.set(s.x + s.nx * 0.02, Math.max(heightAt(terrain, s.x + s.nx, s.y + s.ny), s.base ?? 0), s.y + s.ny * 0.02);
       m.compose(p, q, one);
       door.setMatrixAt(i, m);
       canopy.setMatrixAt(i, m);

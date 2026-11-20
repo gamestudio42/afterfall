@@ -5,9 +5,9 @@ import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp, lineFrame, TICK_SECONDS, type LineFrame } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
 import { wallFrame } from "./structureLayout";
-import { BuildingBatch, outlineOf } from "./buildingBatch";
+import { BuildingBatch, buildingSeat, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
-import { heightAt, heightRange } from "@afterfall/world";
+import { heightAt } from "@afterfall/world";
 import { drape, rayGround, terrainTop } from "./terrainMesh";
 import { buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
 import { WATER_TIME } from "./water";
@@ -145,6 +145,8 @@ export class GameRenderer {
   private hpFg: THREE.InstancedMesh;
   private structures: THREE.InstancedMesh;
   private blueprints: THREE.InstancedMesh;
+  /** Stone under a structure built on a slope, from the lowest ground to where it stands. */
+  private plinths: THREE.InstancedMesh;
   private preview: THREE.InstancedMesh;
   private selectionBox: THREE.LineSegments;
   private hqMarker: THREE.Mesh;
@@ -724,6 +726,7 @@ export class GameRenderer {
       MAX_STRUCTURES,
       true,
     );
+    this.plinths = this.instanced(box, new THREE.MeshStandardMaterial({ color: 0x8a8478, roughness: 0.95 }), MAX_STRUCTURES, true);
     this.blueprints = this.instanced(
       box,
       new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.45, depthWrite: false }),
@@ -824,11 +827,7 @@ export class GameRenderer {
 
     this.buildings = new BuildingBatch(city.buildings, city.terrain);
     this.groundTop = terrainTop(city.terrain);
-    this.buildingBases = new Float32Array(
-      city.buildings.map((b) =>
-        city.terrain ? heightRange(city.terrain, [...outlineOf(b), { x: b.rect.x + b.rect.w / 2, y: b.rect.y + b.rect.h / 2 }]).min : 0,
-      ),
-    );
+    this.buildingBases = new Float32Array(city.buildings.map((b) => buildingSeat(b, city.terrain).base));
     this.rts.groundHeight = city.terrain ? (x, z) => heightAt(city.terrain, x, z) : null;
     this.vfx?.setGround(city.terrain);
     // Textures may already have arrived before the city existed: apply the
@@ -1486,12 +1485,20 @@ export class GameRenderer {
     };
 
     const up = UP;
+    let plinths = 0;
     for (const e of sim.structures()) {
       const s = e.structure;
       const def = STRUCTURES[s.kind];
       const size = def.size * cell;
       const cx = (s.cx + def.size / 2 + (s.line?.ox ?? 0)) * cell;
       const cz = (s.cy + def.size / 2 + (s.line?.oy ?? 0)) * cell;
+      // On a slope a piece stands on the highest ground under it, so no end is buried, and
+      // a plinth fills the gap down to the lowest.
+      const seat = this.seatOn(cx, cz, size / 2);
+      if (s.built && seat.top - seat.low > 0.15 && plinths < MAX_STRUCTURES) {
+        tmpM.compose(tmpV.set(cx, seat.low - 0.3, cz), tmpQ.identity(), tmpS.set(size, seat.top - seat.low + 0.3, size));
+        this.plinths.setMatrixAt(plinths++, tmpM);
+      }
       if (!s.built) {
         if (b >= MAX_STRUCTURES) continue;
         // A ghost is a promise, not a progress bar: at eight percent of the wall's height
@@ -1504,7 +1511,7 @@ export class GameRenderer {
         const frameB = axial ? wallMeasure(s) : { yaw: s.line?.yaw ?? 0, stretch: 1 };
         tmpQ2.setFromAxisAngle(up, frameB.yaw);
         tmpM.compose(
-          tmpV.set(cx, this.ground(cx, cz), cz),
+          tmpV.set(cx, seat.top, cz),
           tmpQ2,
           // A gate going into a wall is drawn around that wall, or it would hide inside it.
           s.replaces !== undefined
@@ -1524,7 +1531,7 @@ export class GameRenderer {
         if (this.structureIds.length >= MAX_STRUCTURES) continue;
         const n = this.structureIds.length;
         const inset = s.kind === "wall" || s.kind === "gate" ? 0 : 0.3;
-        tmpM.compose(tmpV.set(cx, this.ground(cx, cz), cz), tmpQ.identity(), tmpS.set(size - inset, def.height, size - inset));
+        tmpM.compose(tmpV.set(cx, seat.top, cz), tmpQ.identity(), tmpS.set(size - inset, def.height, size - inset));
         this.structures.setMatrixAt(n, tmpM);
         this.structures.setColorAt(n, tmpC.setHex(def.color));
         this.structureIds[n] = e.id;
@@ -1545,7 +1552,7 @@ export class GameRenderer {
         const n = model.ids.length;
         tmpQ2.setFromAxisAngle(up, placement.yaw);
         // Junction geometry is authored at its final dimensions.
-        tmpM.compose(tmpV.set(cx, this.ground(cx, cz), cz), tmpQ2, tmpS.set(corner ? 1 : frame.stretch, 1, 1));
+        tmpM.compose(tmpV.set(cx, seat.top, cz), tmpQ2, tmpS.set(corner ? 1 : frame.stretch, 1, 1));
         for (const part of model.parts) {
           part.setMatrixAt(n, tmpM);
           part.setColorAt(n, tmpC);
@@ -1563,6 +1570,28 @@ export class GameRenderer {
     }
     uploadInstances(this.structures);
     uploadInstances(this.blueprints);
+    this.plinths.count = plinths;
+    uploadInstances(this.plinths);
+  }
+
+  /** Highest and lowest ground under a square of half side `half` around a point. */
+  private seatOn(x: number, z: number, half: number): { top: number; low: number } {
+    const terrain = this.sim?.city.terrain;
+    if (!terrain) return { top: 0, low: 0 };
+    let top = -Infinity;
+    let low = Infinity;
+    for (const [dx, dz] of [
+      [0, 0],
+      [-half, -half],
+      [half, -half],
+      [half, half],
+      [-half, half],
+    ]) {
+      const h = heightAt(terrain, x + dx, z + dz);
+      top = Math.max(top, h);
+      low = Math.min(low, h);
+    }
+    return { top, low };
   }
 
   private updateSelection(sim: Simulation): void {
@@ -1607,7 +1636,7 @@ export class GameRenderer {
       const px = (cx + def.size / 2 + (line?.ox ?? 0)) * cell;
       const pz = (cy + def.size / 2 + (line?.oy ?? 0)) * cell;
       tmpM.compose(
-        tmpV.set(px, this.ground(px, pz), pz),
+        tmpV.set(px, this.seatOn(px, pz, (def.size * cell) / 2).top, pz),
         tmpQ,
         axial
           ? tmpS.set(length - 0.05, Math.max(0.4, def.height), 0.5)

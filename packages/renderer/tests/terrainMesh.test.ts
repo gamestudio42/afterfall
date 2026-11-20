@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { heightAt, type BuildingDef, type TerrainDef } from "@afterfall/world";
 import { drape, groundGrid, rayGround, terrainTop } from "../src/terrainMesh";
-import { BuildingBatch } from "../src/buildingBatch";
+import { BuildingBatch, buildingSeat } from "../src/buildingBatch";
 
 /** A 40 m slope over a 100 m map: the ground rises 0.4 m per metre of x. */
 function slope(): TerrainDef {
@@ -102,5 +102,44 @@ describe("a building on a slope", () => {
     expect(max).toBeCloseTo(16 + 7 + 0.55, 1);
     // The facade shader measures grime from that base.
     expect(batch.mesh.geometry.getAttribute("groundY").getX(0)).toBeCloseTo(16, 3);
+  });
+});
+
+describe("a building on a steep slope", () => {
+  it("is raised until its roof clears the hill, on a plinth down to the foot", () => {
+    // 1 m of rise per metre of x: across a 10 m house the ground climbs 10 m, past its 7 m roof.
+    const cell = 4;
+    const cols = 26;
+    const heights: number[] = [];
+    for (let r = 0; r < cols; r++) for (let c = 0; c < cols; c++) heights.push(c * cell * 10);
+    const t: TerrainDef = { cell, cols, rows: cols, heights, scale: 1, base: 0 };
+    const b: BuildingDef = {
+      id: "b",
+      index: 0,
+      type: "house",
+      zone: "residential",
+      rect: { x: 40, y: 40, w: 10, h: 10 },
+      area: 100,
+      floors: 2,
+      height: 7,
+      entrance: { x: 45, y: 39 },
+      facing: { x: 0, y: -1 },
+    };
+    const seat = buildingSeat(b, t);
+    expect(seat.foot).toBeCloseTo(40, 3);
+    // The roof (base + 7) clears the highest ground (50) by 2.5 m.
+    expect(seat.base + 7).toBeCloseTo(52.5, 3);
+    const p = new BuildingBatch([b], t).mesh.geometry.getAttribute("position");
+    let min = Infinity;
+    for (let i = 0; i < p.count; i++) min = Math.min(min, p.getY(i));
+    // The plinth reaches below the foot.
+    expect(min).toBeLessThan(seat.foot);
+  });
+
+  it("stands on its foot when the slope is gentle", () => {
+    expect(buildingSeat({ ...({} as BuildingDef), rect: { x: 0, y: 0, w: 10, h: 10 }, height: 7 } as BuildingDef, undefined)).toEqual({
+      base: 0,
+      foot: 0,
+    });
   });
 });

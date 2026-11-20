@@ -24,7 +24,13 @@ async function fetchTile(x: number, y: number, signal?: AbortSignal): Promise<Ui
  * The relief of a square area around a point, or null where it is flat. Every tile the
  * area touches is fetched, then the grid is sampled bilinearly between pixel centres.
  */
-export async function fetchTerrain(lat: number, lon: number, size: number, signal?: AbortSignal): Promise<TerrainDef | null> {
+export async function fetchTerrain(
+  lat: number,
+  lon: number,
+  size: number,
+  signal?: AbortSignal,
+  onTile: (done: number, total: number) => void = () => {},
+): Promise<TerrainDef | null> {
   const corners = [mapToLatLon({ lat, lon }, size, 0, 0), mapToLatLon({ lat, lon }, size, size, size)].map((p) =>
     tileXY(p.lat, p.lon, ZOOM),
   );
@@ -36,11 +42,14 @@ export async function fetchTerrain(lat: number, lon: number, size: number, signa
   const y1 = Math.floor(Math.max(corners[0].y, corners[1].y) + pad);
   if ((x1 - x0 + 1) * (y1 - y0 + 1) > 16) return null;
   const tiles = new Map<string, Uint8ClampedArray>();
+  const total = (x1 - x0 + 1) * (y1 - y0 + 1);
+  onTile(0, total);
   await Promise.all(
     Array.from({ length: (x1 - x0 + 1) * (y1 - y0 + 1) }, async (_, k) => {
       const tx = x0 + (k % (x1 - x0 + 1));
       const ty = y0 + Math.floor(k / (x1 - x0 + 1));
       tiles.set(`${tx},${ty}`, await fetchTile(tx, ty, signal));
+      onTile(tiles.size, total);
     }),
   );
   const pixel = (px: number, py: number): number => {

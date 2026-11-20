@@ -826,6 +826,66 @@ canvas.world.hidden {
 .place-picker input {
   min-width: 0;
 }
+.load-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.load-steps li {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  column-gap: 8px;
+  color: var(--muted);
+}
+.load-steps li .mark {
+  text-align: center;
+}
+.load-steps li .detail {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--muted);
+}
+.load-steps li.active {
+  color: var(--text);
+}
+.load-steps li.active .mark {
+  color: var(--accent);
+  animation: load-pulse 1s ease-in-out infinite alternate;
+}
+.load-steps li.done .mark,
+.load-steps li.cached .mark {
+  color: var(--good);
+}
+.load-steps li.skipped .mark {
+  color: var(--warn);
+}
+.load-steps li.failed,
+.load-steps li.failed .mark {
+  color: var(--danger);
+}
+@keyframes load-pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .load-steps li.active .mark {
+    animation: none;
+  }
+}
+.load-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
 .credits-inline {
   font-size: 11px;
   color: var(--muted);

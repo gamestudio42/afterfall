@@ -4,10 +4,9 @@ import { writeFile } from "node:fs/promises";
 /**
  * Gunfire noise, drawn as a ring on the ground sized to the radius that pulls infected.
  *
- * The first version of this spec looked for a `RingGeometry` in the effect pool and a
- * "threat view" that only shows the ring — neither exists. The noise ring is a flat
- * billboard with the ring flipbook (decision 21), it is drawn whatever the overlay is, and
- * at the combat zoom its 45 m radius does not fit in the frame at all.
+ * The noise ring is a line drawn in a shader on a flat quad (`noiseRing.ts`), not one of
+ * the flipbook bursts; it is drawn whatever the overlay is, and at the combat zoom its
+ * 45 m radius does not fit in the frame at all.
  */
 test("gunfire draws a flash, a spark and a noise ring at the pull radius", async ({ page }, info) => {
   const errors: string[] = [];
@@ -40,14 +39,13 @@ test("gunfire draws a flash, a spark and a noise ring at the pull radius", async
     v.debugPin(0.25);
     r.render(0.016);
     const bursts = v.bursts.map((b: any) => ({ look: b.look, size: b.size }));
-    const ring = bursts.find((b: any) => b.look === "ring");
-    const radius = (ring.size * v.ringFill) / 2;
-    // A ring that lands within the merge distance of a live one is dropped, so a fight in
-    // one street does not stack ten rings on top of each other.
+    const radius = v.noise.rings[0]?.radius ?? 0;
+    // A ring that starts within the merge distance of a recent one is dropped, so a fight
+    // in one street does not stack ten rings on top of each other.
     g.sim.emitFx("noise", x - 3, z, x - 3, z, 45);
     r.render(0.016);
-    const ringsAfterMerge = v.bursts.filter((b: any) => b.look === "ring").length;
-    const visibleAtCombat = v.pool.filter((m: any) => m.visible).length;
+    const ringsAfterMerge = v.noise.rings.length;
+    const visibleAtCombat = v.pool.filter((m: any) => m.visible).length + v.noise.visible;
     const normalImage = r.canvas.toDataURL("image/png");
     // Pull back until the whole ring is in frame: at the combat zoom its edge is outside.
     r.rts.distance = r.rts.goalDistance = 150;
@@ -56,11 +54,11 @@ test("gunfire draws a flash, a spark and a noise ring at the pull radius", async
     // And it goes away on its own.
     v.debugPin(null);
     r.render(2);
-    const alive = v.pool.filter((m: any) => m.visible).length;
+    const alive = v.pool.filter((m: any) => m.visible).length + v.noise.visible;
     return { looks: bursts.map((b: any) => b.look), radius, ringsAfterMerge, visibleAtCombat, alive, normalImage, wideImage };
   });
 
-  expect(result.looks).toEqual(["flash", "ring", "spark"]);
+  expect(result.looks).toEqual(["flash", "spark"]);
   expect(result.radius).toBeCloseTo(45, 0);
   expect(result.ringsAfterMerge).toBe(1);
   expect(result.visibleAtCombat).toBe(3);

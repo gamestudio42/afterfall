@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ringAlpha, ringOpen, RING_LIFE } from "../src/noiseRing";
 import { describe, expect, it } from "vitest";
 import { VfxSystem, type FxEvent } from "../src/vfx";
 
@@ -273,75 +274,88 @@ describe("efeitos visuais", () => {
     function noise(seq: number, x: number, y: number, r: number): FxEvent {
       return { seq, type: "noise", x, y, r };
     }
-    const visible = (vfx: VfxSystem) => vfx.pool.filter((m) => m.visible);
 
-    it("lies flat on the ground and spans the noise radius", () => {
+    it("is drawn by its own rings, not the flipbook pool, and needs no sheet", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene);
-      vfx.setNoiseAtlas(new THREE.Texture());
       expect(vfx.noiseReady).toBe(true);
       vfx.emit([noise(1, 3, 4, 45)]);
-      vfx.debugPin(0);
       vfx.update(0.016, camera);
-      const mesh = vfx.pool[0];
-      const mat = mesh.material as THREE.MeshBasicMaterial;
-      expect(mat.map!.repeat.x).toBeCloseTo(1 / 4, 5);
-      expect(mat.map!.repeat.y).toBeCloseTo(1 / 2, 5);
-      expect(mat.blending).toBe(THREE.AdditiveBlending);
-      expect(mesh.position.x).toBeCloseTo(3, 5);
-      expect(mesh.position.z).toBeCloseTo(4, 5);
-      // The quad's normal points up, whatever the camera does.
-      const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.quaternion);
-      expect(normal.y).toBeCloseTo(1, 5);
-      // The last frame's ring fills 496 of 512 px, so the quad is a little wider than the radius.
-      expect(mesh.scale.x * (496 / 512)).toBeCloseTo(90, 5);
-    });
-
-    it("draws nothing, and spawns no particles, without its sheet", () => {
-      const { scene, camera } = system();
-      const vfx = new VfxSystem(scene, undefined, new THREE.Texture());
-      vfx.emit([noise(1, 0, 0, 45)]);
-      vfx.update(0.016, camera);
-      expect(visible(vfx).length).toBe(0);
+      expect(vfx.noise.rings).toHaveLength(1);
+      expect(vfx.noise.rings[0]).toMatchObject({ x: 3, z: 4, radius: 45 });
+      expect(vfx.noise.visible).toBe(1);
+      expect(vfx.pool.filter((m) => m.visible)).toHaveLength(0);
       expect(vfx.active).toBe(0);
     });
 
-    it("drops a ring while another spreads from nearby", () => {
+    it("lies flat and spans the noise radius", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene);
-      vfx.setNoiseAtlas(new THREE.Texture());
+      vfx.emit([noise(1, 3, 4, 45)]);
+      vfx.update(0.016, camera);
+      const mesh = vfx.noise.group.children.find((m) => m.visible) as THREE.Mesh;
+      expect(mesh.position.x).toBeCloseTo(3, 5);
+      expect(mesh.position.z).toBeCloseTo(4, 5);
+      expect(mesh.scale.x).toBeCloseTo(90, 5);
+      // The plane is laid flat in its geometry: its normal points up.
+      expect((mesh.geometry as THREE.BufferGeometry).getAttribute("normal").getY(0)).toBeCloseTo(1, 5);
+      // Blended over the ground, not added to it: the old additive white read as a shockwave.
+      expect((mesh.material as THREE.ShaderMaterial).blending).toBe(THREE.NormalBlending);
+    });
+
+    it("opens fast, holds at full reach, and fades", () => {
+      expect(ringOpen(0)).toBe(0);
+      expect(ringOpen(0.2)).toBeGreaterThan(0.7);
+      expect(ringOpen(0.5)).toBe(1);
+      expect(ringAlpha(0.3)).toBeCloseTo(0.8, 5);
+      expect(ringAlpha(0.7)).toBeLessThan(0.8);
+      expect(ringAlpha(0.7)).toBeGreaterThan(0);
+      expect(ringAlpha(1)).toBe(0);
+    });
+
+    it("gives a spot one ring every couple of seconds, however fast the shots come", () => {
+      const { scene, camera } = system();
+      const vfx = new VfxSystem(scene);
+      // A burst from one street, a second shooter 30 m off.
       vfx.emit([noise(1, 0, 0, 45), noise(2, 4, 0, 45), noise(3, 30, 0, 45)]);
       vfx.update(0.016, camera);
-      expect(visible(vfx).length).toBe(2);
+      expect(vfx.noise.rings).toHaveLength(2);
+      // The first ring is gone after its life, but the spot stays quiet a while longer.
+      for (let i = 0; i < 12; i++) vfx.update(0.15, camera);
+      expect(vfx.noise.rings).toHaveLength(0);
+      vfx.emit([noise(4, 2, 0, 45)]);
+      vfx.update(0.016, camera);
+      expect(vfx.noise.rings).toHaveLength(0);
+      for (let i = 0; i < 6; i++) vfx.update(0.15, camera);
+      vfx.emit([noise(5, 2, 0, 45)]);
+      vfx.update(0.016, camera);
+      expect(vfx.noise.rings).toHaveLength(1);
     });
 
     it("keeps at most three alive", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene);
-      vfx.setNoiseAtlas(new THREE.Texture());
       vfx.emit([0, 1, 2, 3, 4].map((i) => noise(i + 1, i * 50, 0, 45)));
       vfx.update(0.016, camera);
-      expect(visible(vfx).length).toBe(3);
+      expect(vfx.noise.visible).toBe(3);
     });
 
     it("ignores a noise without a radius", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene);
-      vfx.setNoiseAtlas(new THREE.Texture());
       vfx.emit([{ seq: 1, type: "noise", x: 0, y: 0 }]);
       vfx.update(0.016, camera);
-      expect(visible(vfx).length).toBe(0);
+      expect(vfx.noise.visible).toBe(0);
     });
 
-    it("is gone after a second", () => {
+    it("is gone after its life", () => {
       const { scene, camera } = system();
       const vfx = new VfxSystem(scene);
-      vfx.setNoiseAtlas(new THREE.Texture());
       vfx.emit([noise(1, 0, 0, 70)]);
-      vfx.update(0.9, camera);
-      expect(visible(vfx).length).toBe(1);
+      vfx.update(RING_LIFE - 0.1, camera);
+      expect(vfx.noise.visible).toBe(1);
       vfx.update(0.15, camera);
-      expect(visible(vfx).length).toBe(0);
+      expect(vfx.noise.visible).toBe(0);
     });
   });
 

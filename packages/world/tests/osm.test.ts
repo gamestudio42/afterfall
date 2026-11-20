@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pointInPolygon, polygonCentroid } from "@afterfall/shared";
-import { CellKind, NavGrid, OsmImportError, cityFromOverpass, overpassQuery } from "../src";
+import { CellKind, MIN_BUILDINGS, NavGrid, OsmImportError, cityFromOverpass, overpassQuery } from "../src";
 import { FIXTURE_CENTER, syntheticOverpass } from "./fixtures/osm";
 
 const opts = { ...FIXTURE_CENTER, size: 480, label: "Test" };
@@ -92,6 +92,58 @@ describe("OpenStreetMap import", () => {
   it("rejects areas without enough buildings", () => {
     const empty = { elements: syntheticOverpass().elements.filter((e) => !e.tags?.building) };
     expect(() => cityFromOverpass(empty, opts)).toThrow(OsmImportError);
+  });
+
+  it("loads a site with only a handful of buildings, and not one with fewer", () => {
+    // The Taj Mahal has nine buildings in its 480 m, Christ the Redeemer ten: a lone
+    // monument is still a place to play, a poor one.
+    const keep = (n: number) => {
+      let left = n;
+      return { elements: syntheticOverpass().elements.filter((e) => !e.tags?.building || left-- > 0) };
+    };
+    const few = cityFromOverpass(keep(MIN_BUILDINGS + 6), opts);
+    expect(few.buildings.length).toBeGreaterThanOrEqual(MIN_BUILDINGS);
+    // Fewer than the twelve the importer used to demand.
+    expect(few.buildings.length).toBeLessThan(12);
+    expect(() => cityFromOverpass(keep(MIN_BUILDINGS - 2), opts)).toThrow(OsmImportError);
+  });
+
+  it("keeps a city's footpaths out of its streets", () => {
+    // The fixture's grid is kilometres of street; its one footway is not walked as one.
+    expect(city.roads.some((r) => r.trail)).toBe(false);
+  });
+
+  it("walks a site's paths where it has no streets", () => {
+    // Machu Picchu and Chichén Itzá: paths and steps, not a street in 480 m.
+    const site = {
+      elements: syntheticOverpass().elements.map((e) =>
+        e.tags?.highway ? { ...e, tags: { ...e.tags, highway: e.tags.highway === "secondary" ? "steps" : "footway" } } : e,
+      ),
+    };
+    const c = cityFromOverpass(site, opts);
+    expect(c.roads.length).toBeGreaterThan(0);
+    expect(c.roads.every((r) => r.trail)).toBe(true);
+    expect(c.roads.every((r) => (r.width ?? 0) <= 6)).toBe(true);
+    expect(c.buildings.length).toBeGreaterThanOrEqual(MIN_BUILDINGS);
+    expect(c.spawnPoints.length).toBeGreaterThan(0);
+  });
+
+  it("adds the paths to a site whose streets are few", () => {
+    // One street across the area and paths everywhere else, like Christ the Redeemer.
+    let first = true;
+    const site = {
+      elements: syntheticOverpass().elements.map((e) => {
+        if (!e.tags?.highway || e.tags.highway === "footway") return e;
+        if (e.tags.highway === "secondary" && first) {
+          first = false;
+          return e;
+        }
+        return { ...e, tags: { ...e.tags, highway: "path" } };
+      }),
+    };
+    const c = cityFromOverpass(site, opts);
+    expect(c.roads.some((r) => r.trail)).toBe(true);
+    expect(c.roads.some((r) => !r.trail)).toBe(true);
   });
 
   it("builds an Overpass query around the area", () => {

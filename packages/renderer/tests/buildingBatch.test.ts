@@ -277,6 +277,17 @@ describe("landmarks", () => {
     expect(Math.max(...Array.from({ length: pos.count }, (_, v) => pos.getY(v)))).toBeCloseTo(40, 3);
   });
 
+  it("a watchtower is plain masonry with merlons over its parapet, no windows", () => {
+    const batch = tower("watchtower", 11);
+    const pos = batch.mesh.geometry.getAttribute("position");
+    let top = 0;
+    for (let v = 0; v < pos.count; v++) top = Math.max(top, pos.getY(v));
+    // Parapet 0.7 m and merlons 0.9 m over the roof.
+    expect(top).toBeCloseTo(11 + 0.7 + 0.9, 3);
+    // All of it in the plain stone group: no facade, so no windows.
+    expect(groupOf(batch, "trim").count).toBe(pos.count);
+  });
+
   it("a dome rises from a hall on a platform to a finial", () => {
     const batch = tower("dome", 60);
     const bands = profile(batch, 60, 50, 50);

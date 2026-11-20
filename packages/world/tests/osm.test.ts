@@ -347,12 +347,20 @@ describe("landmarks", () => {
     expect(r.minarets).toBeUndefined();
   });
 
-  it("keeps a watchtower a plain block and an ordinary building in the palette", () => {
+  it("makes a defensive tower a watchtower, and keeps an ordinary building in the palette", () => {
     const tower = cityFromOverpass(
       withWay(9213, { building: "tower", man_made: "tower", "tower:type": "defensive", height: "11" }, ring(-60, -40, -60, -40)),
       opts,
     );
-    expect(tower.buildings.find((b) => b.id === "osm9213")?.landmark).toBeUndefined();
+    const t = tower.buildings.find((b) => b.id === "osm9213")!;
+    expect(t.landmark).toBe("watchtower");
+    // 11 m, kept to the game's whole storeys: three, 10.2 m with the parapet band.
+    expect(t.height).toBeCloseTo(10.2, 1);
+    // Untagged, it stands a little taller than it is wide (20 m here).
+    const keep = cityFromOverpass(withWay(9215, { building: "tower", "tower:type": "defensive" }, ring(-60, -40, -60, -40)), opts);
+    const k = keep.buildings.find((b) => b.id === "osm9215")!;
+    expect(k.height).toBeGreaterThan(20);
+    expect(k.height).toBeLessThan(28);
     const plain = cityFromOverpass(withWay(9214, { building: "yes", "building:colour": "white" }, ring(-60, -40, -60, -40)), opts);
     expect(plain.buildings.find((b) => b.id === "osm9214")?.colour).toBeUndefined();
   });

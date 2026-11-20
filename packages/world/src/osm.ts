@@ -821,8 +821,9 @@ function landmarkOf(tags: Record<string, string>): Landmark | undefined {
   // A dome: tagged as one, or a mausoleum (the Taj Mahal is tomb=mausoleum and nothing
   // more), or a mosque, which had been drawn with a church's spire.
   if (/^(dome|onion)$/.test(tags["roof:shape"] ?? "") || tags.tomb === "mausoleum" || tags.building === "mosque") return "dome";
-  // A watchtower on a wall is a block of masonry, not a tapering tower.
-  if (tags["tower:type"] === "defensive") return undefined;
+  // A watchtower on a wall, or a castle's keep: a block of masonry with battlements, not a
+  // tapering tower, and not a house with windows either.
+  if (tags["tower:type"] === "defensive" || tags.defensive_tower === "yes" || tags.castle_type === "defensive") return "watchtower";
   if (tags.man_made === "tower" || tags.building === "tower" || tags["tower:type"]) return "tower";
   if (/^(cathedral|church|chapel|basilica|synagogue|temple|abbey)$/.test(tags.building ?? "")) return "spire";
   if (tags.historic === "monument" || tags.historic === "memorial" || tags.man_made === "obelisk") return "obelisk";
@@ -835,6 +836,12 @@ function floorsOf(tags: Record<string, string>, type: BuildingType, rng: Rng, po
   // A landmark is a silhouette, not storeys: its height wins over a level count (the Great
   // Pyramid is tagged forty levels, which the twenty-floor cap turned into a 65 m block).
   if (landmark && Number.isFinite(height) && height > 2) return Math.max(1, Math.min(125, Math.round(height / 3.2)));
+  if (landmark === "watchtower") {
+    // An untagged watchtower stands a little taller than it is wide: the Great Wall's are
+    // 11 m on 10 m.
+    const r = polygonBounds(poly);
+    return Math.max(2, Math.min(8, Math.round((Math.min(r.w, r.h) * 1.15) / 3.2)));
+  }
   if (landmark === "dome") {
     // An untagged domed hall rises about six tenths of its width: the Taj Mahal's 73 m over a
     // 95 m platform, a mosque's dome over its prayer hall.

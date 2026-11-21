@@ -115,6 +115,39 @@ describe("continuous character animation", () => {
     expect((motion.phase - start + 1) % 1).toBeCloseTo(0.5, 5);
   });
 
+  it("walks at a chore's pace, 1.2 m a cycle, on the walk keys", () => {
+    const { e, motion } = subject();
+    const start = motion.phase;
+    // 1.7 m/s for 0.6 m: half a walking cycle.
+    for (let i = 1; i <= 60; i++) motion.update(e, 10 + i * 0.01, 10, i * (0.01 / 1.7));
+    expect((motion.phase - start + 1) % 1).toBeCloseTo(0.5, 2);
+    const walk = motion.weights.slice(0, 8).reduce((a, b) => a + b, 0);
+    const run = motion.weights.slice(8, 20).reduce((a, b) => a + b, 0);
+    expect(walk).toBeGreaterThan(0.9);
+    expect(run).toBe(0);
+  });
+
+  it("breaks into a jog through a cross-fade, not a jump", () => {
+    const { e, motion } = subject();
+    let x = 10;
+    let time = 0;
+    const step = (speed: number, n: number) => {
+      for (let i = 0; i < n; i++) {
+        x += speed * 0.016;
+        time += 0.016;
+        motion.update(e, x, 10, time);
+      }
+    };
+    step(1.7, 60);
+    step(3.0, 6);
+    const walk = motion.weights.slice(0, 8).reduce((a, b) => a + b, 0);
+    const run = motion.weights.slice(8, 20).reduce((a, b) => a + b, 0);
+    expect(walk).toBeGreaterThan(0.05);
+    expect(run).toBeGreaterThan(0.05);
+    step(3.0, 120);
+    expect(motion.weights.slice(0, 8).reduce((a, b) => a + b, 0)).toBeLessThan(0.01);
+  });
+
   it("turns across the angle wrap by the short route", () => {
     const { e } = subject();
     e.transform!.heading = Math.PI - 0.01;

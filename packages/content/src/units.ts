@@ -74,7 +74,15 @@ export const INFECTED: Record<InfectedKind, InfectedDefinition> = {
   },
 };
 
+/** A survivor in a hurry: ordered, fighting, fleeing, or with the infected close. A jog. */
 export const SURVIVOR_SPEED = 3.0;
+/**
+ * A survivor about a chore with nothing near: a brisk walk. It was the jog for every step,
+ * so the settlement trotted to the well and back all day and never looked at ease.
+ */
+export const SURVIVOR_WALK_SPEED = 1.7;
+/** Infected this close put a survivor in a hurry, in metres. */
+export const SURVIVOR_HURRY_RADIUS = 24;
 export const SURVIVOR_MAX_HEALTH = 100;
 /** Carry weight per survivor. */
 export const CARRY_CAPACITY = 20;

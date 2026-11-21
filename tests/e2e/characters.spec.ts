@@ -55,7 +55,9 @@ test("characters blend on the GPU, equip weapons and freeze when paused", async 
     return {
       before,
       after: snapshot(),
-      adjacent: before.slice(9, 21).filter((w: any) => w > 0).length,
+      // 0.12 m a 0.1 s tick is 1.2 m/s, a survivor's walk (decision 66): two adjacent walk keys.
+      // The texture's first slot is the base influence, so the walk keys are 1 to 8.
+      adjacent: before.slice(1, 9).filter((w: any) => w > 0).length,
       weapons: parts.filter((m: any) => ["crowbar", "pistol", "rifle"].includes(m.material.name)).map((m: any) => m.count),
       skin: Array.from(skin.instanceColor.array.slice(0, 9)),
       textureHeight: cloth.morphTexture.image.height,

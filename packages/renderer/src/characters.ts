@@ -30,7 +30,14 @@ const HIT = BREATH + 5;
  * `CYCLE` in `tools/blender/characters.py`. The old 1.65 m for a survivor at
  * 3.1 m/s was 3.8 steps a second, a scurry; 2.5 m is 2.5 steps a second, a jog.
  */
-export const CYCLE_LENGTH = { survivorRun: 2.5, infectedWalk: 1.0, infectedRun: 2.2 } as const;
+export const CYCLE_LENGTH = { survivorWalk: 1.2, survivorRun: 2.5, infectedWalk: 1.0, infectedRun: 2.2 } as const;
+/**
+ * A survivor's speed, in metres a second, at which the gait goes from walk to jog and back.
+ * Two thresholds, so one hovering between them does not flicker: it walks at 1.7 (1.3 when
+ * hurt and loaded) and jogs at 3.0 (2.25 when both).
+ */
+const GAIT_UP = 2.15;
+const GAIT_DOWN = 1.95;
 // Muted, worn colours: jackets, trousers and hair of people who have been outside for a while.
 const CLOTHES = [0x5d6b52, 0x7a6a4f, 0x4f6274, 0x8a5a48, 0x6b6f76, 0x8c8468, 0x5a4a5e, 0x9a7b4a];
 const PANTS = [0x39424f, 0x4a4438, 0x2f3338, 0x55503f, 0x3d4a57];
@@ -54,6 +61,10 @@ export class CharacterMotion {
   private y: number;
   private time: number;
   private moving = 0;
+  /** 0 walking, 1 jogging, in between while the gait changes. */
+  private gait = 1;
+  private jogging = true;
+  private speed = 0;
   private cooldown: number;
   private hp: number;
   private attackAt = -Infinity;
@@ -84,8 +95,25 @@ export class CharacterMotion {
     this.x = x;
     this.y = y;
     this.time = time;
-    const running = !!e.survivor || e.infected?.kind === "runner";
-    const cycle = e.survivor ? CYCLE_LENGTH.survivorRun : running ? CYCLE_LENGTH.infectedRun : CYCLE_LENGTH.infectedWalk;
+    // A survivor walks about its chores and jogs when in a hurry: the gait follows the speed
+    // it is actually going at, smoothed so one slow tick does not drop it to a walk.
+    if (dt > 0 && !teleport) {
+      const v = distance / dt;
+      // Setting off, the first speed is the speed: no jog that fades into a walk.
+      this.speed = this.moving < 0.1 ? v : this.speed + (v - this.speed) * (1 - Math.exp(-dt * 6));
+    }
+    const starting = this.moving < 0.1;
+    if (e.survivor) {
+      if (this.jogging && this.speed < GAIT_DOWN && walking) this.jogging = false;
+      else if (!this.jogging && this.speed > GAIT_UP) this.jogging = true;
+    } else this.jogging = e.infected?.kind === "runner";
+    this.gait = starting ? (this.jogging ? 1 : 0) : this.gait + ((this.jogging ? 1 : 0) - this.gait) * (1 - Math.exp(-dt * 5));
+    if (!e.survivor) this.gait = this.jogging ? 1 : 0;
+    const cycle = e.survivor
+      ? CYCLE_LENGTH.survivorWalk + (CYCLE_LENGTH.survivorRun - CYCLE_LENGTH.survivorWalk) * this.gait
+      : this.jogging
+        ? CYCLE_LENGTH.infectedRun
+        : CYCLE_LENGTH.infectedWalk;
     if (walking) this.phase = (this.phase + distance / (cycle * strideScale)) % 1;
     if (teleport) this.moving = 0;
     // A body takes a moment to get going and to settle: at 16 the gait snapped on and off.
@@ -107,12 +135,18 @@ export class CharacterMotion {
     const attack = Math.max(0, 1 - age / (this.ranged ? 0.48 : 0.6));
     this.weights.fill(0);
     const walk = this.moving * (1 - attack * 0.8);
-    const keys = running ? RUN_KEYS : WALK_KEYS;
-    const offset = running ? RUN : 0;
-    const p = this.phase * keys;
-    const from = Math.floor(p) % keys;
-    this.weights[offset + from] = (1 - (p % 1)) * walk;
-    this.weights[offset + ((from + 1) % keys)] = (p % 1) * walk;
+    // Both gaits share the phase (the left foot is forward at 0 in each), so a change of
+    // gait cross-fades the two cycles in step instead of jumping between them.
+    for (const [keys, offset, share] of [
+      [WALK_KEYS, 0, 1 - this.gait],
+      [RUN_KEYS, RUN, this.gait],
+    ] as const) {
+      if (share <= 0.001) continue;
+      const p = this.phase * keys;
+      const from = Math.floor(p) % keys;
+      this.weights[offset + from] += (1 - (p % 1)) * walk * share;
+      this.weights[offset + ((from + 1) % keys)] += (p % 1) * walk * share;
+    }
     // Standing still is not standing frozen: the chest rises and falls, and every
     // so often the weight goes onto the other leg with a look over the shoulder.
     const idle = (1 - walk) * (1 - attack);

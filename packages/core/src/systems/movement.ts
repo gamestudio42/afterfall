@@ -1,4 +1,4 @@
-import { BALANCE, CARRY_CAPACITY, bagWeight } from "@afterfall/content";
+import { BALANCE, CARRY_CAPACITY, SURVIVOR_HURRY_RADIUS, SURVIVOR_WALK_SPEED, bagWeight } from "@afterfall/content";
 import { heightAt } from "@afterfall/world";
 import { TICK_SECONDS } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
@@ -43,6 +43,7 @@ export function movementSystem(sim: Simulation): void {
       } else m.gridVersion = sim.grid.version;
     }
     let speed = m.speed;
+    if (e.survivor && !hurried(sim, e)) speed = Math.min(speed, SURVIVOR_WALK_SPEED);
     if (e.survivor) {
       const load = bagWeight(e.survivor.carry) / CARRY_CAPACITY;
       speed *= 1 - 0.25 * Math.min(1, load);
@@ -101,6 +102,27 @@ export function movementSystem(sim: Simulation): void {
     }
     separate(sim, e);
   }
+}
+
+/** Activities a survivor runs through rather than walks. */
+const HURRIED = new Set(["move", "attack", "flee", "returnBase", "defend"]);
+
+/**
+ * Whether a survivor jogs or walks: jogs when the player sent it, when it is fighting,
+ * fleeing or falling back, or when an infected is within `SURVIVOR_HURRY_RADIUS`; walks
+ * about its chores otherwise.
+ */
+export function hurried(sim: Simulation, e: Entity): boolean {
+  const s = e.survivor!;
+  if (s.manual || HURRIED.has(s.activity.type)) return true;
+  const t = e.transform!;
+  let near = false;
+  sim.infectedHash.query(t.x, t.y, SURVIVOR_HURRY_RADIUS, (id) => {
+    if (near) return;
+    const o = sim.state.entities.get(id)?.transform;
+    if (o && (o.x - t.x) ** 2 + (o.y - t.y) ** 2 < SURVIVOR_HURRY_RADIUS ** 2) near = true;
+  });
+  return near;
 }
 
 /** Walking speed up a slope of `rise` (rise over run): slower uphill, never faster downhill. */

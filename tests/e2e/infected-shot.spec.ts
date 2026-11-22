@@ -32,11 +32,13 @@ test("the infected model replaces the capsule", async ({ page }) => {
     return {
       morphs: r.infectedParts[0].geometry.morphAttributes.position.length,
       parts: r.infectedParts.length,
+      mirrored: r.infectedParts.filter((m: { scale: { x: number } }) => m.scale.x === -1).length,
       tinted: r.infectedParts.filter((m: { instanceColor: unknown }) => m.instanceColor !== null).length,
       capsuleHidden: r.infected.visible === false,
       capsuleCount: r.infected.count,
       materials: [...new Set(r.infectedParts.map((m: { material: { name: string } }) => m.material.name))].sort(),
-      drawn: r.infectedParts[0].count,
+      // The first part and its mirrored twin (decision 67) are next to each other.
+      drawn: r.infectedParts[0].count + r.infectedParts[1].count,
       morphCapacity: r.infectedParts[0].morphTexture.image.height,
       drawCalls: r.drawCalls,
     };
@@ -45,10 +47,12 @@ test("the infected model replaces the capsule", async ({ page }) => {
 
   // Walk, run, idle, attack and hit keys share the batches.
   expect(state.morphs).toBe(26);
-  expect(state.parts).toBe(6);
+  // Six materials, each with a mirrored twin, so half the horde drags the other leg (decision 67).
+  expect(state.parts).toBe(12);
+  expect(state.mirrored).toBe(6);
   expect(state.materials).toEqual(["cloth", "detail", "eyes", "hair", "pants", "skin"]);
   // Clothing, trousers, hair and skin vary independently; eyes and fixed details retain their colors.
-  expect(state.tinted).toBe(4);
+  expect(state.tinted).toBe(8);
   expect(state.morphCapacity).toBe(600);
   expect(state.capsuleHidden).toBe(true);
   expect(state.capsuleCount).toBe(0);

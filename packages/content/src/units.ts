@@ -83,6 +83,19 @@ export const SURVIVOR_SPEED = 3.0;
 export const SURVIVOR_WALK_SPEED = 1.7;
 /** Infected this close put a survivor in a hurry, in metres. */
 export const SURVIVOR_HURRY_RADIUS = 24;
+/**
+ * How far one infected's pace is from its kind's, either way: at one speed a horde marched
+ * in step like a parade. Fixed per body, so the mean pace of a horde is the kind's.
+ */
+export const INFECTED_PACE_SPREAD = 0.12;
+/** The pace of infected `id` as a fraction of its kind's speed, 1 ± INFECTED_PACE_SPREAD. */
+export function infectedPace(id: number): number {
+  // A hash, not a stride through [0, 1): ids spawned together sit in a horde together, and a
+  // stride repeated its paces every few ids.
+  const h = Math.sin(id * 91.3458 + 47.853) * 43758.5453;
+  const u = h - Math.floor(h);
+  return 1 + INFECTED_PACE_SPREAD * (2 * u - 1);
+}
 export const SURVIVOR_MAX_HEALTH = 100;
 /** Carry weight per survivor. */
 export const CARRY_CAPACITY = 20;

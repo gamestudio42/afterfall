@@ -90,6 +90,7 @@ const tmpC2 = new THREE.Color();
 const roofC = new THREE.Color();
 const tmpQ2 = new THREE.Quaternion();
 const tmpE = new THREE.Euler();
+const FORWARD = new THREE.Vector3(0, 0, 1);
 const SELECTED_STRUCTURE = new THREE.Color(0xffd34d);
 /** The Eiffel Tower's own brown (OSM `building:colour=#706550`), a touch lifted for the grade. */
 const LATTICE_IRON = 0x7a6b55;
@@ -1401,6 +1402,8 @@ export class GameRenderer {
         if (s.inside >= 0 || su >= MAX_UNITS) continue;
         const y = (s.mounted >= 0 ? 3.4 : 0) + this.ground(x, z);
         tmpQ.setFromAxisAngle(UP, -motion.heading + Math.PI / 2);
+        // Leaning into a turn, pivoting on the feet (the model faces +Z, so its roll is about Z).
+        if (motion.bank !== 0) tmpQ.multiply(tmpQ2.setFromAxisAngle(FORWARD, motion.bank));
         tmpM.compose(tmpV.set(x, y, z), tmpQ, tmpS.set(UNIT_SCALE, UNIT_SCALE, UNIT_SCALE));
         this.survivors.setMatrixAt(su, tmpM);
         this.heads.setMatrixAt(su, tmpM);
@@ -1428,7 +1431,7 @@ export class GameRenderer {
         // foot to foot that follows the stride (once a cycle, the left foot forward at 0).
         const rock = build.rock * motion.striding * Math.sin(Math.PI * 2 * motion.phase);
         tmpQ.setFromAxisAngle(UP, -motion.heading + Math.PI / 2);
-        tmpQ.multiply(tmpQ2.setFromEuler(tmpE.set(build.lean, 0, build.list + rock, "XZY")));
+        tmpQ.multiply(tmpQ2.setFromEuler(tmpE.set(build.lean, 0, build.list + rock + motion.bank, "XZY")));
         const width = e.infected.kind === "brute" ? 1.25 : e.infected.kind === "runner" ? 0.78 : 1;
         const scale = def.scale * build.height;
         tmpM.compose(tmpV.set(x, this.ground(x, z), z), tmpQ, tmpS.set(scale * width, scale, scale));

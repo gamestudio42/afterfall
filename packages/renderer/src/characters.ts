@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { INFECTED, WEAPONS, type WeaponId } from "@afterfall/content";
 import type { Entity } from "@afterfall/core";
+import { BONE_FLOATS, CharacterRig, type RigData } from "./rig";
 
-export const WALK_KEYS = 8;
-export const RUN_KEYS = 12;
-/** The morph layout `tools/blender/characters.py` exports, in order. */
-export const CHARACTER_MORPHS = [
+export const WALK_KEYS = 16;
+export const RUN_KEYS = 24;
+/** The key poses `tools/blender/characters.py` exports, in the order a motion weights them. */
+export const CHARACTER_POSES = [
   ...Array.from({ length: WALK_KEYS }, (_, i) => `walk${i}`),
   ...Array.from({ length: RUN_KEYS }, (_, i) => `run${i}`),
   "breath",
@@ -89,7 +90,7 @@ export function infectedBuild(id: number): InfectedBuild {
 
 /** Distance-driven locomotion and simulation-time actions; never advances while paused. */
 export class CharacterMotion {
-  readonly weights = Array<number>(CHARACTER_MORPHS.length).fill(0);
+  readonly weights = Array<number>(CHARACTER_POSES.length).fill(0);
   phase: number;
   heading: number;
   private x: number;
@@ -242,7 +243,6 @@ export interface CharacterPart {
   mesh: THREE.InstancedMesh;
   /** The infected's left-for-right twin of `mesh`, or null. */
   mirrored: THREE.InstancedMesh | null;
-  sample: THREE.Mesh;
   name: string;
 }
 
@@ -250,54 +250,126 @@ export interface CharacterPart {
 const MIRROR = new THREE.Matrix4().makeScale(-1, 1, 1);
 const mirroredMatrix = new THREE.Matrix4();
 
-/** One batch per material, with independent GPU morph weights for every person. */
+/**
+ * Skins a material on the GPU from the batch's bone texture: each vertex follows its two
+ * bones by its weight, and each instance reads the row of bones its motion was posed into.
+ * The same code goes into the shadow pass's depth material, so shadows move with the body.
+ */
+function skinned<T extends THREE.Material>(material: T, bones: THREE.DataTexture): T {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.boneTex = { value: bones };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+uniform highp sampler2D boneTex;
+attribute vec3 skinBind;
+attribute float boneRow;
+mat4 boneAt(float bone) {
+  int x = int(bone + 0.5) * 3;
+  int y = int(boneRow + 0.5);
+  return transpose(mat4(
+    texelFetch(boneTex, ivec2(x, y), 0),
+    texelFetch(boneTex, ivec2(x + 1, y), 0),
+    texelFetch(boneTex, ivec2(x + 2, y), 0),
+    vec4(0.0, 0.0, 0.0, 1.0)));
+}`,
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `vec4 restPosition = vec4(position, 1.0);
+vec3 transformed = skinBind.z * (boneAt(skinBind.x) * restPosition).xyz
+  + (1.0 - skinBind.z) * (boneAt(skinBind.y) * restPosition).xyz;`,
+      );
+  };
+  material.customProgramCacheKey = () => "afterfall-character-skin";
+  return material;
+}
+
+/**
+ * One instanced mesh per material, skinned on the GPU: every person's bones are posed on
+ * the CPU into a row of one texture, and each mesh instance names its row.
+ */
 export class CharacterBatch {
   readonly parts: CharacterPart[] = [];
   readonly meshes: THREE.InstancedMesh[] = [];
+  /** One row per person: the skinning matrices of every bone. */
+  bones!: THREE.DataTexture;
+  private boneData!: Float32Array;
+  rig!: CharacterRig;
+  private rows = 0;
   private constructor(
     private readonly scene: THREE.Scene,
     readonly infected: boolean,
+    readonly capacity: number,
   ) {}
 
   static async load(scene: THREE.Scene, url: string, capacity: number, infected: boolean): Promise<CharacterBatch | null> {
-    const batch = new CharacterBatch(scene, infected);
+    const batch = new CharacterBatch(scene, infected, capacity);
     try {
       const gltf = await new GLTFLoader().loadAsync(url);
       gltf.scene.updateMatrixWorld(true);
+      let data: RigData | null = null;
+      gltf.scene.traverse((child) => {
+        const rig = child.userData?.afterfall_rig;
+        if (typeof rig === "string") data = JSON.parse(rig) as RigData;
+      });
+      if (!data) throw new Error("Character has no rig");
+      const rigData = data as RigData;
+      if (rigData.walkKeys !== WALK_KEYS || rigData.runKeys !== RUN_KEYS) throw new Error("Character rig has the wrong key count");
+      batch.rig = new CharacterRig(rigData, CHARACTER_POSES);
+      const width = batch.rig.bones * 3;
+      batch.boneData = new Float32Array(width * capacity * 4);
+      batch.bones = new THREE.DataTexture(batch.boneData, width, capacity, THREE.RGBAFormat, THREE.FloatType);
+      batch.bones.minFilter = batch.bones.magFilter = THREE.NearestFilter;
+      batch.bones.generateMipmaps = false;
+      batch.bones.needsUpdate = true;
       gltf.scene.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
-        if (!CHARACTER_MORPHS.every((name, i) => child.morphTargetDictionary?.[name] === i))
-          throw new Error("Invalid character morph layout");
-        const geo = child.geometry.clone();
-        geo.applyMatrix4(child.matrixWorld);
-        // BufferGeometry.applyMatrix4 transforms the base attributes only. Relative
-        // morph offsets need the same axis/scale conversion, without translation.
-        const morphBasis = new THREE.Matrix3().setFromMatrix4(child.matrixWorld);
-        for (const attribute of geo.morphAttributes.position ?? []) {
-          if (geo.morphTargetsRelative) (attribute as THREE.BufferAttribute).applyMatrix3(morphBasis);
-          else (attribute as THREE.BufferAttribute).applyMatrix4(child.matrixWorld);
+        if (!child.matrixWorld.equals(new THREE.Matrix4())) throw new Error("Character mesh is not at the origin");
+        const src = child.geometry as THREE.BufferGeometry;
+        const bind = src.morphAttributes.position?.[0] as THREE.BufferAttribute | undefined;
+        if (!bind || child.morphTargetDictionary?.bind !== 0) throw new Error("Character has no bone binding");
+        // The bind target carries each vertex's two bones and the first one's weight.
+        const skin = new Float32Array(bind.count * 3);
+        for (let i = 0; i < bind.count; i++) {
+          skin[i * 3] = Math.round(bind.getX(i));
+          skin[i * 3 + 1] = Math.round(bind.getY(i));
+          skin[i * 3 + 2] = bind.getZ(i);
         }
-        const src = child.material as THREE.MeshStandardMaterial;
-        const name = src.name;
-        const mat = new THREE.MeshStandardMaterial({
-          name,
-          color: 0xffffff,
-          vertexColors: true,
-          roughness: 0.88,
-          flatShading: true,
-          side: infected && name === "cloth" ? THREE.DoubleSide : THREE.FrontSide,
-          emissive: name === "eyes" ? 0x9bba52 : 0,
-          emissiveIntensity: name === "eyes" ? 0.65 : 0,
-        });
-        const sample = new THREE.Mesh(geo, mat);
+        const skinBind = new THREE.BufferAttribute(skin, 3);
+        const name = (child.material as THREE.MeshStandardMaterial).name;
+        const mat = skinned(
+          new THREE.MeshStandardMaterial({
+            name,
+            color: 0xffffff,
+            vertexColors: true,
+            roughness: 0.88,
+            flatShading: true,
+            side: infected && name === "cloth" ? THREE.DoubleSide : THREE.FrontSide,
+            emissive: name === "eyes" ? 0x9bba52 : 0,
+            emissiveIntensity: name === "eyes" ? 0.65 : 0,
+          }),
+          batch.bones,
+        );
+        const depth = skinned(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), batch.bones);
         const instanced = () => {
+          // Each mesh has its own geometry for its own row indices; the vertex data is shared.
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", src.getAttribute("position"));
+          if (src.getAttribute("color")) geo.setAttribute("color", src.getAttribute("color"));
+          geo.setAttribute("skinBind", skinBind);
+          if (src.index) geo.setIndex(src.index);
+          const rows = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+          rows.setUsage(THREE.DynamicDrawUsage);
+          geo.setAttribute("boneRow", rows);
           const mesh = new THREE.InstancedMesh(geo, mat, capacity);
+          mesh.name = name;
           mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
           mesh.castShadow = mesh.receiveShadow = true;
+          mesh.customDepthMaterial = depth;
           mesh.frustumCulled = false;
           if (TINTED.has(name)) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
-          // Allocate at full capacity before setting count=0; Three sizes the texture by count.
-          mesh.setMorphAt(0, sample);
           mesh.count = 0;
           batch.meshes.push(mesh);
           return mesh;
@@ -312,7 +384,7 @@ export class CharacterBatch {
           mirrored.updateMatrix();
           mirrored.matrixAutoUpdate = false;
         }
-        batch.parts.push({ mesh, mirrored, sample, name });
+        batch.parts.push({ mesh, mirrored, name });
       });
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
@@ -332,12 +404,16 @@ export class CharacterBatch {
   }
 
   begin(): void {
+    this.rows = 0;
     for (const mesh of this.meshes) mesh.count = 0;
   }
 
   place(e: Entity, matrix: THREE.Matrix4, motion: CharacterMotion, selected: boolean, danger: boolean): void {
     // The twin's object matrix mirrors the world, so its instance is mirrored on both sides:
     // world = mirror · (mirror · matrix · mirror) = matrix · mirror, the body flipped in place.
+    if (this.rows >= this.capacity) return;
+    const row = this.rows++;
+    this.rig.skin(motion.weights, this.boneData, row * this.rig.bones * BONE_FLOATS);
     const mirror = !!motion.build?.mirror && this.parts[0]?.mirrored != null;
     if (mirror) mirroredMatrix.multiplyMatrices(MIRROR, matrix).multiply(MIRROR);
     const s = e.survivor;
@@ -356,7 +432,7 @@ export class CharacterBatch {
     else if (s?.manual) clothTint.multiplyScalar(1.12);
     if (danger && this.infected) skinTint.lerp(dangerTint, 0.5);
     for (const part of this.parts) {
-      const { sample, name } = part;
+      const { name } = part;
       if ((name === "crowbar" || name === "pistol" || name === "rifle") && name !== weapon) continue;
       const mesh = mirror ? part.mirrored! : part.mesh;
       const at = mesh.count;
@@ -364,8 +440,7 @@ export class CharacterBatch {
       mesh.setMatrixAt(at, mirror ? mirroredMatrix : matrix);
       if (mesh.instanceColor)
         mesh.setColorAt(at, name === "skin" ? skinTint : name === "pants" ? pantsTint : name === "hair" ? hairTint : clothTint);
-      sample.morphTargetInfluences = motion.weights;
-      mesh.setMorphAt(at, sample);
+      (mesh.geometry.getAttribute("boneRow") as THREE.InstancedBufferAttribute).setX(at, row);
       mesh.count++;
     }
   }
@@ -376,14 +451,14 @@ export class CharacterBatch {
     for (const mesh of this.meshes) {
       const n = mesh.count;
       if (n === 0) continue;
-      for (const a of [mesh.instanceMatrix, mesh.instanceColor]) {
+      for (const a of [mesh.instanceMatrix, mesh.instanceColor, mesh.geometry.getAttribute("boneRow") as THREE.InstancedBufferAttribute]) {
         if (!a) continue;
         a.clearUpdateRanges();
         a.addUpdateRange(0, n * a.itemSize);
         a.needsUpdate = true;
       }
-      if (mesh.morphTexture) mesh.morphTexture.needsUpdate = true;
     }
+    if (this.rows > 0) this.bones.needsUpdate = true;
   }
 
   dispose(): void {
@@ -391,7 +466,9 @@ export class CharacterBatch {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
+      mesh.customDepthMaterial?.dispose();
       mesh.dispose();
     }
+    this.bones?.dispose();
   }
 }

@@ -1,4 +1,4 @@
-"""Original characters: one continuous skinned body, posed by a skeleton and baked to morphs.
+"""Original characters: one continuous skinned body, posed by a skeleton.
 
 Run through survivors.py / infected.py. Blender is Z-up and the character faces -Y.
 
@@ -8,9 +8,14 @@ so a knee or an elbow bends as skin instead of two tubes passing through each
 other). Every pose is then that same mesh skinned by the skeleton: legs by
 two-bone inverse kinematics from a foot path on the ground, so a planted foot
 stays planted, and the spine, arms and head by forward kinematics from a
-handful of angles. The vertex order never changes, so each pose exports as a
-glTF morph target and three.js blends them per instance on the GPU, with no
-skeleton at run time and no draw call per frame of animation.
+handful of angles.
+
+The GLB carries the body in its rest stance, each vertex's two bones and weight
+(as a single glTF morph target named `bind`, which keeps them in step with the
+exporter's vertex order), and in the object's extras the skeleton and every key
+pose as bone rotations. The renderer blends poses per instance by rotating
+bones, not by moving vertices in straight lines, so a limb keeps its length
+half way between two keys (decision 69).
 """
 import hashlib
 import json
@@ -21,10 +26,10 @@ import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
-WALK_KEYS = 8
+WALK_KEYS = 16
 # Twelve, not eight: in a run the shin swings through a right angle in an eighth of a
 # cycle, and a straight blend between two such keys flattened the knee.
-RUN_KEYS = 12
+RUN_KEYS = 24
 POSE_NAMES = (
     [f"walk{i}" for i in range(WALK_KEYS)]
     + [f"run{i}" for i in range(RUN_KEYS)]
@@ -60,6 +65,21 @@ for _s, _n in ((-1, "L"), (1, "R")):
     REST[f"thigh{_n}"] = Vector((_s * HIP_W, 0, 0.93))
     REST[f"shin{_n}"] = Vector((_s * HIP_W, 0, 0.50))
     REST[f"foot{_n}"] = Vector((_s * HIP_W, 0, 0.085))
+# The skeleton, in the order the renderer indexes bones, and each bone's parent.
+BONES = list(REST)
+PARENT = {
+    "pelvis": None,
+    "spine": "pelvis",
+    "chest": "spine",
+    "neck": "chest",
+    "head": "neck",
+    **{f"upper{n}": "chest" for n in "LR"},
+    **{f"fore{n}": f"upper{n}" for n in "LR"},
+    **{f"hand{n}": f"fore{n}" for n in "LR"},
+    **{f"thigh{n}": "pelvis" for n in "LR"},
+    **{f"shin{n}": f"thigh{n}" for n in "LR"},
+    **{f"foot{n}": f"shin{n}" for n in "LR"},
+}
 THIGH = 0.43
 SHIN = 0.415
 ANKLE_Z = 0.085
@@ -824,20 +844,70 @@ def make_object(name, vertices, faces, names, colors):
     return ob
 
 
+# Blender is Z-up; glTF and three.js are Y-up: (x, y, z) -> (x, z, -y).
+Y_UP = Matrix(((1, 0, 0), (0, 0, 1), (0, -1, 0)))
+
+
+def rig_pose(bones):
+    """A pose for the renderer: the root's position and every bone's rotation, Y-up.
+
+    Only the root moves freely; every other bone hangs off its parent, so the renderer
+    places it by forward kinematics, and a blend of two poses keeps every bone's length.
+    """
+    for name in BONES:
+        parent = PARENT[name]
+        if parent is None:
+            continue
+        o, _ = bones[name]
+        po, pr = bones[parent]
+        drift = (po + pr @ (REST[name] - REST[parent]) - o).length
+        assert drift < 1e-4, f"{name} does not hang off {parent} ({drift:.6f} m)"
+    root = Y_UP @ bones["pelvis"][0]
+    quats = []
+    for name in BONES:
+        q = (Y_UP @ bones[name][1] @ Y_UP.transposed()).to_quaternion()
+        quats.extend((q.x, q.y, q.z, q.w))
+    return {"root": [round(v, 6) for v in root], "q": [round(v, 6) for v in quats]}
+
+
 def generate(infected, out_dir):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     os.makedirs(out_dir, exist_ok=True)
-    vertices, faces, names, colors = build(infected)
+    body = build_body(infected)
+    vertices, faces, names, colors = body.verts, body.faces, body.materials, body.colors
     ob = make_object("infected" if infected else "survivor", vertices, faces, names, colors)
     bpy.context.view_layer.objects.active = ob
     ob.select_set(True)
     ob.shape_key_add(name="Basis")
-    for name in POSE_NAMES:
-        points, check_faces, _, _ = build(infected, name)
-        assert check_faces == faces and len(points) == len(vertices), "Morph topology changed"
-        key = ob.shape_key_add(name=name)
-        for vertex, point in zip(key.data, points):
-            vertex.co = point
+    # Each vertex's bones and the first one's weight, written as a morph offset so the
+    # exporter carries them through its own vertex order. Exported Y-up, the offset
+    # (a, -w, b) arrives as (a, b, w).
+    index = {name: i for i, name in enumerate(BONES)}
+    key = ob.shape_key_add(name="bind")
+    for vertex, v, bind in zip(key.data, vertices, body.binds):
+        (a, wa), (b, _) = (bind[0], bind[1]) if len(bind) > 1 else (bind[0], bind[0])
+        assert len(bind) <= 2 and abs(sum(w for _, w in bind) - 1) < 1e-6, bind
+        vertex.co = v + Vector((index[a], -wa, index[b]))
+    poses = {name: rig_pose(solve(pose_for(infected, name))) for name in ["stand", *POSE_NAMES]}
+    # The rig must reproduce the generator's own skinning: one pose checked end to end.
+    check = solve(pose_for(infected, "walk3"))
+    for v, bind, posed in zip(vertices, body.binds, body.posed(check)):
+        p = Vector((0, 0, 0))
+        for name, w in bind:
+            o, r = check[name]
+            p += w * (o + r @ (v - REST[name]))
+        assert (p - posed).length < 1e-5
+    ob["afterfall_rig"] = json.dumps(
+        {
+            "bones": BONES,
+            "parents": [BONES.index(PARENT[n]) if PARENT[n] else -1 for n in BONES],
+            "rest": [[round(c, 6) for c in Y_UP @ REST[n]] for n in BONES],
+            "walkKeys": WALK_KEYS,
+            "runKeys": RUN_KEYS,
+            "poses": poses,
+        },
+        separators=(",", ":"),
+    )
     path = os.path.join(out_dir, "infected.glb" if infected else "walker.glb")
     bpy.ops.export_scene.gltf(
         filepath=path,
@@ -848,6 +918,7 @@ def generate(infected, out_dir):
         export_texcoords=False,
         export_animations=False,
         export_morph=True,
+        export_extras=True,
         export_morph_normal=False,
         export_morph_tangent=False,
         export_cameras=False,
@@ -856,7 +927,7 @@ def generate(infected, out_dir):
     size = os.path.getsize(path)
     assert size <= 512 * 1024, f"Character exceeds asset budget: {size}"
     tris = sum(len(f) - 2 for f in faces)
-    print(f"CHARACTER {path}: {len(vertices)} vertices, {tris} triangles, {len(POSE_NAMES)} morphs, {size} bytes")
+    print(f"CHARACTER {path}: {len(vertices)} vertices, {tris} triangles, {len(poses)} poses, {size} bytes")
     # Update provenance only when regenerating an asset inside the shipped art directory.
     manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../apps/web/public/art/manifest.json"))
     with open(manifest_path, encoding="utf8") as f:

@@ -30,7 +30,9 @@ test("the infected model replaces the capsule", async ({ page }) => {
   const state = await page.evaluate(() => {
     const r = (window as unknown as Win).__afterfall.renderer;
     return {
-      morphs: r.infectedParts[0].geometry.morphAttributes.position.length,
+      skinned: r.infectedParts.every((m: any) => m.geometry.getAttribute("skinBind") && m.geometry.getAttribute("boneRow")),
+      morphs: Object.keys(r.infectedParts[0].geometry.morphAttributes).length,
+      bones: r.infectedBatch.rig.bones,
       parts: r.infectedParts.length,
       mirrored: r.infectedParts.filter((m: { scale: { x: number } }) => m.scale.x === -1).length,
       tinted: r.infectedParts.filter((m: { instanceColor: unknown }) => m.instanceColor !== null).length,
@@ -39,21 +41,23 @@ test("the infected model replaces the capsule", async ({ page }) => {
       materials: [...new Set(r.infectedParts.map((m: { material: { name: string } }) => m.material.name))].sort(),
       // The first part and its mirrored twin (decision 67) are next to each other.
       drawn: r.infectedParts[0].count + r.infectedParts[1].count,
-      morphCapacity: r.infectedParts[0].morphTexture.image.height,
+      boneCapacity: r.infectedBatch.bones.image.height,
       drawCalls: r.drawCalls,
     };
   });
   console.log("INFECTED", JSON.stringify(state));
 
-  // Walk, run, idle, attack and hit keys share the batches.
-  expect(state.morphs).toBe(26);
+  // Skinned by a skeleton of seventeen bones, posed from a texture (decision 69): no morphs.
+  expect(state.skinned).toBe(true);
+  expect(state.morphs).toBe(0);
+  expect(state.bones).toBe(17);
   // Six materials, each with a mirrored twin, so half the horde drags the other leg (decision 67).
   expect(state.parts).toBe(12);
   expect(state.mirrored).toBe(6);
   expect(state.materials).toEqual(["cloth", "detail", "eyes", "hair", "pants", "skin"]);
   // Clothing, trousers, hair and skin vary independently; eyes and fixed details retain their colors.
   expect(state.tinted).toBe(8);
-  expect(state.morphCapacity).toBe(600);
+  expect(state.boneCapacity).toBe(600);
   expect(state.capsuleHidden).toBe(true);
   expect(state.capsuleCount).toBe(0);
   expect(state.drawn).toBeGreaterThan(0);

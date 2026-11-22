@@ -48,10 +48,13 @@ pnpm exec prettier --write apps/web/public/art/manifest.json
 pnpm assets:check
 ```
 
-Both entrypoints use `tools/blender/characters.py`, validate mesh and morph
-topology, enforce the 512 KiB per-model budget, and update manifest checksums.
-The renderer uses Three.js instanced morph textures, including the shadow pass,
-with a fixed number of material batches rather than one batch per animation key.
+Both entrypoints use `tools/blender/characters.py`, check that every bone hangs
+off its parent and that the exported rig reproduces the generator's own skinning,
+enforce the 512 KiB per-model budget, and update manifest checksums. The GLB holds
+the rest mesh, each vertex's two bones (a morph target named `bind`) and the rig
+in the object's extras. The renderer poses bones on the CPU into one texture per
+batch and skins on the GPU, shadow pass included, with a fixed number of material
+batches (decision 69).
 
 ## Environment and lifecycle regressions
 

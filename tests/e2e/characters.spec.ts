@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 
 type Win = { __afterfall: any };
 
-test("characters blend on the GPU, equip weapons and freeze when paused", async ({ page }, testInfo) => {
+test("characters are skinned on the GPU, equip weapons and freeze when paused", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
@@ -47,24 +47,32 @@ test("characters blend on the GPU, equip weapons and freeze when paused", async 
       g.renderer.render(0.1);
     }
     const parts = g.renderer.unitParts;
-    const cloth = parts.find((m: any) => m.material.name === "cloth");
     const skin = parts.find((m: any) => m.material.name === "skin");
-    const snapshot = () => Array.from(cloth.morphTexture.image.data);
+    const batch = g.renderer.unitBatch;
+    // Three people posed: three rows of bones, a 3×4 matrix per bone.
+    const snapshot = (): number[] => Array.from(batch.bones.image.data.slice(0, 3 * batch.rig.bones * 12));
     const before = snapshot();
     for (let i = 0; i < 5; i++) g.renderer.render(0.1);
+    const weights = g.renderer.motions.get(people[0].id).weights;
     return {
       before,
       after: snapshot(),
       // 0.12 m a 0.1 s tick is 1.2 m/s, a survivor's walk (decision 66): two adjacent walk keys.
-      // The texture's first slot is the base influence, so the walk keys are 1 to 8.
-      adjacent: before.slice(1, 9).filter((w: any) => w > 0).length,
+      adjacent: weights.slice(0, 16).filter((w: number) => w > 0).length,
+      // Every part reads its people's bones from the batch's rows.
+      rows: parts.map((m: any) => Array.from(m.geometry.getAttribute("boneRow").array.slice(0, m.count))),
+      morphs: parts.map((m: any) => Object.keys(m.geometry.morphAttributes).length),
       weapons: parts.filter((m: any) => ["crowbar", "pistol", "rifle"].includes(m.material.name)).map((m: any) => m.count),
       skin: Array.from(skin.instanceColor.array.slice(0, 9)),
-      textureHeight: cloth.morphTexture.image.height,
+      textureHeight: batch.bones.image.height,
+      moving: before.some((v: number, i: number) => i % 12 === 3 && v !== 0),
     };
   });
   expect(result.after).toEqual(result.before);
   expect(result.adjacent).toBe(2);
+  expect(result.morphs.every((n: number) => n === 0)).toBe(true);
+  expect(result.rows.find((r: number[]) => r.length === 3)).toEqual([0, 1, 2]);
+  expect(result.moving).toBe(true);
   expect(result.weapons).toEqual([1, 1, 1]);
   expect(result.textureHeight).toBe(64);
   expect(result.skin.slice(0, 3)).not.toEqual(result.skin.slice(3, 6));
@@ -93,7 +101,9 @@ test("characters blend on the GPU, equip weapons and freeze when paused", async 
       }
       return { counts: g.renderer.infectedParts.map((m: any) => m.count), samples, calls: g.renderer.drawCalls };
     });
-    expect(stress.counts).toEqual([600, 600, 600, 600, 600, 600]);
+    // Each material and its mirrored twin (decision 67) share the horde between them.
+    const pairs = stress.counts.filter((_: number, i: number) => i % 2 === 0).map((n: number, i: number) => n + stress.counts[i * 2 + 1]);
+    expect(pairs).toEqual([600, 600, 600, 600, 600, 600]);
     console.log("CHARACTER STRESS", JSON.stringify(stress));
   }
 
@@ -137,25 +147,15 @@ test("characters blend on the GPU, equip weapons and freeze when paused", async 
       await page.evaluate(
         ({ time, label }) => {
           const g = (window as unknown as Win).__afterfall;
+          const w = window as unknown as { __x0?: Map<number, number> };
+          w.__x0 ??= new Map([...g.sim.state.entities.values()].map((e: any) => [e.id, e.transform.x]));
           for (const e of g.sim.state.entities.values()) {
-            const motion = g.renderer.motions.get(e.id);
             if (label === "attack") (e.survivor ?? e.infected).cooldown = 1;
-            motion.update(e, e.transform.x + (time - 1) * 0.6, e.transform.y, time);
+            e.transform.x = e.transform.px = w.__x0.get(e.id)! + (time - 1) * 0.6;
           }
-          // Place updated weights without running the simulation or changing the art camera.
+          // Pose and place everyone at this moment without running the simulation or moving the art camera.
           const r = g.renderer;
-          for (const batch of [r.unitBatch, r.infectedBatch]) {
-            for (const { mesh, sample } of batch.parts) {
-              let at = 0;
-              for (const e of g.sim.state.entities.values()) {
-                if (!!e.infected !== batch.infected) continue;
-                if (["crowbar", "pistol", "rifle"].includes(mesh.material.name) && mesh.material.name !== e.survivor.weapon) continue;
-                sample.morphTargetInfluences = r.motions.get(e.id).weights;
-                mesh.setMorphAt(at++, sample);
-              }
-            }
-            batch.end();
-          }
+          r.updateUnits(g.sim, time / 0.1 - g.sim.state.tick);
           r.renderer.render(r.scene, r.rts.camera);
         },
         { time, label },

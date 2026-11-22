@@ -183,3 +183,42 @@ describe("infected builds", () => {
     expect(new CharacterMotion(s, 10, 10, 0).build).toBeNull();
   });
 });
+
+describe("turns and shoves", () => {
+  it("leans into a turn, the way it turns, and stands straight again", () => {
+    const { e, motion } = subject();
+    const r = 4;
+    // A jog round a circle anticlockwise, the heading following the path.
+    for (let i = 1; i <= 60; i++) {
+      const a = i * 0.04;
+      e.transform!.heading = a;
+      motion.update(e, 10 + r * Math.sin(a), 10 - r * Math.cos(a), i * 0.05);
+    }
+    expect(motion.bank).toBeGreaterThan(0.05);
+    expect(motion.bank).toBeLessThanOrEqual((12 * Math.PI) / 180 + 1e-9);
+    // Clockwise, the other way.
+    const b = subject();
+    for (let i = 1; i <= 60; i++) {
+      const a = -i * 0.04;
+      b.e.transform!.heading = a;
+      b.motion.update(b.e, 10 + r * Math.sin(-a), 10 + r * Math.cos(a) - r, i * 0.05);
+    }
+    expect(b.motion.bank).toBeLessThan(-0.05);
+    // Straight on, upright.
+    const x = 10 + r * Math.sin(2.4);
+    for (let i = 61; i <= 120; i++) motion.update(e, x + (i - 60) * 0.15, 10 - r * Math.cos(2.4), i * 0.05);
+    e.transform!.heading = 0;
+    for (let i = 121; i <= 160; i++) motion.update(e, x + (i - 60) * 0.15, 10 - r * Math.cos(2.4), i * 0.05);
+    expect(Math.abs(motion.bank)).toBeLessThan(0.01);
+  });
+
+  it("plays a shove to the side as a shift of weight, not a stride", () => {
+    const { e, motion } = subject();
+    e.transform!.heading = 0;
+    // Pushed along y while facing x: a crowd making room.
+    for (let i = 1; i <= 20; i++) motion.update(e, 10, 10 + i * 0.03, i * 0.05);
+    // Walk and run keys are 0 to 19, then breath and shift.
+    const stride = motion.weights.slice(0, 20).reduce((a, b) => a + b, 0);
+    expect(motion.weights[21]).toBeGreaterThan(stride);
+  });
+});

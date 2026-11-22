@@ -38,6 +38,8 @@ export const CYCLE_LENGTH = { survivorWalk: 1.2, survivorRun: 2.5, infectedWalk:
  */
 const GAIT_UP = 2.15;
 const GAIT_DOWN = 1.95;
+/** The most a body leans into a turn, in radians: 12°, a sharp corner at a run. */
+const MAX_BANK = (12 * Math.PI) / 180;
 // Muted, worn colours: jackets, trousers and hair of people who have been outside for a while.
 const CLOTHES = [0x5d6b52, 0x7a6a4f, 0x4f6274, 0x8a5a48, 0x6b6f76, 0x8c8468, 0x5a4a5e, 0x9a7b4a];
 const PANTS = [0x39424f, 0x4a4438, 0x2f3338, 0x55503f, 0x3d4a57];
@@ -94,6 +96,13 @@ export class CharacterMotion {
   private y: number;
   private time: number;
   private moving = 0;
+  /** How much of the motion goes the way the body faces: 1 a step forward, 0 a shove to the side. */
+  private forward = 1;
+  /**
+   * Sideways tilt into a turn, in radians, positive to the body's left: a body going round a
+   * corner leans into it as a person does, by about atan(speed × turn rate / g).
+   */
+  bank = 0;
   /** The infected's own build; null for a survivor. */
   readonly build: InfectedBuild | null;
   /** 0 walking, 1 jogging, in between while the gait changes. */
@@ -130,7 +139,9 @@ export class CharacterMotion {
 
   update(e: Entity, x: number, y: number, time: number, strideScale = 1): void {
     const dt = Math.max(0, time - this.time);
-    const distance = Math.hypot(x - this.x, y - this.y);
+    const dx = x - this.x;
+    const dy = y - this.y;
+    const distance = Math.hypot(dx, dy);
     const teleport = distance > 3 || time < this.time;
     const walking = distance > 0.00001 && !teleport;
     this.x = x;
@@ -161,7 +172,20 @@ export class CharacterMotion {
     else this.moving += ((walking ? 1 : 0) - this.moving) * (1 - Math.exp(-dt * 9));
     const angle = e.transform!.heading;
     const turn = Math.atan2(Math.sin(angle - this.heading), Math.cos(angle - this.heading));
-    this.heading += turn * (1 - Math.exp(-dt * 12));
+    const step = turn * (1 - Math.exp(-dt * 12));
+    this.heading += step;
+    if (dt > 0) {
+      // Lean into the turn: the heading is the smoothed one, so a path's corner is a curve.
+      const lean = this.moving * Math.atan((this.speed * (step / dt)) / 9.81) * 0.6;
+      const target = Math.max(-MAX_BANK, Math.min(MAX_BANK, teleport ? 0 : lean));
+      this.bank += (target - this.bank) * (1 - Math.exp(-dt * 6));
+      // A shove to the side (a crowd making room) is not a step forward: played as the walk,
+      // a body pushed sideways walked on the spot facing the wrong way.
+      if (walking) {
+        const along = Math.abs(dx * Math.cos(angle) + dy * Math.sin(angle)) / distance;
+        this.forward += (along - this.forward) * (1 - Math.exp(-dt * 8));
+      } else this.forward += (1 - this.forward) * (1 - Math.exp(-dt * 4));
+    }
     const cooldown = e.survivor?.cooldown ?? e.infected?.cooldown ?? 0;
     if (cooldown > this.cooldown + 0.001) {
       this.attackAt = time;
@@ -175,7 +199,8 @@ export class CharacterMotion {
     const age = time - this.attackAt;
     const attack = Math.max(0, 1 - age / (this.ranged ? 0.48 : 0.6));
     this.weights.fill(0);
-    const walk = this.moving * (1 - attack * 0.8);
+    const walk = this.moving * this.forward * (1 - attack * 0.8);
+    const sidestep = this.moving * (1 - this.forward) * (1 - attack);
     // Both gaits share the phase (the left foot is forward at 0 in each), so a change of
     // gait cross-fades the two cycles in step instead of jumping between them.
     for (const [keys, offset, share] of [
@@ -193,7 +218,8 @@ export class CharacterMotion {
     const idle = (1 - walk) * (1 - attack);
     const wander = 0.5 + 0.5 * Math.sin(time * 0.41 + e.id * 2.3);
     const shift = wander * wander * (3 - 2 * wander);
-    this.weights[SHIFT] = idle * Math.max(0, (shift - 0.55) / 0.45) * 0.9;
+    // A sidestep is the weight going onto the other leg, the shift pose, not a stride.
+    this.weights[SHIFT] = Math.min(idle, idle * Math.max(0, (shift - 0.55) / 0.45) * 0.9 + sidestep * 0.8);
     this.weights[BREATH] = idle * (1 - this.weights[SHIFT] / Math.max(idle, 1e-6)) * (0.5 + 0.5 * Math.sin(time * 1.9 + e.id * 1.7));
     if (this.ranged) this.weights[AIM] = Math.min(1, attack * 2);
     else if (age < 0.12) {

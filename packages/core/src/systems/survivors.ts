@@ -161,8 +161,44 @@ function idle(sim: Simulation, e: SurvivorEntity, hour: number, bedsUsed: Map<nu
   // back towards the base so they are not left out in the open.
   if (sim.arrived(e) && sim.state.tick % 50 === e.id % 50) {
     const ent = sim.hqEntrance();
-    if (dist(e, ent.x, ent.y) > 24) sim.setDestination(e, ent.x + sim.rng.range(-4, 4), ent.y + sim.rng.range(-4, 4), "survivor");
+    if (dist(e, ent.x, ent.y) > 24) {
+      sim.setDestination(e, ent.x + sim.rng.range(-4, 4), ent.y + sim.rng.range(-4, 4), "survivor");
+      return;
+    }
   }
+  if (s.mounted < 0 && sim.arrived(e)) loiter(sim, e);
+}
+
+/**
+ * Someone waiting for work does not stand frozen on one spot all day: now and then they
+ * take a few steps, or turn to look somewhere else. Decided by a hash of the tick and the
+ * id, so a waiting survivor draws on the random stream only when it does move.
+ */
+function loiter(sim: Simulation, e: SurvivorEntity): void {
+  const roll = idleRoll(sim.state.tick, e.id);
+  const t = e.transform!;
+  if (roll < 1 / LOITER_STEP_TICKS) {
+    const angle = sim.rng.range(0, Math.PI * 2);
+    const reach = sim.rng.range(LOITER_REACH[0], LOITER_REACH[1]);
+    const x = t.x + Math.cos(angle) * reach;
+    const y = t.y + Math.sin(angle) * reach;
+    if (sim.grid.passable(x, y, "survivor") && sim.grid.walkable(t.x, t.y, x, y, "survivor", 0)) sim.setDestination(e, x, y, "survivor");
+  } else if (roll < 1 / LOITER_STEP_TICKS + 1 / LOITER_LOOK_TICKS) {
+    t.heading += sim.rng.range(0.5, 1.6) * (sim.rng.next() < 0.5 ? -1 : 1);
+  }
+}
+
+/** Ticks a waiting survivor goes, on average, between a few steps and between a look round. */
+const LOITER_STEP_TICKS = 160;
+const LOITER_LOOK_TICKS = 110;
+/** How far a loitering survivor wanders in one go, in metres. */
+const LOITER_REACH = [1.2, 3.5] as const;
+
+/** A number in [0, 1) from the tick and an id, the same on every run. */
+function idleRoll(tick: number, id: number): number {
+  let h = Math.imul(tick ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(id, 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 13), 0x27d4eb2f);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 export function returnToBase(sim: Simulation, e: SurvivorEntity): void {

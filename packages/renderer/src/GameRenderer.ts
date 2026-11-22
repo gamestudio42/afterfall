@@ -89,6 +89,7 @@ const lightUp = new THREE.Vector3();
 const tmpC2 = new THREE.Color();
 const roofC = new THREE.Color();
 const tmpQ2 = new THREE.Quaternion();
+const tmpE = new THREE.Euler();
 const SELECTED_STRUCTURE = new THREE.Color(0xffd34d);
 /** The Eiffel Tower's own brown (OSM `building:colour=#706550`), a touch lifted for the grade. */
 const LATTICE_IRON = 0x7a6b55;
@@ -1392,7 +1393,8 @@ export class GameRenderer {
         motion = new CharacterMotion(e, x, z, animationTime);
         this.motions.set(e.id, motion);
       }
-      const strideScale = e.infected ? INFECTED[e.infected.kind].scale : 1;
+      // A taller body covers more ground a stride, so its stride is scaled with it.
+      const strideScale = e.infected ? INFECTED[e.infected.kind].scale * motion.build!.height : 1;
       motion.update(e, x, z, animationTime, strideScale);
       if (e.survivor) {
         const s = e.survivor;
@@ -1421,9 +1423,15 @@ export class GameRenderer {
       } else if (e.infected) {
         if (zi >= MAX_INFECTED) continue;
         const def = INFECTED[e.infected.kind];
+        const build = motion.build!;
+        // The body pivots on its feet: a lean forward, a list to one side, and a rock from
+        // foot to foot that follows the stride (once a cycle, the left foot forward at 0).
+        const rock = build.rock * motion.striding * Math.sin(Math.PI * 2 * motion.phase);
         tmpQ.setFromAxisAngle(UP, -motion.heading + Math.PI / 2);
+        tmpQ.multiply(tmpQ2.setFromEuler(tmpE.set(build.lean, 0, build.list + rock, "XZY")));
         const width = e.infected.kind === "brute" ? 1.25 : e.infected.kind === "runner" ? 0.78 : 1;
-        tmpM.compose(tmpV.set(x, this.ground(x, z), z), tmpQ, tmpS.set(def.scale * width, def.scale, def.scale));
+        const scale = def.scale * build.height;
+        tmpM.compose(tmpV.set(x, this.ground(x, z), z), tmpQ, tmpS.set(scale * width, scale, scale));
         if (this.infectedBatch) {
           this.infectedBatch.place(e, tmpM, motion, false, this.overlay === "danger");
         } else {

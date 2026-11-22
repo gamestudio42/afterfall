@@ -13,6 +13,7 @@ import {
   TECHS,
   addToBag,
   bagTotal,
+  infectedPace,
   type BuildingFunction,
   type InfectedKind,
   type ResourceBag,
@@ -342,11 +343,20 @@ export class Simulation {
 
   spawnInfected(kind: InfectedKind, x: number, y: number, horde: number): Entity {
     const def = INFECTED[kind];
+    const id = this.newId();
     const e: Entity = {
-      id: this.newId(),
+      id,
       transform: { x, y, px: x, py: y, heading: this.rng.range(0, Math.PI * 2) },
       health: { hp: def.hp, max: def.hp },
-      mover: { path: [], speed: def.speed, goal: null, stuckTicks: 0, lastProgressX: x, lastProgressY: y, gridVersion: 0 },
+      mover: {
+        path: [],
+        speed: def.speed * infectedPace(id),
+        goal: null,
+        stuckTicks: 0,
+        lastProgressX: x,
+        lastProgressY: y,
+        gridVersion: 0,
+      },
       infected: {
         kind,
         state: horde >= 0 ? { type: "assault" } : { type: "idle" },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CharacterMotion } from "../src/characters";
+import { CharacterMotion, infectedBuild } from "../src/characters";
 import { Simulation } from "@afterfall/core";
 
 function subject() {
@@ -155,5 +155,31 @@ describe("continuous character animation", () => {
     e.transform!.heading = -Math.PI + 0.01;
     motion.update(e, 10, 10, 0.05);
     expect(Math.abs(motion.heading - Math.PI)).toBeLessThan(0.011);
+  });
+});
+
+describe("infected builds", () => {
+  it("are fixed per body and vary across a horde", () => {
+    const builds = Array.from({ length: 400 }, (_, id) => infectedBuild(id));
+    expect(infectedBuild(17)).toEqual(builds[17]);
+    const mirrored = builds.filter((b) => b.mirror).length;
+    expect(mirrored).toBeGreaterThan(160);
+    expect(mirrored).toBeLessThan(240);
+    for (const b of builds) {
+      expect(b.height).toBeGreaterThanOrEqual(0.92);
+      expect(b.height).toBeLessThanOrEqual(1.08);
+      // Small enough that the feet stay on their spot as the body pivots on them.
+      expect(Math.abs(b.lean) + Math.abs(b.list) + b.rock).toBeLessThanOrEqual((14.5 * Math.PI) / 180);
+    }
+    const heights = builds.map((b) => b.height);
+    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.12);
+  });
+
+  it("go to the infected only", () => {
+    const sim = new Simulation({ seed: 9 });
+    const z = sim.spawnInfected("walker", 5, 5, -1);
+    const s = sim.spawnSurvivor(10, 10);
+    expect(new CharacterMotion(z, 5, 5, 0).build).toEqual(infectedBuild(z.id));
+    expect(new CharacterMotion(s, 10, 10, 0).build).toBeNull();
   });
 });

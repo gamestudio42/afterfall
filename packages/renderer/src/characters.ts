@@ -52,6 +52,39 @@ const pallorTint = new THREE.Color(0x8d9482);
 const selectedTint = new THREE.Color(0x75ceee);
 const dangerTint = new THREE.Color(0xff3020);
 
+/**
+ * How one infected body differs from the next, fixed by its id. The horde shares one walk,
+ * and in step at one height it read as a parade. Mirrored, the other leg drags and the other
+ * arm hangs; a taller body takes longer strides at the same pace; and each carries itself
+ * its own way, hunched or upright, listing to a side, and rocking more or less as it goes.
+ */
+export interface InfectedBuild {
+  mirror: boolean;
+  /** Height as a fraction of the kind's. */
+  height: number;
+  /** Forward lean, in radians. */
+  lean: number;
+  /** Sideways list, in radians, positive to the body's right. */
+  list: number;
+  /** Side-to-side rock at each step, in radians. */
+  rock: number;
+}
+
+export function infectedBuild(id: number): InfectedBuild {
+  const r = (k: number) => {
+    const v = Math.sin(id * 12.9898 + k * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const deg = Math.PI / 180;
+  return {
+    mirror: r(1) < 0.5,
+    height: 0.92 + 0.16 * r(2),
+    lean: (-2 + 8 * r(3)) * deg,
+    list: (r(4) - 0.5) * 8 * deg,
+    rock: (1.5 + 3 * r(5)) * deg,
+  };
+}
+
 /** Distance-driven locomotion and simulation-time actions; never advances while paused. */
 export class CharacterMotion {
   readonly weights = Array<number>(CHARACTER_MORPHS.length).fill(0);
@@ -61,6 +94,8 @@ export class CharacterMotion {
   private y: number;
   private time: number;
   private moving = 0;
+  /** The infected's own build; null for a survivor. */
+  readonly build: InfectedBuild | null;
   /** 0 walking, 1 jogging, in between while the gait changes. */
   private gait = 1;
   private jogging = true;
@@ -85,6 +120,12 @@ export class CharacterMotion {
     this.cooldown = e.survivor?.cooldown ?? e.infected?.cooldown ?? 0;
     this.hp = e.health?.hp ?? 0;
     this.ammo = e.survivor?.ammo ?? 0;
+    this.build = e.infected ? infectedBuild(e.id) : null;
+  }
+
+  /** How far into the walk the body is, 0 standing to 1 striding. */
+  get striding(): number {
+    return this.moving;
   }
 
   update(e: Entity, x: number, y: number, time: number, strideScale = 1): void {
@@ -173,9 +214,15 @@ const TINTED = new Set(["skin", "cloth", "pants", "hair"]);
 
 export interface CharacterPart {
   mesh: THREE.InstancedMesh;
+  /** The infected's left-for-right twin of `mesh`, or null. */
+  mirrored: THREE.InstancedMesh | null;
   sample: THREE.Mesh;
   name: string;
 }
+
+/** Swaps left and right in the model's own frame. */
+const MIRROR = new THREE.Matrix4().makeScale(-1, 1, 1);
+const mirroredMatrix = new THREE.Matrix4();
 
 /** One batch per material, with independent GPU morph weights for every person. */
 export class CharacterBatch {
@@ -216,17 +263,30 @@ export class CharacterBatch {
           emissive: name === "eyes" ? 0x9bba52 : 0,
           emissiveIntensity: name === "eyes" ? 0.65 : 0,
         });
-        const mesh = new THREE.InstancedMesh(geo, mat, capacity);
-        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        mesh.castShadow = mesh.receiveShadow = true;
-        mesh.frustumCulled = false;
-        if (TINTED.has(name)) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
         const sample = new THREE.Mesh(geo, mat);
-        // Allocate at full capacity before setting count=0; Three sizes the texture by count.
-        mesh.setMorphAt(0, sample);
-        mesh.count = 0;
-        batch.parts.push({ mesh, sample, name });
-        batch.meshes.push(mesh);
+        const instanced = () => {
+          const mesh = new THREE.InstancedMesh(geo, mat, capacity);
+          mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          mesh.castShadow = mesh.receiveShadow = true;
+          mesh.frustumCulled = false;
+          if (TINTED.has(name)) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+          // Allocate at full capacity before setting count=0; Three sizes the texture by count.
+          mesh.setMorphAt(0, sample);
+          mesh.count = 0;
+          batch.meshes.push(mesh);
+          return mesh;
+        };
+        const mesh = instanced();
+        // A mirrored twin, for the infected: a negative scale on the object itself, so Three
+        // turns the winding round and faces and shadows stay the right way out.
+        let mirrored: THREE.InstancedMesh | null = null;
+        if (infected) {
+          mirrored = instanced();
+          mirrored.scale.x = -1;
+          mirrored.updateMatrix();
+          mirrored.matrixAutoUpdate = false;
+        }
+        batch.parts.push({ mesh, mirrored, sample, name });
       });
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
@@ -250,6 +310,10 @@ export class CharacterBatch {
   }
 
   place(e: Entity, matrix: THREE.Matrix4, motion: CharacterMotion, selected: boolean, danger: boolean): void {
+    // The twin's object matrix mirrors the world, so its instance is mirrored on both sides:
+    // world = mirror · (mirror · matrix · mirror) = matrix · mirror, the body flipped in place.
+    const mirror = !!motion.build?.mirror && this.parts[0]?.mirrored != null;
+    if (mirror) mirroredMatrix.multiplyMatrices(MIRROR, matrix).multiply(MIRROR);
     const s = e.survivor;
     const weapon: WeaponId = s && (s.ammo > 0 || motion.firing) ? s.weapon : "crowbar";
     skinTint.setHex(s ? SKIN[e.id % SKIN.length] : INFECTED[e.infected!.kind].color);
@@ -265,11 +329,13 @@ export class CharacterBatch {
     if (selected) clothTint.lerp(selectedTint, 0.42);
     else if (s?.manual) clothTint.multiplyScalar(1.12);
     if (danger && this.infected) skinTint.lerp(dangerTint, 0.5);
-    for (const { mesh, sample, name } of this.parts) {
+    for (const part of this.parts) {
+      const { sample, name } = part;
       if ((name === "crowbar" || name === "pistol" || name === "rifle") && name !== weapon) continue;
+      const mesh = mirror ? part.mirrored! : part.mesh;
       const at = mesh.count;
       if (at >= mesh.instanceMatrix.count) continue;
-      mesh.setMatrixAt(at, matrix);
+      mesh.setMatrixAt(at, mirror ? mirroredMatrix : matrix);
       if (mesh.instanceColor)
         mesh.setColorAt(at, name === "skin" ? skinTint : name === "pants" ? pantsTint : name === "hair" ? hairTint : clothTint);
       sample.morphTargetInfluences = motion.weights;

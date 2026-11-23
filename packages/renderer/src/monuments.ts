@@ -5,6 +5,8 @@ import { heightAt, pedestalSide, type CityMap, type MonumentDef } from "@afterfa
 const SOAPSTONE = new THREE.Color(0xd9d5c9);
 const BRONZE = new THREE.Color(0x6f7a6c);
 const PEDESTAL = new THREE.Color(0x9a958a);
+/** The chapel door under Christ the Redeemer. */
+const DOOR = new THREE.Color(0x3a3530);
 
 interface Sink {
   pos: number[];
@@ -68,15 +70,225 @@ function lathe(out: Sink, cx: number, cz: number, profile: [number, number][], s
   }
 }
 
+type V3 = [number, number, number];
+
+/**
+ * Joins rings of points, each the same length, into a closed tube: a robe, an arm, a head.
+ * Flat-shaded, each quad's normal its own, turned away from the axis the rings run along.
+ */
+function tube(out: Sink, rings: V3[][], c: THREE.Color): void {
+  for (let k = 0; k < rings.length - 1; k++) {
+    const a = rings[k];
+    const b = rings[k + 1];
+    const centre = [a, b].map((r) =>
+      r.reduce((m, p) => [m[0] + p[0] / r.length, m[1] + p[1] / r.length, m[2] + p[2] / r.length], [0, 0, 0]),
+    );
+    const axis = [(centre[0][0] + centre[1][0]) / 2, (centre[0][1] + centre[1][1]) / 2, (centre[0][2] + centre[1][2]) / 2];
+    for (let i = 0; i < a.length; i++) {
+      const j = (i + 1) % a.length;
+      const pts = [a[i], a[j], b[j], b[i]];
+      const e1 = sub(pts[2], pts[0]);
+      const e2 = sub(pts[3], pts[1]);
+      let n = cross(e1, e2);
+      const l = Math.hypot(n[0], n[1], n[2]);
+      if (l < 1e-9) continue;
+      n = [n[0] / l, n[1] / l, n[2] / l];
+      const mid = [(pts[0][0] + pts[2][0]) / 2 - axis[0], (pts[0][1] + pts[2][1]) / 2 - axis[1], (pts[0][2] + pts[2][2]) / 2 - axis[2]];
+      if (n[0] * mid[0] + n[1] * mid[1] + n[2] * mid[2] < 0) n = [-n[0], -n[1], -n[2]];
+      quad(out, pts, n, c);
+    }
+  }
+}
+
+function sub(a: V3 | number[], b: V3 | number[]): V3 {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function cross(a: V3, b: V3): V3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+/** A flat panel with thickness: a polygon in the x–y plane, from z0 to z1, in the frame `P`. */
+function slab(
+  out: Sink,
+  P: (x: number, y: number, z: number) => V3,
+  poly: [number, number][],
+  z0: number,
+  z1: number,
+  c: THREE.Color,
+): void {
+  const front = poly.map(([x, y]) => P(x, y, z1));
+  const back = poly.map(([x, y]) => P(x, y, z0));
+  const nz = sub(P(0, 0, 1), P(0, 0, 0));
+  const fan = (ring: V3[], n: V3) => {
+    for (let i = 1; i < ring.length - 1; i++) quad(out, [ring[0], ring[i], ring[i + 1], ring[i + 1]], n, c);
+  };
+  fan(front, nz);
+  fan(back, [-nz[0], -nz[1], -nz[2]]);
+  tube(out, [front, back], c);
+}
+
+/**
+ * Christ the Redeemer, 30 m of soapstone over a chapel pedestal, at its own proportions:
+ * a robe that narrows to the feet and broadens to the shoulders, wider than it is deep,
+ * folds falling from a cord at the waist; arms out almost level, 28 m from hand to hand,
+ * the sleeves hanging from the forearms back to the body; a head bowed a little forward.
+ *
+ * It faces the camera's default view (+z) rather than Guanabara Bay, so the cross it makes
+ * reads from the start; the arms run along x.
+ */
+function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.Color): void {
+  const H = m.height;
+  const cos = Math.cos(yaw);
+  const sin = Math.sin(yaw);
+  const P = (x: number, y: number, z: number): V3 => [m.x + x * cos - z * sin, base + y, m.y + x * sin + z * cos];
+  const SEG = 28;
+  // Height, half width, half depth (shares of H), folds, forward shift.
+  const robe: [number, number, number, number, number][] = [
+    [0, 0.074, 0.054, 0.1, 0],
+    [0.04, 0.077, 0.056, 0.1, 0],
+    [0.22, 0.085, 0.06, 0.09, 0],
+    [0.4, 0.09, 0.062, 0.07, 0],
+    [0.49, 0.091, 0.063, 0.04, 0],
+    // The cord at the waist.
+    [0.495, 0.097, 0.068, 0, 0],
+    [0.515, 0.097, 0.068, 0, 0],
+    [0.52, 0.092, 0.063, 0.02, 0],
+    [0.64, 0.106, 0.068, 0.02, 0.003],
+    [0.73, 0.12, 0.07, 0, 0.004],
+    [0.775, 0.124, 0.068, 0, 0.004],
+    // The shoulders round in to the neck.
+    [0.805, 0.1, 0.06, 0, 0.004],
+    [0.825, 0.055, 0.045, 0, 0.006],
+    [0.84, 0.03, 0.03, 0, 0.01],
+  ];
+  const ringAt = ([y, hw, hd, folds, fwd]: [number, number, number, number, number]): V3[] =>
+    Array.from({ length: SEG }, (_, i) => {
+      const a = (i / SEG) * Math.PI * 2;
+      // Folds hang down the front and back of the robe, not round its sides.
+      const fold = 1 + folds * 0.5 * Math.cos(a * 10) * Math.abs(Math.sin(a));
+      return P(Math.cos(a) * hw * H * fold, y * H, (Math.sin(a) * hd * fold + fwd) * H);
+    });
+  tube(out, robe.map(ringAt), c);
+  // The hem's underside, on the pedestal.
+  const hem = ringAt(robe[0]);
+  for (let i = 1; i < SEG - 1; i++) quad(out, [hem[0], hem[i], hem[i + 1], hem[i + 1]], [0, -1, 0], c);
+
+  // The head, bowed: each ring a little further forward than the one under it.
+  const head: [number, number, number][] = [
+    [0.835, 0.03, 0.01],
+    [0.87, 0.033, 0.014],
+    // Hair to the jaw, then the crown.
+    [0.885, 0.043, 0.018],
+    [0.92, 0.048, 0.024],
+    [0.955, 0.046, 0.028],
+    [0.978, 0.037, 0.03],
+    [0.994, 0.02, 0.03],
+    [1, 0, 0.03],
+  ];
+  tube(
+    out,
+    head.map(([y, r, fwd]) =>
+      Array.from({ length: 14 }, (_, i) => {
+        const a = (i / 14) * Math.PI * 2;
+        return P(Math.cos(a) * r * H, y * H, (Math.sin(a) * r * 0.92 + fwd) * H);
+      }),
+    ),
+    c,
+  );
+
+  // Arms: from inside the shoulder to the wrist, rising a touch, thinning to the wrist.
+  const ARM = 10;
+  for (const s of [-1, 1]) {
+    const arm: [number, number][] = [
+      [0.09, 0.044],
+      [0.16, 0.042],
+      [0.26, 0.037],
+      [0.36, 0.031],
+      [0.43, 0.025],
+    ];
+    tube(
+      out,
+      arm.map(([x, r]) => {
+        const y = 0.768 + (x - 0.09) * 0.03;
+        return Array.from({ length: ARM }, (_, i) => {
+          const a = (i / ARM) * Math.PI * 2;
+          return P(s * x * H, (y + Math.cos(a) * r) * H, Math.sin(a) * r * 0.85 * H);
+        });
+      }),
+      c,
+    );
+    // The open hand, palm forward, its fingers together.
+    const hy = 0.778;
+    slab(
+      out,
+      P,
+      [
+        [s * 0.425 * H, (hy - 0.02) * H],
+        [s * 0.452 * H, (hy - 0.024) * H],
+        [s * 0.472 * H, (hy - 0.012) * H],
+        [s * 0.472 * H, (hy + 0.014) * H],
+        [s * 0.45 * H, (hy + 0.022) * H],
+        [s * 0.425 * H, (hy + 0.02) * H],
+      ],
+      -0.009 * H,
+      0.009 * H,
+      c,
+    );
+    // The sleeve hangs from the forearm, lowest at the wrist, and runs back under the arm to the chest.
+    slab(
+      out,
+      P,
+      [
+        [s * 0.41 * H, 0.778 * H],
+        [s * 0.395 * H, 0.712 * H],
+        [s * 0.33 * H, 0.69 * H],
+        [s * 0.18 * H, 0.678 * H],
+        [s * 0.1 * H, 0.7 * H],
+        [s * 0.1 * H, 0.77 * H],
+      ],
+      -0.022 * H,
+      0.022 * H,
+      c,
+    );
+  }
+}
+
+/** The chapel the Christ stands on: steps up to it, its walls, and a cornice under the feet. */
+function chapel(out: Sink, m: MonumentDef, ground: number, side: number, yaw: number): void {
+  const base = ground + m.pedestal;
+  const half = side / 2;
+  // Three steps round it.
+  for (const [k, y] of [
+    [1.2, 0.35],
+    [0.8, 0.7],
+    [0.4, 1.05],
+  ])
+    box(out, m.x, m.y, yaw, -half - k, half + k, ground - 0.5, ground + y, -half - k, half + k, PEDESTAL);
+  // The walls, a band at the chapel's roof, and the cornice the figure stands on.
+  box(out, m.x, m.y, yaw, -half, half, ground, base - 1.6, -half, half, PEDESTAL);
+  box(out, m.x, m.y, yaw, -half - 0.25, half + 0.25, base - 1.6, base - 1.1, -half - 0.25, half + 0.25, SOAPSTONE);
+  box(out, m.x, m.y, yaw, -half * 0.9, half * 0.9, base - 1.1, base - 0.5, -half * 0.9, half * 0.9, PEDESTAL);
+  box(out, m.x, m.y, yaw, -half * 0.95, half * 0.95, base - 0.5, base, -half * 0.95, half * 0.95, SOAPSTONE);
+  // A door on the chapel's front.
+  const dw = Math.min(1.1, half * 0.3);
+  box(out, m.x, m.y, yaw, -dw, dw, ground + 1.05, ground + Math.min(3.6, m.pedestal * 0.45), half - 0.02, half + 0.04, DOOR);
+}
+
 /**
  * One monument on the ground under it: a stepped pedestal and the figure on it. A figure is
- * a robed body and a head; Christ the Redeemer's spreads its arms, sleeves hanging, almost
- * as wide as it is tall (28 m across for 30 m high). A column is a shaft with a capital.
+ * a robed body and a head; Christ the Redeemer has a figure and a chapel of its own. A
+ * column is a shaft with a capital.
  */
 function monument(out: Sink, m: MonumentDef, ground: number): void {
   const side = pedestalSide(m);
   const yaw = 0;
   const base = ground + m.pedestal;
+  if (m.kind === "open-arms") {
+    chapel(out, m, ground, side, yaw);
+    christ(out, m, base, yaw, SOAPSTONE);
+    return;
+  }
   box(
     out,
     m.x,
@@ -111,7 +323,6 @@ function monument(out: Sink, m: MonumentDef, ground: number): void {
     );
     return;
   }
-  const c = m.kind === "open-arms" ? SOAPSTONE : BRONZE;
   // The robe falls straight from the shoulders and flares a little at the feet.
   lathe(
     out,
@@ -130,17 +341,8 @@ function monument(out: Sink, m: MonumentDef, ground: number): void {
       [0, base + H],
     ],
     16,
-    c,
+    BRONZE,
   );
-  if (m.kind === "open-arms") {
-    const span = H * 0.47;
-    const arm = H * 0.06;
-    const y = base + H * 0.76;
-    // Arms straight out, and the sleeves hanging under them nearer the body.
-    box(out, m.x, m.y, yaw, -span, span, y - arm / 2, y + arm / 2, -arm / 2, arm / 2, c);
-    for (const s of [-1, 1])
-      box(out, m.x, m.y, yaw, s > 0 ? H * 0.1 : -H * 0.3, s > 0 ? H * 0.3 : -H * 0.1, y - H * 0.13, y, -arm * 0.6, arm * 0.6, c);
-  }
 }
 
 /** Every monument of the map, in one mesh. Built at the ground's height, not draped. */

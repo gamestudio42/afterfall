@@ -323,6 +323,31 @@ describe("landmarks", () => {
     expect(top).toBeCloseTo(60, 3);
   });
 
+  it("a domed hall is the Taj Mahal's: iwans with doorways, a slim onion, kiosks round it", () => {
+    const h = 73;
+    const batch = tower("dome", h);
+    const trim = verticesIn(batch, "trim");
+    // The hall's cut corners: something stands on the diagonal well inside the platform's corner.
+    const diagonal = trim.filter(([x, y, z]) => y > h * 0.2 && y < h * 0.4 && Math.abs(x - 50 - (z - 50)) < 0.5);
+    const reach = Math.max(...diagonal.map(([x, , z]) => Math.hypot(x - 50, z - 50)));
+    expect(reach).toBeLessThan(30 * Math.SQRT2 * 0.95);
+    // The iwan is cut into the face it stands on: surfaces set back from its front.
+    const front = trim.filter(([x, y, z]) => Math.abs(x - 50) < 12 && y > h * 0.2 && y < h * 0.3 && z < 25);
+    const depths = front.map(([, , z]) => z);
+    expect(Math.max(...depths) - Math.min(...depths)).toBeGreaterThan(2);
+    // Its doorway is in the darker tone.
+    expect(verticesIn(batch, "roof").length).toBeGreaterThan(0);
+    // The onion is about two fifths of the hall across at its widest, not the whole roof.
+    const onion = trim.filter(([, y]) => y > h * 0.66 && y < h * 0.72).map(([x, , z]) => Math.hypot(x - 50, z - 50));
+    const widest = Math.max(...onion.filter((r) => r < 20));
+    expect(widest * 2).toBeGreaterThan(60 * 0.4);
+    expect(widest * 2).toBeLessThan(60 * 0.55);
+    // Four kiosks on the roof round it, one in each quarter.
+    const kiosks = trim.filter(([x, y, z]) => y > h * 0.55 && y < h * 0.6 && Math.hypot(x - 50, z - 50) > 15);
+    const quarters = new Set(kiosks.map(([x, , z]) => `${Math.sign(x - 50)}${Math.sign(z - 50)}`));
+    expect(quarters.size).toBe(4);
+  });
+
   it("a spire is slender at the top, an obelisk narrows once", () => {
     const spire = profile(tower("spire"), 330, 50, 50).filter((w) => w > 0);
     expect(spire[spire.length - 1]).toBeLessThan(spire[0] * 0.1);

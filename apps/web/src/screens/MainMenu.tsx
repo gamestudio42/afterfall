@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { desktop } from "../app/desktop";
+import { publicAssetUrl } from "../app/publicUrl";
 import { deleteSave, getSave, listSaves, type SaveSlot } from "../app/saves";
 import { useGame, useT } from "../app/hooks";
 import { useUi } from "../app/store";
@@ -47,7 +48,14 @@ export function MainMenu() {
   };
 
   return (
-    <div className="menu" style={{ "--menu-bg": `url(${import.meta.env.BASE_URL}art/menu_bg.jpg)` } as CSSProperties}>
+    <div
+      className="menu"
+      style={
+        {
+          "--menu-bg": `url("${publicAssetUrl(import.meta.env.BASE_URL, "art/menu_bg.jpg", document.baseURI)}")`,
+        } as CSSProperties
+      }
+    >
       <div className="menu-card">
         <h1 className="logo">
           AFTER<span>FALL</span>

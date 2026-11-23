@@ -5,6 +5,8 @@ import { heightAt, pedestalSide, type CityMap, type MonumentDef } from "@afterfa
 const SOAPSTONE = new THREE.Color(0xd9d5c9);
 const BRONZE = new THREE.Color(0x6f7a6c);
 const PEDESTAL = new THREE.Color(0x9a958a);
+/** The Christ's pedestal: dark stone under a pale band. */
+const CHAPEL = new THREE.Color(0x5f5850);
 /** The chapel door under Christ the Redeemer. */
 const DOOR = new THREE.Color(0x3a3530);
 
@@ -145,28 +147,28 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
   const SEG = 28;
   // Height, half width, half depth (shares of H), folds, forward shift.
   const robe: [number, number, number, number, number][] = [
-    [0, 0.074, 0.054, 0.1, 0],
-    [0.04, 0.077, 0.056, 0.1, 0],
-    [0.22, 0.085, 0.06, 0.09, 0],
-    [0.4, 0.09, 0.062, 0.07, 0],
-    [0.49, 0.091, 0.063, 0.04, 0],
+    [0, 0.112, 0.07, 0.12, 0],
+    [0.04, 0.113, 0.071, 0.12, 0],
+    [0.2, 0.114, 0.072, 0.12, 0],
+    [0.38, 0.117, 0.073, 0.1, 0],
+    [0.47, 0.12, 0.074, 0.05, 0],
     // The cord at the waist.
-    [0.495, 0.097, 0.068, 0, 0],
-    [0.515, 0.097, 0.068, 0, 0],
-    [0.52, 0.092, 0.063, 0.02, 0],
-    [0.64, 0.106, 0.068, 0.02, 0.003],
-    [0.73, 0.12, 0.07, 0, 0.004],
-    [0.775, 0.124, 0.068, 0, 0.004],
+    [0.475, 0.125, 0.079, 0, 0],
+    [0.495, 0.125, 0.079, 0, 0],
+    [0.5, 0.12, 0.074, 0.03, 0],
+    [0.62, 0.145, 0.08, 0.03, 0.003],
+    [0.72, 0.158, 0.082, 0.01, 0.004],
+    [0.775, 0.16, 0.08, 0, 0.004],
     // The shoulders round in to the neck.
-    [0.805, 0.1, 0.06, 0, 0.004],
-    [0.825, 0.055, 0.045, 0, 0.006],
-    [0.84, 0.03, 0.03, 0, 0.01],
+    [0.805, 0.13, 0.07, 0, 0.004],
+    [0.825, 0.07, 0.05, 0, 0.006],
+    [0.84, 0.035, 0.034, 0, 0.01],
   ];
   const ringAt = ([y, hw, hd, folds, fwd]: [number, number, number, number, number]): V3[] =>
     Array.from({ length: SEG }, (_, i) => {
       const a = (i / SEG) * Math.PI * 2;
       // Folds hang down the front and back of the robe, not round its sides.
-      const fold = 1 + folds * 0.5 * Math.cos(a * 10) * Math.abs(Math.sin(a));
+      const fold = 1 + folds * 0.5 * Math.cos(a * 14) * Math.abs(Math.sin(a));
       return P(Math.cos(a) * hw * H * fold, y * H, (Math.sin(a) * hd * fold + fwd) * H);
     });
   tube(out, robe.map(ringAt), c);
@@ -176,14 +178,14 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
 
   // The head, bowed: each ring a little further forward than the one under it.
   const head: [number, number, number][] = [
-    [0.835, 0.03, 0.01],
-    [0.87, 0.033, 0.014],
+    [0.835, 0.035, 0.01],
+    [0.865, 0.04, 0.014],
     // Hair to the jaw, then the crown.
-    [0.885, 0.043, 0.018],
-    [0.92, 0.048, 0.024],
-    [0.955, 0.046, 0.028],
-    [0.978, 0.037, 0.03],
-    [0.994, 0.02, 0.03],
+    [0.88, 0.052, 0.018],
+    [0.915, 0.057, 0.024],
+    [0.95, 0.055, 0.028],
+    [0.975, 0.045, 0.03],
+    [0.993, 0.025, 0.03],
     [1, 0, 0.03],
   ];
   tube(
@@ -201,16 +203,16 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
   const ARM = 10;
   for (const s of [-1, 1]) {
     const arm: [number, number][] = [
-      [0.09, 0.044],
-      [0.16, 0.042],
-      [0.26, 0.037],
-      [0.36, 0.031],
-      [0.43, 0.025],
+      [0.12, 0.046],
+      [0.2, 0.043],
+      [0.28, 0.039],
+      [0.36, 0.034],
+      [0.43, 0.028],
     ];
     tube(
       out,
       arm.map(([x, r]) => {
-        const y = 0.768 + (x - 0.09) * 0.03;
+        const y = 0.768 + (x - 0.12) * 0.03;
         return Array.from({ length: ARM }, (_, i) => {
           const a = (i / ARM) * Math.PI * 2;
           return P(s * x * H, (y + Math.cos(a) * r) * H, Math.sin(a) * r * 0.85 * H);
@@ -235,20 +237,20 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
       0.009 * H,
       c,
     );
-    // The sleeve hangs from the forearm, lowest at the wrist, and runs back under the arm to the chest.
+    // The wide sleeve hangs from the whole arm, lowest at the wrist, and meets the body at the waist.
     slab(
       out,
       P,
       [
-        [s * 0.41 * H, 0.778 * H],
-        [s * 0.395 * H, 0.712 * H],
-        [s * 0.33 * H, 0.69 * H],
-        [s * 0.18 * H, 0.678 * H],
-        [s * 0.1 * H, 0.7 * H],
-        [s * 0.1 * H, 0.77 * H],
+        [s * 0.415 * H, 0.778 * H],
+        [s * 0.4 * H, 0.665 * H],
+        [s * 0.3 * H, 0.635 * H],
+        [s * 0.15 * H, 0.56 * H],
+        [s * 0.13 * H, 0.58 * H],
+        [s * 0.13 * H, 0.77 * H],
       ],
-      -0.022 * H,
-      0.022 * H,
+      -0.028 * H,
+      0.028 * H,
       c,
     );
   }
@@ -266,13 +268,13 @@ function chapel(out: Sink, m: MonumentDef, ground: number, side: number, yaw: nu
   ])
     box(out, m.x, m.y, yaw, -half - k, half + k, ground - 0.5, ground + y, -half - k, half + k, PEDESTAL);
   // The walls, a band at the chapel's roof, and the cornice the figure stands on.
-  box(out, m.x, m.y, yaw, -half, half, ground, base - 1.6, -half, half, PEDESTAL);
+  box(out, m.x, m.y, yaw, -half, half, ground, base - 1.6, -half, half, CHAPEL);
   box(out, m.x, m.y, yaw, -half - 0.25, half + 0.25, base - 1.6, base - 1.1, -half - 0.25, half + 0.25, SOAPSTONE);
-  box(out, m.x, m.y, yaw, -half * 0.9, half * 0.9, base - 1.1, base - 0.5, -half * 0.9, half * 0.9, PEDESTAL);
+  box(out, m.x, m.y, yaw, -half * 0.9, half * 0.9, base - 1.1, base - 0.5, -half * 0.9, half * 0.9, CHAPEL);
   box(out, m.x, m.y, yaw, -half * 0.95, half * 0.95, base - 0.5, base, -half * 0.95, half * 0.95, SOAPSTONE);
-  // A door on the chapel's front.
+  // The chapel's door, at the back.
   const dw = Math.min(1.1, half * 0.3);
-  box(out, m.x, m.y, yaw, -dw, dw, ground + 1.05, ground + Math.min(3.6, m.pedestal * 0.45), half - 0.02, half + 0.04, DOOR);
+  box(out, m.x, m.y, yaw, -dw, dw, ground + 1.05, ground + Math.min(3.6, m.pedestal * 0.45), -half - 0.04, -half + 0.02, DOOR);
 }
 
 /**

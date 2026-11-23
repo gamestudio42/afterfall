@@ -221,7 +221,7 @@ describe("monuments", () => {
     expect(east - west).toBeGreaterThan(30 * 0.9);
   });
 
-  it("draw Christ the Redeemer's robe narrow at the feet and broad at the shoulders, head bowed", () => {
+  it("draw Christ the Redeemer's robe broader at the shoulders than at the feet, head bowed", () => {
     const city = { monuments: [{ id: "c", x: 0, y: 0, kind: "open-arms", height: 30, pedestal: 8 }] } as unknown as CityMap;
     const p = buildMonuments(city)!.geometry.getAttribute("position");
     const across = (y0: number, y1: number) => {
@@ -237,7 +237,7 @@ describe("monuments", () => {
     };
     const feet = across(0.02, 0.1);
     const chest = across(0.62, 0.66);
-    expect(chest.w).toBeGreaterThan(feet.w * 1.25);
+    expect(chest.w).toBeGreaterThan(feet.w * 1.15);
     // Wider than it is deep, as a figure is.
     expect(feet.d).toBeLessThan(feet.w * 0.85);
     // Above the chin the head sits in front of the body's axis.

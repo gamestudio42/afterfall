@@ -221,6 +221,36 @@ describe("monuments", () => {
     expect(east - west).toBeGreaterThan(30 * 0.9);
   });
 
+  it("draw Christ the Redeemer's robe broader at the shoulders than at the feet, head bowed", () => {
+    const city = { monuments: [{ id: "c", x: 0, y: 0, kind: "open-arms", height: 30, pedestal: 8 }] } as unknown as CityMap;
+    const p = buildMonuments(city)!.geometry.getAttribute("position");
+    const across = (y0: number, y1: number) => {
+      let w = 0;
+      let d = 0;
+      for (let i = 0; i < p.count; i++) {
+        const y = p.getY(i) - 8;
+        if (y < y0 * 30 || y > y1 * 30) continue;
+        w = Math.max(w, Math.abs(p.getX(i)));
+        d = Math.max(d, Math.abs(p.getZ(i)));
+      }
+      return { w, d };
+    };
+    const feet = across(0.02, 0.1);
+    const chest = across(0.62, 0.66);
+    expect(chest.w).toBeGreaterThan(feet.w * 1.15);
+    // Wider than it is deep, as a figure is.
+    expect(feet.d).toBeLessThan(feet.w * 0.85);
+    // Above the chin the head sits in front of the body's axis.
+    let front = -Infinity;
+    let back = Infinity;
+    for (let i = 0; i < p.count; i++) {
+      if (p.getY(i) - 8 < 0.93 * 30) continue;
+      front = Math.max(front, p.getZ(i));
+      back = Math.min(back, p.getZ(i));
+    }
+    expect(front + back).toBeGreaterThan(0.5);
+  });
+
   it("is nothing on a map without them", () => {
     expect(buildMonuments({} as CityMap)).toBeNull();
   });

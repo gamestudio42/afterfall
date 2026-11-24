@@ -797,7 +797,18 @@ function buildLandmark(
   }
 
   if (b.landmark === "dome") {
-    add("trim", (o) => domedHall(poly, h, b.minarets ?? [], o));
+    // The iwans' doorways go to the darker roof tone; both groups are this building's.
+    let doors: Builder | null = null;
+    add("trim", (o) => {
+      doors = new Builder();
+      domedHall(poly, h, b.minarets ?? [], o, doors);
+    });
+    add("roof", (o) => {
+      if (!doors) return;
+      o.pos.push(...doors.pos);
+      o.nrm.push(...doors.nrm);
+      o.uv.push(...doors.uv);
+    });
     return;
   }
 
@@ -1126,70 +1137,321 @@ function lathe(cx: number, cz: number, profile: [number, number][], segments: nu
   }
 }
 
+/** A face of a building to carve into: its middle, the unit tangent along it, and its outward normal. */
+interface Face {
+  at: (s: number, d: number, y: number) => [number, number, number];
+  n: [number, number, number];
+  t: [number, number, number];
+}
+
+function faceOf(a: { x: number; y: number }, b: { x: number; y: number }, centre: { x: number; y: number }): Face {
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const tx = (b.x - a.x) / len;
+  const tz = (b.y - a.y) / len;
+  const mx = (a.x + b.x) / 2;
+  const mz = (a.y + b.y) / 2;
+  let nx = tz;
+  let nz = -tx;
+  if (nx * (mx - centre.x) + nz * (mz - centre.y) < 0) {
+    nx = -nx;
+    nz = -nz;
+  }
+  return { at: (s, d, y) => [mx + tx * s + nx * d, y, mz + tz * s + nz * d], n: [nx, 0, nz], t: [tx, 0, tz] };
+}
+
 /**
- * A domed hall: a platform the size of the footprint, a hall on it, a drum and an onion
- * dome with its finial, and the minarets OSM maps on the platform (the Taj Mahal's four).
+ * A pointed arch's outline, from the foot of its left jamb up over the apex and down to the
+ * foot of the right one: two arcs, each centred half the opening across from its own side,
+ * which meet in a point above the middle (the apex rises 1.41 times the half opening over
+ * the springing).
+ */
+function pointedArch(half: number, foot: number, apex: number, steps = 5): [number, number][] {
+  const k = half / 2;
+  const R = half + k;
+  const rise = Math.sqrt(R * R - k * k);
+  const spring = apex - rise;
+  const end = Math.acos(-k / R);
+  const left: [number, number][] = [[-half, foot]];
+  for (let i = 0; i <= steps; i++) {
+    const a = Math.PI - ((Math.PI - end) * i) / steps;
+    left.push([k + R * Math.cos(a), spring + R * Math.sin(a)]);
+  }
+  left[left.length - 1] = [0, apex];
+  const right = left
+    .slice(0, -1)
+    .reverse()
+    .map(([s, y]) => [-s, y] as [number, number]);
+  return [...left, ...right];
+}
+
+/**
+ * A block standing `proud` out of a face, `half` either side of `s0`, from `y0` to `y1`,
+ * with a pointed arch cut into its front `recess` deep: an iwan, or one of the alcoves
+ * stacked beside it. The arch's own back wall, and a doorway in it when `door` is given, in
+ * the darker tone.
+ */
+function archBay(
+  f: Face,
+  s0: number,
+  half: number,
+  y0: number,
+  y1: number,
+  proud: number,
+  arch: { half: number; apex: number; recess: number; door?: number },
+  out: Builder,
+  dark: Builder,
+): void {
+  const at = (s: number, d: number, y: number) => f.at(s0 + s, d, y);
+  const up: [number, number, number] = [0, 1, 0];
+  const outline = pointedArch(arch.half, y0, arch.apex);
+  // The block's sides and top.
+  for (const side of [-1, 1]) {
+    const hint: [number, number, number] = [f.t[0] * side, 0, f.t[2] * side];
+    face(out, [at(side * half, 0, y0), at(side * half, proud, y0), at(side * half, proud, y1), at(side * half, 0, y1)], hint);
+  }
+  face(out, [at(-half, 0, y1), at(half, 0, y1), at(half, proud, y1), at(-half, proud, y1)], up);
+  // Its front round the arch: a strip each side, and above the arch, a quad over each step.
+  face(out, [at(-half, proud, y0), at(-arch.half, proud, y0), at(-arch.half, proud, y1), at(-half, proud, y1)], f.n);
+  face(out, [at(arch.half, proud, y0), at(half, proud, y0), at(half, proud, y1), at(arch.half, proud, y1)], f.n);
+  for (let i = 1; i < outline.length - 2; i++) {
+    const [sa, ya] = outline[i];
+    const [sb, yb] = outline[i + 1];
+    face(out, [at(sa, proud, ya), at(sb, proud, yb), at(sb, proud, y1), at(sa, proud, y1)], f.n);
+  }
+  // Into the arch: the jambs and the soffit, facing in, then its back wall.
+  const back = proud - arch.recess;
+  for (let i = 0; i < outline.length - 1; i++) {
+    const [sa, ya] = outline[i];
+    const [sb, yb] = outline[i + 1];
+    const ms = (sa + sb) / 2;
+    const my = (ya + yb) / 2;
+    const mid = (y0 + arch.apex) / 2;
+    const toward = at(-ms, 0, mid - my + y0);
+    const from = at(0, 0, y0);
+    face(
+      out,
+      [at(sa, proud, ya), at(sb, proud, yb), at(sb, back, yb), at(sa, back, ya)],
+      [toward[0] - from[0], toward[1] - from[1], toward[2] - from[2]],
+    );
+  }
+  const centre = at(0, back, (y0 + arch.apex) / 2);
+  for (let i = 0; i < outline.length - 1; i++) {
+    const [sa, ya] = outline[i];
+    const [sb, yb] = outline[i + 1];
+    face(out, [centre, at(sa, back, ya), at(sb, back, yb)], f.n);
+  }
+  face(out, [centre, at(outline[outline.length - 1][0], back, y0), at(outline[0][0], back, y0)], f.n);
+  face(
+    out,
+    [at(-arch.half, back, y0 + 0.02), at(arch.half, back, y0 + 0.02), at(arch.half, proud, y0 + 0.02), at(-arch.half, proud, y0 + 0.02)],
+    up,
+  );
+  if (arch.door) {
+    const door = pointedArch(arch.door, y0, y0 + (arch.apex - y0) * 0.42, 4);
+    const c = at(0, back + 0.06, y0 + (arch.apex - y0) * 0.2);
+    for (let i = 0; i < door.length - 1; i++)
+      face(dark, [c, at(door[i][0], back + 0.06, door[i][1]), at(door[i + 1][0], back + 0.06, door[i + 1][1])], f.n);
+    face(dark, [c, at(door[door.length - 1][0], back + 0.06, y0), at(door[0][0], back + 0.06, y0)], f.n);
+  }
+}
+
+/** A small domed kiosk on a roof: a drum, a lip, a dome and a finial. */
+function chhatri(x: number, z: number, y: number, r: number, out: Builder): void {
+  lathe(
+    x,
+    z,
+    [
+      [r * 1.1, y],
+      [r * 1.1, y + r * 0.3],
+      [r, y + r * 0.3],
+      [r, y + r * 1.6],
+      [r * 1.22, y + r * 1.7],
+      [r * 1.22, y + r * 1.9],
+      [r * 1.02, y + r * 1.95],
+      [r * 1.06, y + r * 2.3],
+      [r * 0.8, y + r * 2.75],
+      [r * 0.3, y + r * 3.05],
+      [r * 0.08, y + r * 3.15],
+      [r * 0.04, y + r * 3.7],
+      [0, y + r * 3.7],
+    ],
+    12,
+    out,
+  );
+}
+
+/**
+ * A domed hall, drawn after the Taj Mahal: a platform the size of the footprint; on it a
+ * hall with its corners cut, six tenths of the platform across, each face a tall iwan (a
+ * pointed arch in a frame that rises over the roof line) between alcoves stacked two high;
+ * an onion dome on a drum, about two fifths of the hall across, with a kiosk at each corner
+ * of the roof and pinnacles at the hall's corners; and the minarets OSM maps on the
+ * platform, slim and in three stages, each under its own kiosk.
+ *
  * A mosque without mapped minarets gets the hall and the dome.
  */
-function domedHall(poly: { x: number; y: number }[], h: number, minarets: { x: number; y: number }[], out: Builder): void {
-  let cx = 0;
-  let cz = 0;
-  for (const p of poly) {
-    cx += p.x / poly.length;
-    cz += p.y / poly.length;
-  }
-  let reach = Infinity;
-  for (const p of poly) reach = Math.min(reach, Math.hypot(p.x - cx, p.y - cz));
+function domedHall(poly: { x: number; y: number }[], h: number, minarets: { x: number; y: number }[], out: Builder, dark: Builder): void {
+  const f = latticeFrame(poly);
   const plinth = h * 0.1;
   walls(poly, 0, plinth, out, 0, 0, 3, 3);
   cap(poly, plinth, out, 3);
-  const hall = scalePoly(poly, 0.62);
-  const hallTop = h * 0.45;
+  const ha = f.a * 0.6;
+  const hb = f.b * 0.6;
+  const e = Math.min(ha, hb);
+  const cut = e * 0.3;
+  const P = (s: number, t: number) => ({ x: f.centre.x + f.u.x * s + f.v.x * t, y: f.centre.y + f.u.y * s + f.v.y * t });
+  const hall = [
+    P(ha, -hb + cut),
+    P(ha, hb - cut),
+    P(ha - cut, hb),
+    P(-ha + cut, hb),
+    P(-ha, hb - cut),
+    P(-ha, -hb + cut),
+    P(-ha + cut, -hb),
+    P(ha - cut, -hb),
+  ];
+  const hallTop = h * 0.47;
+  const iwanTop = h * 0.54;
   walls(hall, plinth, hallTop, out, 0, 0, 3, 3);
   cornice(hall, hallTop - 0.8, hallTop + 0.4, out);
   cap(hall, hallTop, out, 3);
-  // The drum and the onion: it swells past the drum before it closes to the finial.
-  const rd = Math.max(1.5, reach * 0.62 * 0.62);
+  const mid = (plinth + hallTop) / 2;
+  for (let i = 0; i < hall.length; i++) {
+    const a = hall[i];
+    const b = hall[(i + 1) % hall.length];
+    const face = faceOf(a, b, f.centre);
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const alcoves = (s0: number, half: number) => {
+      for (const [y0, y1] of [
+        [plinth, mid],
+        [mid, hallTop - 1],
+      ])
+        archBay(face, s0, half, y0, y1, 0.6, { half: half * 0.68, apex: y0 + (y1 - y0) * 0.86, recess: 0.55 }, out, dark);
+    };
+    if (i % 2 === 1) {
+      // A cut corner: two alcoves, one over the other.
+      if (e >= 12) alcoves(0, len * 0.4);
+      continue;
+    }
+    // A main face: the iwan, and two alcoves each side of it.
+    const half = Math.min(len * 0.3, e * 0.42);
+    const archHalf = half * 0.66;
+    archBay(
+      face,
+      0,
+      half,
+      plinth,
+      iwanTop,
+      3,
+      { half: archHalf, apex: plinth + (iwanTop - plinth) * 0.8, recess: 2.9, door: archHalf * 0.36 },
+      out,
+      dark,
+    );
+    if (e >= 12) {
+      const flank = (len / 2 - half) / 2;
+      for (const side of [-1, 1]) alcoves(side * (half + flank), flank * 0.85);
+    }
+    // Pinnacles at the frame's two upper corners.
+    for (const side of [-1, 1]) {
+      const p = face.at(side * half, 3, 0);
+      lathe(
+        p[0],
+        p[2],
+        [
+          [0.55, iwanTop - 2],
+          [0.55, iwanTop + 1.6],
+          [0.8, iwanTop + 1.9],
+          [0.12, iwanTop + 3.4],
+          [0, iwanTop + 3.4],
+        ],
+        8,
+        out,
+      );
+    }
+  }
+  // Pinnacles where the cut corners meet the faces.
+  for (const p of hall)
+    lathe(
+      p.x,
+      p.y,
+      [
+        [0.7, plinth],
+        [0.7, hallTop + 2.4],
+        [1, hallTop + 2.8],
+        [0.15, hallTop + 4.6],
+        [0, hallTop + 4.6],
+      ],
+      8,
+      out,
+    );
+  // Four kiosks round the dome.
+  for (const [s, t] of [
+    [1, 1],
+    [-1, 1],
+    [-1, -1],
+    [1, -1],
+  ]) {
+    const p = P(s * ha * 0.62, t * hb * 0.62);
+    chhatri(p.x, p.y, hallTop, e * 0.11, out);
+  }
+  // The drum, and the onion: it swells past the drum before it closes to a lotus and a finial.
+  const rd = Math.max(1.5, e * 0.4);
+  const c = f.centre;
   lathe(
-    cx,
-    cz,
+    c.x,
+    c.y,
     [
       [rd, hallTop],
-      [rd, h * 0.56],
-      [rd * 1.08, h * 0.6],
-      [rd * 1.16, h * 0.66],
-      [rd * 1.1, h * 0.73],
-      [rd * 0.86, h * 0.8],
-      [rd * 0.52, h * 0.87],
-      [rd * 0.18, h * 0.93],
-      [0.25, h * 0.96],
+      [rd, h * 0.595],
+      [rd * 1.06, h * 0.6],
+      [rd * 1.06, h * 0.612],
+      [rd * 1.1, h * 0.635],
+      [rd * 1.19, h * 0.67],
+      [rd * 1.2, h * 0.705],
+      [rd * 1.12, h * 0.75],
+      [rd * 0.92, h * 0.8],
+      [rd * 0.64, h * 0.845],
+      [rd * 0.32, h * 0.88],
+      [rd * 0.12, h * 0.9],
+      [Math.max(0.3, rd * 0.06), h * 0.91],
+      [Math.max(0.5, rd * 0.08), h * 0.93],
+      [0.2, h * 0.95],
+      [0.35, h * 0.965],
       [0.12, h],
       [0, h],
     ],
-    24,
+    32,
     out,
   );
   for (const m of minarets) {
-    const rm = Math.max(1, reach * 0.055);
+    const rm = Math.max(0.8, Math.min(f.a, f.b) * 0.045);
     const top = h * 0.6;
-    lathe(
-      m.x,
-      m.y,
-      [
-        [rm * 1.15, 0],
-        [rm * 1.15, plinth],
-        [rm, plinth],
-        [rm * 0.85, top],
-        [rm * 1.25, top + 0.4],
-        [rm * 1.25, top + 2.6],
-        [rm * 0.9, top + 3.2],
-        [rm * 0.5, top + 4.4],
-        [0.1, top + 5.2],
-        [0, top + 5.2],
-      ],
-      12,
-      out,
+    const stage = (top - plinth) / 3;
+    const profile: [number, number][] = [
+      [rm * 1.5, 0],
+      [rm * 1.5, plinth + 1.5],
+      [rm * 1.05, plinth + 1.5],
+    ];
+    // Three stages, each a little narrower, each ending in a balcony.
+    for (let k = 1; k <= 3; k++) {
+      const y = plinth + stage * k;
+      const r = rm * (1 - 0.07 * k);
+      profile.push([r, y], [rm * 1.42, y + 0.7], [rm * 1.42, y + 1.3], [r * 0.95, y + 1.3]);
+    }
+    const y = top + 1.3;
+    profile.push(
+      [rm * 0.75, y],
+      [rm * 0.75, y + 3.2],
+      [rm * 1.2, y + 3.4],
+      [rm * 1.2, y + 3.8],
+      [rm * 0.95, y + 3.9],
+      [rm * 0.95, y + 4.5],
+      [rm * 0.62, y + 5.5],
+      [rm * 0.2, y + 6.1],
+      [0.08, y + 7.6],
+      [0, y + 7.6],
     );
+    lathe(m.x, m.y, profile, 12, out);
   }
 }
 

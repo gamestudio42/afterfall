@@ -91,12 +91,14 @@ const CREASE_MAX = 0.45;
  * other, closed round when `wrap`. Each vertex gets the normal of the surface there (from
  * its neighbours on either side), turned away from its own row's middle, so a robe or an
  * arm shades as cloth and stone rather than as facets. A row that has shrunk to a point (a
- * crown, a fingertip) takes its normal from `centre`.
+ * crown, a fingertip) takes its normal from `centre`. An open surface that curves round an
+ * axis (hair round a face) passes a point on that axis for each row in `refs`; `crease` is
+ * how strongly its hollows darken.
  */
-function surface(out: Sink, rows: V3[][], wrap: boolean, c: THREE.Color, centre: V3): void {
+function surface(out: Sink, rows: V3[][], wrap: boolean, c: THREE.Color, centre: V3, refs?: V3[], crease = CREASE): void {
   const R = rows.length;
   const C = rows[0].length;
-  const mids = rows.map((r) => r.reduce((m, p) => [m[0] + p[0] / C, m[1] + p[1] / C, m[2] + p[2] / C], [0, 0, 0] as V3));
+  const mids = refs ?? rows.map((r) => r.reduce((m, p) => [m[0] + p[0] / C, m[1] + p[1] / C, m[2] + p[2] / C], [0, 0, 0] as V3));
   const normals = rows.map((row, i) =>
     row.map((p, j) => {
       const jl = wrap ? (j - 1 + C) % C : Math.max(0, j - 1);
@@ -128,7 +130,7 @@ function surface(out: Sink, rows: V3[][], wrap: boolean, c: THREE.Color, centre:
       const n = normals[i][j];
       const into = sub(mean, p);
       const cavity = (into[0] * n[0] + into[1] * n[1] + into[2] * n[2]) / Math.max(1e-9, spacing);
-      return 1 - Math.min(CREASE_MAX, Math.max(0, cavity * CREASE));
+      return 1 - Math.min(CREASE_MAX, Math.max(0, cavity * crease));
     }),
   );
   const push = (i: number, j: number) => {
@@ -164,17 +166,37 @@ const smooth = (a: number, b: number, x: number) => {
 };
 
 function curve(keys: number[][], x: number, k: number): number {
+  const n = keys.length;
   if (x <= keys[0][0]) return keys[0][k];
-  for (let i = 0; i < keys.length - 1; i++) {
-    const [x0] = keys[i];
-    const [x1] = keys[i + 1];
-    if (x <= x1) {
-      const t = (x - x0) / (x1 - x0);
-      const s = t * t * (3 - 2 * t);
-      return keys[i][k] + (keys[i + 1][k] - keys[i][k]) * s;
-    }
+  if (x >= keys[n - 1][0]) return keys[n - 1][k];
+  // A monotone cubic through the keys (Fritsch-Carlson): smooth through each key, where
+  // easing in and out of every one would leave a terrace there, and never overshooting.
+  const slope = (i: number) => (keys[i + 1][k] - keys[i][k]) / (keys[i + 1][0] - keys[i][0]);
+  const tangent = (i: number) => {
+    if (i === 0) return slope(0);
+    if (i === n - 1) return slope(n - 2);
+    const a = slope(i - 1);
+    const b = slope(i);
+    return a * b <= 0
+      ? 0
+      : (3 * (keys[i + 1][0] - keys[i - 1][0])) /
+          ((2 * keys[i + 1][0] - keys[i][0] - keys[i - 1][0]) / a + (keys[i + 1][0] + keys[i][0] - 2 * keys[i - 1][0]) / b);
+  };
+  let i = 0;
+  while (x > keys[i + 1][0]) i++;
+  const h = keys[i + 1][0] - keys[i][0];
+  const t = (x - keys[i][0]) / h;
+  const d = slope(i);
+  let m0 = tangent(i);
+  let m1 = tangent(i + 1);
+  if (d === 0) m0 = m1 = 0;
+  else {
+    m0 = Math.max(0, Math.min(3, m0 / d)) * d;
+    m1 = Math.max(0, Math.min(3, m1 / d)) * d;
   }
-  return keys[keys.length - 1][k];
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * keys[i][k] + (t3 - 2 * t2 + t) * h * m0 + (-2 * t3 + 3 * t2) * keys[i + 1][k] + (t3 - t2) * h * m1;
 }
 
 /** An ellipsoid about `o` with radii `r`, turned by `tilt` round z, as a smooth surface. */
@@ -210,25 +232,60 @@ const BODY = [
   [0.775, 0.158, 0.081],
   [0.8, 0.138, 0.072],
   [0.818, 0.1, 0.06],
-  [0.832, 0.055, 0.046],
-  [0.85, 0.036, 0.036],
+  [0.834, 0.062, 0.052],
+  [0.85, 0.047, 0.045],
+  [0.862, 0.041, 0.04],
+  [0.872, 0.038, 0.038],
 ];
-const NECK = 0.85;
+const NECK = 0.872;
 const WAIST = 0.48;
 
+/** Where the head starts (the base of the neck) and how tall it is to the crown. */
+const HEAD_Y = 0.83;
+const HEAD_H = 0.17;
+
 /**
- * The head's half width, and its depth in front and behind, from the base of the neck (0)
- * to the crown (1): the hair falls to the jaw, so it is widest low down, like a hood.
+ * The head under its hair: half width, and depth in front and behind, from the base of the
+ * neck (0) to the crown (1). The chin, under its beard, is at about 0.27, the nose's tip at
+ * 0.47, the eyes at 0.6 and the hairline at 0.82: a face in thirds.
  */
-const HEAD = [
-  [0, 0.034, 0.034, 0.034],
-  [0.15, 0.036, 0.036, 0.04],
-  [0.32, 0.05, 0.044, 0.054],
-  [0.52, 0.054, 0.048, 0.057],
-  [0.72, 0.051, 0.046, 0.054],
-  [0.86, 0.041, 0.037, 0.043],
-  [0.95, 0.026, 0.022, 0.027],
+const SKULL = [
+  [0, 0.036, 0.036, 0.036],
+  [0.17, 0.036, 0.038, 0.036],
+  [0.25, 0.034, 0.044, 0.034],
+  [0.33, 0.039, 0.049, 0.04],
+  [0.46, 0.042, 0.047, 0.045],
+  [0.6, 0.043, 0.045, 0.047],
+  [0.74, 0.042, 0.042, 0.047],
+  [0.86, 0.035, 0.034, 0.04],
+  [0.93, 0.026, 0.025, 0.03],
+  [0.97, 0.017, 0.016, 0.019],
+  [0.99, 0.009, 0.009, 0.01],
   [1, 0, 0, 0],
+];
+
+/** Half the angle the hair leaves open round the face, from below the neck to the crown. */
+const OPENING = [
+  [-0.12, 1.75],
+  [0.0, 1.6],
+  [0.12, 1.35],
+  [0.27, 1.05],
+  [0.36, 0.95],
+  [0.6, 0.95],
+  [0.7, 0.8],
+  [0.78, 0.5],
+  [0.85, 0.18],
+  [0.92, 0.015],
+];
+
+/** How thick the hair lies on the head, from below the neck to the crown. */
+const HAIR = [
+  [-0.12, 0.004],
+  [0, 0.012],
+  [0.3, 0.013],
+  [0.5, 0.011],
+  [0.8, 0.007],
+  [1, 0.004],
 ];
 
 /** Where the arm's axis runs, how thick it is, and how low its sleeve hangs, at a reach. */
@@ -252,15 +309,143 @@ const SLEEVE = [
   [0.425, 0.72],
 ];
 
+/** A bell round `c0`, `w` wide. */
+const bell = (v: number, c0: number, w: number) => Math.exp(-(((v - c0) / w) ** 2));
+
+/**
+ * A point of the head at a height `t` (0 at the base of the neck, 1 at the crown) and an
+ * angle `u` round it (π/2 straight ahead), before it is bowed. The face is carved into the
+ * front: the nose's ridge widening to its tip, the eyes deep under the brow, the
+ * cheekbones, the moustache over the mouth, and the beard over the chin and jaw.
+ */
+function skull(t: number, u: number): V3 {
+  const rx = curve(SKULL, t, 1);
+  const cu = Math.cos(u);
+  const su = Math.sin(u);
+  const x = cu * rx;
+  let z = su * curve(SKULL, t, su > 0 ? 2 : 3);
+  if (su > 0) {
+    const s = cu;
+    const as = Math.abs(s);
+    let d = 0;
+    const nose = smooth(0.62, 0.47, t) * smooth(0.44, 0.47, t);
+    d += 0.011 * nose * bell(s, 0, 0.08 + 0.1 * smooth(0.62, 0.47, t));
+    d -= 0.006 * bell(as, 0.37, 0.17) * bell(t, 0.595, 0.038);
+    d += 0.0016 * bell(t, 0.637, 0.02) * smooth(0.05, 0.25, as) * (1 - smooth(0.5, 0.8, as));
+    d += 0.002 * bell(as, 0.55, 0.15) * bell(t, 0.54, 0.04);
+    d += 0.002 * bell(t, 0.425 - 0.07 * as, 0.018) * bell(s, 0, 0.45);
+    d -= 0.0015 * bell(t, 0.402, 0.009) * bell(s, 0, 0.18);
+    const cheek = 0.12 * smooth(0.3, 0.6, as);
+    const beard = smooth(0.2, 0.27, t) * (1 - smooth(0.37 + cheek, 0.43 + cheek, t)) * (1 - 0.6 * bell(t, 0.4, 0.02) * bell(s, 0, 0.2));
+    d += beard * (0.0028 * bell(s, 0, 0.6) + 0.0012 * Math.abs(Math.cos(s * 16)) * (1 - smooth(0.33, 0.37, t) * bell(s, 0, 0.45)));
+    d += 0.0012 * bell(t, 0.385, 0.012) * bell(s, 0, 0.2);
+    z += d * su * su;
+  }
+  return [x, HEAD_Y + t * HEAD_H, z];
+}
+
+/**
+ * A point of the hair at a height `t` and an angle `u`, before it is bowed: a shell over the
+ * skull, in wavy locks from the crown, that falls straight from the jaw behind the neck to
+ * the shoulders. `edge` runs from 0 at the rim round the face to 1 a little inside it; at
+ * the rim the hair turns in to the head, so it has thickness, and where the rims meet over
+ * the forehead they leave the parting.
+ */
+function hair(t: number, u: number, edge: number): V3 {
+  const tt = Math.max(t, 0.34);
+  const narrow = 1 - 0.12 * smooth(0.34, -0.12, t);
+  const rx = curve(SKULL, tt, 1) * narrow;
+  const cu = Math.cos(u);
+  const su = Math.sin(u);
+  const deep = curve(SKULL, tt, su > 0 ? 2 : 3);
+  // Locks, smoother where the hair is swept back from the forehead.
+  const swept = 1 - 0.55 * smooth(0.3, 0.9, Math.sin(u)) * smooth(0.55, 0.75, t);
+  const lock = 0.003 * Math.abs(Math.sin(u * 10 + 0.8 * Math.sin(t * 8))) ** 0.5 * (1 - smooth(0.82, 0.98, t)) * swept;
+  let out = curve(HAIR, t, 1) + lock;
+  out *= smooth(0, 1, edge);
+  // Its end tucks under the mantle on the shoulders.
+  const tuck = 1 - 0.25 * smooth(-0.04, -0.12, t);
+  return [cu * (rx + out) * tuck, HEAD_Y + t * HEAD_H, su * (deep + out) * tuck];
+}
+
+/** The head bows forward from the neck, more the higher up it is. */
+function bow(p: V3, t: number): V3 {
+  const a = 0.17 * smooth(0, 0.35, t);
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const dy = p[1] - HEAD_Y;
+  return [p[0], HEAD_Y + dy * ca - p[2] * sa, p[2] * ca + dy * sa + 0.006];
+}
+
+/**
+ * A heart in low relief at `o`, facing +z, `k` the size of one unit of the classic heart
+ * curve (16 wide): domed, its edge sunk a little into what it stands on.
+ */
+function heart(out: Sink, P: (x: number, y: number, z: number) => V3, o: V3, k: number, c: THREE.Color): void {
+  const rows: V3[][] = [];
+  const AROUND = 48;
+  for (let i = 0; i <= 8; i++) {
+    const r = i / 8;
+    const lift = 0.004 * Math.sqrt(Math.max(0, 1 - r * r)) - 0.0015 * r ** 6;
+    const row: V3[] = [];
+    for (let j = 0; j < AROUND; j++) {
+      const q = (j / AROUND) * Math.PI * 2;
+      const hx = 16 * Math.sin(q) ** 3;
+      const hy = 13 * Math.cos(q) - 5 * Math.cos(2 * q) - 2 * Math.cos(3 * q) - Math.cos(4 * q);
+      row.push(P(o[0] + hx * k * r, o[1] + (hy + 2) * k * r, o[2] + lift));
+    }
+    rows.push(row);
+  }
+  const behind = P(o[0], o[1] + 2 * k, o[2] - 0.02);
+  surface(
+    out,
+    rows,
+    true,
+    c,
+    behind,
+    rows.map(() => behind),
+  );
+}
+
+/** A round cord along a path, closed at both ends. */
+function tube(out: Sink, P: (x: number, y: number, z: number) => V3, path: V3[], r: number, c: THREE.Color): void {
+  const n = path.length;
+  const rows: V3[][] = [];
+  for (let k = 0; k < n; k++) {
+    const t = sub(path[Math.min(n - 1, k + 1)], path[Math.max(0, k - 1)]);
+    const tl = Math.hypot(t[0], t[1], t[2]) || 1;
+    const along: V3 = [t[0] / tl, t[1] / tl, t[2] / tl];
+    let side = cross(along, [0, 0, 1]);
+    const sl = Math.hypot(side[0], side[1], side[2]);
+    side = sl > 1e-6 ? [side[0] / sl, side[1] / sl, side[2] / sl] : [1, 0, 0];
+    const up = cross(side, along);
+    const row: V3[] = [];
+    for (let j = 0; j < 10; j++) {
+      const q = (j / 10) * Math.PI * 2;
+      const [px, py, pz] = path[k];
+      const a = Math.cos(q) * r;
+      const b = Math.sin(q) * r;
+      row.push(P(px + side[0] * a + up[0] * b, py + side[1] * a + up[1] * b, pz + side[2] * a + up[2] * b));
+    }
+    rows.push(row);
+  }
+  rows.unshift(rows[0].map(() => P(...path[0])));
+  rows.push(rows[rows.length - 1].map(() => P(...path[n - 1])));
+  surface(out, rows, true, c, P(...path[n >> 1]));
+}
+
 /**
  * Christ the Redeemer, 30 m of soapstone over its pedestal, measured off a photograph and
  * drawn as smooth surfaces. The body is a tunic falling almost straight, a little wider
- * than deep, in deep tubular pleats below a cord at the waist, the feet showing under the
- * hem; over it the mantle, its folds hanging in curves from shoulder to shoulder across the
- * chest and its edge running down the figure's left side to the knee. The arms are out
- * almost level, 28 m from hand to hand, and each is one piece with its wide sleeve, which
- * hangs lowest at the wrist and rises to meet the body at the waist, its hem rippling. The
- * hands are open, palms forward. The head is bowed a little, the hair falling to the jaw.
+ * than deep, in deep tubular pleats below a cord knotted at the waist, its ends hanging down
+ * the front, the feet showing under the hem; the Sacred Heart stands out on the chest. Over
+ * it the mantle, its folds hanging in curves from shoulder to shoulder across the chest, its
+ * edge running down the figure's left side to the knee, and down the back almost to the hem
+ * in long folds. The arms are out almost level, 28 m from hand to hand, and each is one
+ * piece with its wide sleeve, which hangs lowest at the wrist and rises to meet the body at
+ * the waist, folding as it hangs. The hands are open, palms forward. The head is bowed: a
+ * long face with a straight nose, deep eyes and a short beard, framed by hair parted in the
+ * middle that falls past the cheeks and down behind to the shoulders.
  *
  * It faces the camera's default view (+z) rather than Guanabara Bay, so the cross it makes
  * reads from the start; the arms run along x.
@@ -273,10 +458,11 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
   const P = (x: number, y: number, z: number): V3 => [m.x + (x * cos - z * sin) * H, base + y * H, m.y + (x * sin + z * cos) * H];
 
   // The body, from the hem to the neck.
-  const COLS = 96;
-  const rows: V3[][] = [];
-  for (let i = 0; i <= 90; i++) {
-    const y = (NECK * i) / 90;
+  const COLS = 128;
+  const ROWS = 180;
+  const body: V3[][] = [];
+  for (let i = 0; i <= ROWS; i++) {
+    const y = (NECK * i) / ROWS;
     const W = curve(BODY, y, 1);
     const D = curve(BODY, y, 2);
     const row: V3[] = [];
@@ -289,16 +475,20 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
       let z = Math.sign(sa) * Math.abs(sa) ** 0.8 * D;
       const u = x / W;
       let bulge = 0;
-      // Pleats: rounded ridges with sharp valleys, deeper towards the hem, mostly front and back.
-      const pleat = 0.004 + 0.011 * (1 - smooth(0.05, WAIST, y));
-      bulge += pleat * Math.abs(Math.cos(a * 7)) ** 0.6 * (0.35 + 0.65 * Math.abs(sa)) * (1 - smooth(WAIST - 0.03, WAIST, y));
-      // The cord round the waist.
-      bulge += 0.007 * Math.exp(-(((y - WAIST) / 0.006) ** 2));
-      // The mantle over the shoulders and chest stands a little proud of the tunic.
+      // The mantle over the shoulders and chest, and hanging down the back almost to the hem.
       const mantle = smooth(WAIST + 0.01, WAIST + 0.04, y);
-      bulge += 0.008 * mantle;
+      const cloak = Math.max(0, -sa) ** 0.6 * smooth(0.075, 0.095, y);
+      bulge += Math.max(0.008 * mantle, 0.012 * cloak);
+      bulge += 0.006 * cloak * Math.abs(Math.cos(a * 9 + 0.25 * Math.sin(y * 9))) ** 0.7 * (1 - 0.6 * mantle);
+      // Pleats: rounded ridges with sharp valleys, deeper towards the hem, under the mantle at the back.
+      const pleat = 0.004 + 0.011 * (1 - smooth(0.05, WAIST, y));
+      bulge += pleat * Math.abs(Math.cos(a * 7)) ** 0.6 * (0.35 + 0.65 * Math.abs(sa)) * (1 - smooth(WAIST - 0.03, WAIST, y)) * (1 - cloak);
+      // The tunic's collar, rolled round the base of the neck.
+      bulge += 0.004 * Math.exp(-(((y - 0.857) / 0.005) ** 2));
+      // The cord round the waist.
+      bulge += 0.007 * Math.exp(-(((y - WAIST) / 0.006) ** 2)) * (1 - cloak);
       if (sa > 0) {
-        // Its folds across the chest, hanging in curves from shoulder to shoulder.
+        // The mantle's folds across the chest, hanging in curves from shoulder to shoulder.
         for (const sag of [0.05, 0.1, 0.16, 0.22])
           bulge += 0.006 * mantle * sa * Math.exp(-(((y - (0.77 - sag * (1 - 0.55 * u * u))) / 0.011) ** 2));
         // Its edge down the figure's left side (the viewer's right) to the knee.
@@ -308,22 +498,60 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
       const l = Math.hypot(ca, sa);
       x += (ca / l) * bulge;
       z += (sa / l) * bulge;
-      row.push(P(x, y, z));
+      row.push([x, y, z]);
     }
-    rows.push(row);
+    body.push(row);
   }
-  surface(out, rows, true, c, P(0, 0.4, 0));
+  surface(
+    out,
+    body.map((row) => row.map((p) => P(...p))),
+    true,
+    c,
+    P(0, 0.4, 0),
+  );
   // The hem's underside.
-  const hem = rows[0];
+  const hem = body[0].map((p) => P(...p));
   for (let j = 1; j < COLS - 1; j++) quad(out, [hem[0], hem[j], hem[j + 1], hem[j + 1]], [0, -1, 0], c);
   // The feet under the hem.
   for (const s of [-1, 1]) ellipsoid(out, P, [s * 0.032, 0.008, 0.07], [0.022, 0.011, 0.034], 0, c);
 
-  // The arms and their sleeves, each one surface from inside the shoulder to the cuff.
+  // How far forward the robe stands at a point of its front, over the folds there.
+  const front = (x: number, y: number) => {
+    const row = body[Math.round((y / NECK) * ROWS)];
+    let z = 0;
+    for (const p of row) if (p[2] > 0 && Math.abs(p[0] - x) < 0.01) z = Math.max(z, p[2]);
+    return z;
+  };
+  // The Sacred Heart on the chest, over the figure's heart.
+  const hx = 0.03;
+  const hy = 0.7;
+  const hz = front(hx, hy) + 0.001;
+  heart(out, P, [hx, hy, hz], 0.0013, c);
+  // The cord's knot at the waist and its two ends hanging down the front, tasselled.
+  ellipsoid(out, P, [0.002, WAIST, front(0.002, WAIST) + 0.003], [0.012, 0.009, 0.007], 0, c);
+  for (const [x0, x1, y1] of [
+    [0.006, 0.016, 0.3],
+    [-0.004, -0.007, 0.335],
+  ]) {
+    const path: V3[] = [];
+    for (let k = 0; k <= 20; k++) {
+      const f = k / 20;
+      const y = WAIST - 0.006 - f * (WAIST - 0.006 - y1);
+      const x = x0 + (x1 - x0) * f + 0.003 * Math.sin(f * 5);
+      path.push([x, y, front(x, y) + 0.004]);
+    }
+    tube(out, P, path, 0.0042, c);
+    ellipsoid(out, P, [x1, y1 - 0.012, front(x1, y1 - 0.012) + 0.005], [0.007, 0.016, 0.006], 0, c);
+  }
+
+  // The arms and their sleeves, each one surface from inside the shoulder to the cuff, drawn
+  // a little shorter than their profile so the hands end 28 m apart as on the real statue.
   const RING = 32;
+  const REACH = 0.88;
+  const WRIST = 0.1 + (0.425 - 0.1) * REACH;
   for (const s of [-1, 1]) {
     const arm: V3[][] = [];
-    const STEPS = 44;
+    const STEPS = 72;
     for (let i = 0; i <= STEPS; i++) {
       const x = 0.1 + ((0.425 - 0.1) * i) / STEPS;
       const ya = armY(x);
@@ -340,15 +568,17 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
           y = ya + r * sp;
           z = r * cp * 0.92;
         } else {
-          // The sleeve: the cloth hangs from the arm to its hem, thinning as it falls.
+          // The sleeve: the cloth hangs from the arm to its hem, thinning as it falls, in folds
+          // that slant down from the wrist towards the body.
           const t = -sp;
           y = ya - t * (ya - low);
           z = cp * (r * 0.92 * (1 - t) + 0.012 * t);
+          z += 0.0035 * t * (1 - 0.4 * t) * Math.sin(x * 75 - t * 5);
           // Its hem ripples as it hangs.
           z += 0.003 * t * t * Math.sin(x * 45);
           y += 0.002 * t * t * Math.cos(x * 38);
         }
-        row.push(P(s * x, y, z));
+        row.push(P(s * (0.1 + (x - 0.1) * REACH), y, z));
       }
       arm.push(row);
     }
@@ -356,49 +586,67 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
     const cuff = arm[arm.length - 1];
     const mid = cuff.reduce((m, p) => [m[0] + p[0] / RING, m[1] + p[1] / RING, m[2] + p[2] / RING], [0, 0, 0] as V3);
     arm.push(cuff.map(() => mid));
-    surface(out, arm, true, c, P(s * 0.3, armY(0.3), 0));
-    // The open hand, its fingers a little raised, and the thumb.
+    surface(out, arm, true, c, P(s * (0.1 + 0.2 * REACH), armY(0.3), 0));
+    // The open hand, palm forward, about a ninth of the figure from wrist to fingertip as on
+    // the real statue: a broad palm, four fingers held together and a little raised, the thumb up.
     const hy = armY(0.45);
-    ellipsoid(out, P, [s * 0.448, hy, 0.002], [0.03, 0.019, 0.008], s * 0.18, c);
-    ellipsoid(out, P, [s * 0.437, hy + 0.017, 0.006], [0.006, 0.013, 0.006], s * -0.4, c);
+    ellipsoid(out, P, [s * (WRIST + 0.03), hy + 0.001, 0.003], [0.036, 0.024, 0.0095], s * 0.06, c);
+    for (const [dy, len] of [
+      [0.0145, 0.025],
+      [0.005, 0.029],
+      [-0.0045, 0.028],
+      [-0.0135, 0.023],
+    ]) {
+      const fx = WRIST + 0.043 + len * 0.95;
+      ellipsoid(out, P, [s * fx, hy + dy + 0.002, 0.002], [len, 0.0062, 0.0068], s * 0.08, c);
+    }
+    ellipsoid(out, P, [s * (WRIST + 0.027), hy + 0.024, 0.009], [0.008, 0.017, 0.0075], s * -0.6, c);
   }
 
-  // The head on its neck, bowed forward from the neck, hair falling to the jaw.
+  // The head, and the hair over it, bowed together and set so the crown is the figure's top.
+  const HEAD_ROWS = 72;
+  const AROUND = 80;
   const head: V3[][] = [];
-  const bow = 0.17;
-  const cb = Math.cos(bow);
-  const sb = Math.sin(bow);
-  const pivot = [0, 0.83, 0];
-  for (let i = 0; i <= 30; i++) {
-    // From the base of the neck (0) to the crown (1).
-    const t = i / 30;
-    const y = 0.83 + t * 0.17;
-    const rx = curve(HEAD, t, 1);
-    const front = curve(HEAD, t, 2);
-    const back = curve(HEAD, t, 3);
-    const row: [number, number, number][] = [];
-    for (let j = 0; j < 40; j++) {
-      const u = (j / 40) * Math.PI * 2;
-      const cu = Math.cos(u);
-      const su = Math.sin(u);
-      // The face is narrower than the hair round it.
-      const x = cu * rx * (1 - 0.12 * Math.max(0, su) * smooth(0.2, 0.35, t));
-      const z = su * (su > 0 ? front : back);
-      // Bowed: turned forward round the base of the neck.
-      const dy = y - pivot[1];
-      row.push([x, pivot[1] + dy * cb - z * sb, z * cb + dy * sb + 0.006]);
-    }
+  for (let i = 0; i <= HEAD_ROWS; i++) {
+    const t = i / HEAD_ROWS;
+    const row: V3[] = [];
+    for (let j = 0; j < AROUND; j++) row.push(bow(skull(t, (j / AROUND) * Math.PI * 2), t));
     head.push(row);
   }
-  // The crown at the figure's full height.
+  const HAIR_ROWS = 72;
+  const locks: V3[][] = [];
+  const axis: V3[] = [];
+  for (let i = 0; i <= HAIR_ROWS; i++) {
+    const t = 1 - (1.12 * i) / HAIR_ROWS;
+    const open = curve(OPENING, t, 1);
+    const row: V3[] = [];
+    for (let j = 0; j < AROUND; j++) {
+      const f = j / (AROUND - 1);
+      const u = Math.PI / 2 + open + (Math.PI * 2 - 2 * open) * f;
+      row.push(bow(hair(t, u, Math.min(f, 1 - f) / 0.06), t));
+    }
+    locks.push(row);
+    axis.push(bow([0, HEAD_Y + t * HEAD_H, 0], t));
+  }
   let top = 0;
-  for (const row of head) for (const p of row) top = Math.max(top, p[1]);
+  for (const row of locks) for (const p of row) top = Math.max(top, p[1]);
+  const lift = 1 - top;
+  const place = (p: V3) => P(p[0], p[1] + lift, p[2]);
   surface(
     out,
-    head.map((row) => row.map(([x, y, z]) => P(x, y + 1 - top, z))),
+    head.map((row) => row.map(place)),
     true,
     c,
-    P(0, 0.92, 0.01),
+    place([0, 0.92, 0.01]),
+  );
+  surface(
+    out,
+    locks.map((row) => row.map(place)),
+    false,
+    c,
+    place([0, 0.92, 0]),
+    axis.map(place),
+    CREASE * 0.7,
   );
 }
 

@@ -166,17 +166,37 @@ const smooth = (a: number, b: number, x: number) => {
 };
 
 function curve(keys: number[][], x: number, k: number): number {
+  const n = keys.length;
   if (x <= keys[0][0]) return keys[0][k];
-  for (let i = 0; i < keys.length - 1; i++) {
-    const [x0] = keys[i];
-    const [x1] = keys[i + 1];
-    if (x <= x1) {
-      const t = (x - x0) / (x1 - x0);
-      const s = t * t * (3 - 2 * t);
-      return keys[i][k] + (keys[i + 1][k] - keys[i][k]) * s;
-    }
+  if (x >= keys[n - 1][0]) return keys[n - 1][k];
+  // A monotone cubic through the keys (Fritsch-Carlson): smooth through each key, where
+  // easing in and out of every one would leave a terrace there, and never overshooting.
+  const slope = (i: number) => (keys[i + 1][k] - keys[i][k]) / (keys[i + 1][0] - keys[i][0]);
+  const tangent = (i: number) => {
+    if (i === 0) return slope(0);
+    if (i === n - 1) return slope(n - 2);
+    const a = slope(i - 1);
+    const b = slope(i);
+    return a * b <= 0
+      ? 0
+      : (3 * (keys[i + 1][0] - keys[i - 1][0])) /
+          ((2 * keys[i + 1][0] - keys[i][0] - keys[i - 1][0]) / a + (keys[i + 1][0] + keys[i][0] - 2 * keys[i - 1][0]) / b);
+  };
+  let i = 0;
+  while (x > keys[i + 1][0]) i++;
+  const h = keys[i + 1][0] - keys[i][0];
+  const t = (x - keys[i][0]) / h;
+  const d = slope(i);
+  let m0 = tangent(i);
+  let m1 = tangent(i + 1);
+  if (d === 0) m0 = m1 = 0;
+  else {
+    m0 = Math.max(0, Math.min(3, m0 / d)) * d;
+    m1 = Math.max(0, Math.min(3, m1 / d)) * d;
   }
-  return keys[keys.length - 1][k];
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * keys[i][k] + (t3 - 2 * t2 + t) * h * m0 + (-2 * t3 + 3 * t2) * keys[i + 1][k] + (t3 - t2) * h * m1;
 }
 
 /** An ellipsoid about `o` with radii `r`, turned by `tilt` round z, as a smooth surface. */
@@ -238,15 +258,18 @@ const SKULL = [
   [0.6, 0.043, 0.045, 0.047],
   [0.74, 0.042, 0.042, 0.047],
   [0.86, 0.035, 0.034, 0.04],
-  [0.95, 0.021, 0.02, 0.025],
+  [0.93, 0.026, 0.025, 0.03],
+  [0.97, 0.017, 0.016, 0.019],
+  [0.99, 0.009, 0.009, 0.01],
   [1, 0, 0, 0],
 ];
 
 /** Half the angle the hair leaves open round the face, from below the neck to the crown. */
 const OPENING = [
   [-0.12, 1.75],
-  [0.12, 1.7],
-  [0.27, 1.2],
+  [0.0, 1.6],
+  [0.12, 1.35],
+  [0.27, 1.05],
   [0.36, 0.95],
   [0.6, 0.95],
   [0.7, 0.8],
@@ -314,7 +337,8 @@ function skull(t: number, u: number): V3 {
     d -= 0.0015 * bell(t, 0.402, 0.009) * bell(s, 0, 0.18);
     const cheek = 0.12 * smooth(0.3, 0.6, as);
     const beard = smooth(0.2, 0.27, t) * (1 - smooth(0.37 + cheek, 0.43 + cheek, t)) * (1 - 0.6 * bell(t, 0.4, 0.02) * bell(s, 0, 0.2));
-    d += beard * (0.0028 * bell(s, 0, 0.6) + 0.0012 * Math.abs(Math.cos(s * 16)));
+    d += beard * (0.0028 * bell(s, 0, 0.6) + 0.0012 * Math.abs(Math.cos(s * 16)) * (1 - smooth(0.33, 0.37, t) * bell(s, 0, 0.45)));
+    d += 0.0012 * bell(t, 0.385, 0.012) * bell(s, 0, 0.2);
     z += d * su * su;
   }
   return [x, HEAD_Y + t * HEAD_H, z];
@@ -335,8 +359,8 @@ function hair(t: number, u: number, edge: number): V3 {
   const su = Math.sin(u);
   const deep = curve(SKULL, tt, su > 0 ? 2 : 3);
   // Locks, smoother where the hair is swept back from the forehead.
-  const swept = 1 - 0.7 * smooth(0.3, 0.9, Math.sin(u)) * smooth(0.55, 0.75, t);
-  const lock = 0.0022 * Math.abs(Math.sin(u * 10 + 0.8 * Math.sin(t * 8))) ** 0.5 * (1 - smooth(0.82, 0.98, t)) * swept;
+  const swept = 1 - 0.55 * smooth(0.3, 0.9, Math.sin(u)) * smooth(0.55, 0.75, t);
+  const lock = 0.003 * Math.abs(Math.sin(u * 10 + 0.8 * Math.sin(t * 8))) ** 0.5 * (1 - smooth(0.82, 0.98, t)) * swept;
   let out = curve(HAIR, t, 1) + lock;
   out *= smooth(0, 1, edge);
   // Its end tucks under the mantle on the shoulders.
@@ -455,10 +479,12 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
       const mantle = smooth(WAIST + 0.01, WAIST + 0.04, y);
       const cloak = Math.max(0, -sa) ** 0.6 * smooth(0.075, 0.095, y);
       bulge += Math.max(0.008 * mantle, 0.012 * cloak);
-      bulge += 0.006 * cloak * Math.abs(Math.cos(a * 9 + 0.6 * Math.sin(y * 14))) ** 0.7 * (1 - 0.6 * mantle);
+      bulge += 0.006 * cloak * Math.abs(Math.cos(a * 9 + 0.25 * Math.sin(y * 9))) ** 0.7 * (1 - 0.6 * mantle);
       // Pleats: rounded ridges with sharp valleys, deeper towards the hem, under the mantle at the back.
       const pleat = 0.004 + 0.011 * (1 - smooth(0.05, WAIST, y));
       bulge += pleat * Math.abs(Math.cos(a * 7)) ** 0.6 * (0.35 + 0.65 * Math.abs(sa)) * (1 - smooth(WAIST - 0.03, WAIST, y)) * (1 - cloak);
+      // The tunic's collar, rolled round the base of the neck.
+      bulge += 0.004 * Math.exp(-(((y - 0.857) / 0.005) ** 2));
       // The cord round the waist.
       bulge += 0.007 * Math.exp(-(((y - WAIST) / 0.006) ** 2)) * (1 - cloak);
       if (sa > 0) {
@@ -620,7 +646,7 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
     c,
     place([0, 0.92, 0]),
     axis.map(place),
-    CREASE * 0.45,
+    CREASE * 0.7,
   );
 }
 

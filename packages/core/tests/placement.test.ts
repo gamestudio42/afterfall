@@ -442,6 +442,108 @@ describe("corners between slanted runs", () => {
   });
 });
 
+describe("runs along an axis meeting slanted runs", () => {
+  /** Both ends of the panel in this cell, on the grid (cell units, from the cell's corner). */
+  function ends(sim: Simulation, c: [number, number]): number[][] {
+    const s = at(sim, c[0], c[1])!.structure!;
+    const l = s.line!;
+    const ux = Math.cos(l.yaw);
+    const uy = -Math.sin(l.yaw);
+    const h = l.stretch / 2;
+    return [
+      [s.cx + l.ox - ux * h, s.cy + l.oy - uy * h],
+      [s.cx + l.ox + ux * h, s.cy + l.oy + uy * h],
+    ];
+  }
+  const touches = (pts: number[][], p: [number, number]) => Math.min(...pts.map(([px, py]) => Math.hypot(px - p[0], py - p[1])));
+
+  it("a straight run drawn from the end of a diagonal meets it at the corner's centre", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 14, 10);
+    const corner: [number, number] = [x + 6, y + 6];
+    placeStructures(sim, "wall", lineCells([x, y], corner));
+    placeStructures(sim, "wall", lineCells(corner, [x + 12, y + 6]));
+    // Before, the first straight panel stopped at its cell's edge, 0.7 of a cell from the
+    // diagonal, and the diagonal's last panel ran on past the corner.
+    expect(touches(ends(sim, [x + 7, y + 6]), corner)).toBeCloseTo(0);
+    expect(touches(ends(sim, corner), corner)).toBeCloseTo(0);
+    expect(at(sim, corner[0], corner[1])!.structure!.line!.stretch).toBeCloseTo(Math.SQRT2 / 2);
+  });
+
+  it("a diagonal drawn from the end of a straight run cuts that run's end back to the corner", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 14, 10);
+    const corner: [number, number] = [x + 6, y];
+    placeStructures(sim, "wall", lineCells([x, y], corner));
+    placeStructures(sim, "wall", lineCells(corner, [x + 12, y + 6]));
+    expect(touches(ends(sim, [x + 7, y + 1]), corner)).toBeCloseTo(0);
+    // The straight run's end panel now ends at the corner instead of running half a cell past it.
+    expect(touches(ends(sim, corner), corner)).toBeCloseTo(0);
+    expect(at(sim, corner[0], corner[1])!.structure!.line!.stretch).toBeCloseTo(0.5);
+    // The rest of the straight run is still drawn from its neighbours.
+    expect(at(sim, x + 3, y)!.structure!.line).toBeUndefined();
+  });
+
+  it("a straight stem on a slanted run reaches the run, and two straight runs still meet in a pier", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 14, 12);
+    const run = lineCells([x, y], [x + 12, y + 4]);
+    placeStructures(sim, "wall", run);
+    const junction = run[6];
+    placeStructures(sim, "wall", lineCells(junction, [junction[0], junction[1] + 8]));
+    expect(touches(ends(sim, [junction[0], junction[1] + 1]), junction)).toBeCloseTo(0);
+    // A straight corner leaves both runs to the renderer's junction pier.
+    placeStructures(sim, "wall", lineCells([x, y + 10], [x + 6, y + 10]));
+    placeStructures(sim, "wall", lineCells([x + 6, y + 10], [x + 6, y + 12]));
+    expect(at(sim, x + 6, y + 10)!.structure!.line).toBeUndefined();
+    expect(at(sim, x + 6, y + 11)!.structure!.line).toBeUndefined();
+  });
+});
+
+describe("where a gate opens", () => {
+  it("not in the corner of a wall, where nobody could walk through it", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 10, 8);
+    placeStructures(sim, "wall", lineCells([x, y], [x + 8, y]));
+    placeStructures(sim, "wall", lineCells([x + 8, y], [x + 8, y + 6]));
+    finishAll(sim);
+    expect(placementAt(sim, "gate", x + 8, y)).toBeNull();
+    expect(placementAt(sim, "gate", x + 4, y)).not.toBeNull();
+    // Nor beside a wall blueprint that will close one side.
+    placeStructures(sim, "wall", lineCells([x, y + 4], [x + 4, y + 4]));
+    placeStructures(sim, "wall", [[x + 2, y + 5]]);
+    expect(placementAt(sim, "gate", x + 2, y + 4)).toBeNull();
+  });
+
+  it("not in a panel cut back to the corner of two slanted runs", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 12, 10);
+    const corner: [number, number] = [x + 8, y + 1];
+    placeStructures(sim, "wall", lineCells([x, y + 4], corner));
+    placeStructures(sim, "wall", lineCells(corner, [x + 10, y + 8]));
+    finishAll(sim);
+    expect(at(sim, corner[0], corner[1])!.structure!.line!.stretch).toBeLessThan(1);
+    expect(placementAt(sim, "gate", corner[0], corner[1])).toBeNull();
+  });
+
+  it("in a diagonal wall, and survivors walk through it while the infected do not", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 10, 10);
+    placeStructures(sim, "wall", lineCells([x, y + 8], [x + 8, y]));
+    finishAll(sim);
+    placeStructures(sim, "gate", [[x + 4, y + 4]]);
+    finishAll(sim);
+    const c = sim.grid.cell;
+    // From one side of the line to the other, beside the gate.
+    const path = (agent: "survivor" | "infected") => sim.grid.findPath((x + 3.5) * c, (y + 3.5) * c, (x + 5.5) * c, (y + 5.5) * c, agent);
+    const walk = path("survivor")!;
+    expect(walk.points.length).toBeLessThanOrEqual(3);
+    const crawl = path("infected");
+    // The infected go round the end of the wall, if at all.
+    if (crawl) expect(crawl.expanded).toBeGreaterThan(walk.expanded);
+  });
+});
+
 describe("water and railways", () => {
   const map = cityFromOverpass(
     { elements: [...syntheticOverpass().elements, ...syntheticTerrain()] },

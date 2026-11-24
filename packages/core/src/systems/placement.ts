@@ -1,6 +1,6 @@
 import { BALANCE, STRUCTURES, type StructureKind } from "@afterfall/content";
 import { lineCells, type LineFrame } from "@afterfall/shared";
-import { CellKind } from "@afterfall/world";
+import { CellKind, isWalkableKind } from "@afterfall/world";
 import type { Simulation } from "../simulation";
 import type { Entity, EntityId } from "../state";
 
@@ -79,6 +79,9 @@ export function placementAt(sim: Simulation, kind: StructureKind, cx: number, cy
       // line never opens while it is being built.
       const wall = kind === "gate" ? sim.state.entities.get(owner) : undefined;
       if (!wall?.structure || wall.structure.kind !== "wall" || !wall.structure.built || replacedBy(sim, owner) >= 0) return null;
+      // A panel cut back to a corner is half a gateway: the gate model squeezed into it.
+      const l = wall.structure.line;
+      if (l && l.stretch < nominalStretch(l.yaw) - 1e-6) return null;
       replaces = owner;
       continue;
     }
@@ -88,7 +91,27 @@ export function placementAt(sim: Simulation, kind: StructureKind, cx: number, cy
   }
   // Do not seal off building doors.
   if (kind !== "farm" && touchesEntrance(sim, cells)) return null;
+  if (kind === "gate" && !passesThrough(sim, cx, cy)) return null;
   return { cells, replaces };
+}
+
+/**
+ * Whether a gate here would open onto ground on two opposite sides. In the corner of a
+ * wall, or where three runs meet, the cells beyond it are wall: survivors may not cut a
+ * corner, so nobody could ever walk through it, and the gate model (a straight panel)
+ * left the other run open beside it.
+ */
+function passesThrough(sim: Simulation, cx: number, cy: number): boolean {
+  const g = sim.grid;
+  const open = (x: number, y: number) => {
+    if (!g.inBounds(x, y)) return false;
+    const i = g.index(x, y);
+    const e = sim.state.entities.get(g.structureAt[i]);
+    // A blueprint has not changed the grid yet, but it will.
+    if (e?.structure) return e.structure.kind === "gate" || e.structure.kind === "farm";
+    return g.kind[i] === CellKind.Gate || isWalkableKind(g.kind[i]);
+  };
+  return (open(cx - 1, cy) && open(cx + 1, cy)) || (open(cx, cy - 1) && open(cx, cy + 1));
 }
 
 /** The blueprint waiting to take a wall's place, or -1. */
@@ -274,26 +297,51 @@ export function nominalStretch(yaw: number): number {
   return 1 / Math.max(Math.abs(Math.cos(yaw)), Math.abs(Math.sin(yaw)));
 }
 
+/** True for a frame along a grid axis. */
+function onAxis(f: LineFrame): boolean {
+  return Math.abs(Math.sin(2 * f.yaw)) < 1e-6;
+}
+
 /**
- * Closes the corner where a newly drawn slanted line meets a piece already standing in
- * one of its cells (an end, or a crossing). The new line cannot place a piece there (the cell is taken), so its first
- * panel stopped half a step short of the corner and the old panel ran half a step past
- * it. The new panel is lengthened back to the corner cell's centre; the old one, when it
- * is the free end of its own slanted run, is cut to end there too.
+ * The frame a piece is drawn with along its run. A piece of a run along a grid axis
+ * carries none (the renderer reads its neighbours); this gives it the axis it runs on,
+ * or null for a lone piece or a junction pier.
+ */
+function runFrame(sim: Simulation, e: Entity): LineFrame | null {
+  const s = e.structure!;
+  if (s.line) return s.line;
+  const alongX = !!axialAt(sim, s.cx + 1, s.cy) || !!axialAt(sim, s.cx - 1, s.cy);
+  const alongZ = !!axialAt(sim, s.cx, s.cy + 1) || !!axialAt(sim, s.cx, s.cy - 1);
+  if (alongX === alongZ) return null;
+  return { yaw: alongZ ? Math.PI / 2 : 0, stretch: 1, ox: 0, oy: 0 };
+}
+
+/**
+ * Closes the corner where a newly drawn line meets a piece already standing in one of
+ * its cells (an end, or a crossing), when one of the two runs is slanted. The new line
+ * cannot place a piece there (the cell is taken), so its first panel stopped half a step
+ * short of the corner and the old panel ran half a step past it. The new panel is
+ * lengthened back to the corner cell's centre; the old one, when it is the free end of
+ * its own run, is cut to end there too. Two runs along the grid axes meet in a junction
+ * pier instead, which fills the whole cell.
  */
 export function joinCorner(sim: Simulation, corner: [number, number], piece: Entity): void {
   const at = axialAt(sim, corner[0], corner[1]);
-  const line = piece.structure!.line;
+  if (!at || at.id === piece.id) return;
+  const line = runFrame(sim, piece);
   // Already lengthened once (a taken cell on each side): leave it.
-  if (!at || !line || at.id === piece.id || Math.abs(line.stretch - nominalStretch(line.yaw)) > 1e-6) return;
+  if (!line || Math.abs(line.stretch - nominalStretch(line.yaw)) > 1e-6) return;
+  const oldFrame = runFrame(sim, at);
+  if (onAxis(line) && (!oldFrame || onAxis(oldFrame))) return;
   const s = piece.structure!;
+  s.line = line;
   // From the new piece's point on its line to the corner cell's centre: one step.
   const dx = corner[0] - (s.cx + line.ox);
   const dy = corner[1] - (s.cy + line.oy);
   line.ox += dx / 4;
   line.oy += dy / 4;
   line.stretch *= 1.5;
-  const old = at.structure!.line;
+  const old = oldFrame;
   if (!old || Math.abs(old.stretch - nominalStretch(old.yaw)) > 1e-6 || Math.abs(Math.sin(old.yaw - line.yaw)) < 1e-3) return;
   // The run the old piece belongs to: exactly one neighbour at its angle means it is an end.
   const os = at.structure!;
@@ -303,12 +351,14 @@ export function joinCorner(sim: Simulation, corner: [number, number], piece: Ent
     for (let nx = -1; nx <= 1; nx++) {
       if (!nx && !ny) continue;
       const n = axialAt(sim, os.cx + nx, os.cy + ny);
-      if (!n || n.id === piece.id || !n.structure!.line || Math.abs(Math.sin(n.structure!.line.yaw - old.yaw)) > 1e-3) continue;
+      if (!n || n.id === piece.id) continue;
+      const nf = runFrame(sim, n);
+      if (!nf || Math.abs(Math.sin(nf.yaw - old.yaw)) > 1e-3) continue;
       run = n;
       count++;
     }
   if (count !== 1 || !run) return;
-  const rl = run.structure!.line!;
+  const rl = runFrame(sim, run)!;
   const tx = run.structure!.cx + rl.ox - (os.cx + old.ox);
   const ty = run.structure!.cy + rl.oy - (os.cy + old.oy);
   const len = Math.hypot(tx, ty);
@@ -317,4 +367,5 @@ export function joinCorner(sim: Simulation, corner: [number, number], piece: Ent
   old.ox += ((tx / len) * old.stretch) / 4;
   old.oy += ((ty / len) * old.stretch) / 4;
   old.stretch *= 0.5;
+  os.line = old;
 }

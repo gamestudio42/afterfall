@@ -221,7 +221,7 @@ describe("monuments", () => {
     expect(east - west).toBeGreaterThan(30 * 0.9);
   });
 
-  it("draw Christ the Redeemer's robe broader at the shoulders than at the feet, head bowed", () => {
+  it("draw Christ the Redeemer's robe broader at the shoulders than at the feet, head bowed, hands full size", () => {
     const city = { monuments: [{ id: "c", x: 0, y: 0, kind: "open-arms", height: 30, pedestal: 8 }] } as unknown as CityMap;
     const p = buildMonuments(city)!.geometry.getAttribute("position");
     const across = (y0: number, y1: number) => {
@@ -249,6 +249,13 @@ describe("monuments", () => {
       back = Math.min(back, p.getZ(i));
     }
     expect(front + back).toBeGreaterThan(0.5);
+    // 28 m from hand to hand, and each hand a tenth of the figure, not a stub at the cuff.
+    const reach = across(0.7, 0.9).w;
+    expect(reach * 2).toBeGreaterThan(27);
+    expect(reach * 2).toBeLessThan(30);
+    // The sleeve ends where its hem hangs; past it only the hand.
+    const cuff = across(0.6, 0.745).w;
+    expect(reach - cuff).toBeGreaterThan(2.5);
   });
 
   it("is nothing on a map without them", () => {

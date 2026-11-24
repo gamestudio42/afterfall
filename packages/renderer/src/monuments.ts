@@ -319,8 +319,11 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
   // The feet under the hem.
   for (const s of [-1, 1]) ellipsoid(out, P, [s * 0.032, 0.008, 0.07], [0.022, 0.011, 0.034], 0, c);
 
-  // The arms and their sleeves, each one surface from inside the shoulder to the cuff.
+  // The arms and their sleeves, each one surface from inside the shoulder to the cuff, drawn
+  // a little shorter than their profile so the hands end 28 m apart as on the real statue.
   const RING = 32;
+  const REACH = 0.88;
+  const WRIST = 0.1 + (0.425 - 0.1) * REACH;
   for (const s of [-1, 1]) {
     const arm: V3[][] = [];
     const STEPS = 44;
@@ -348,7 +351,7 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
           z += 0.003 * t * t * Math.sin(x * 45);
           y += 0.002 * t * t * Math.cos(x * 38);
         }
-        row.push(P(s * x, y, z));
+        row.push(P(s * (0.1 + (x - 0.1) * REACH), y, z));
       }
       arm.push(row);
     }
@@ -356,11 +359,21 @@ function christ(out: Sink, m: MonumentDef, base: number, yaw: number, c: THREE.C
     const cuff = arm[arm.length - 1];
     const mid = cuff.reduce((m, p) => [m[0] + p[0] / RING, m[1] + p[1] / RING, m[2] + p[2] / RING], [0, 0, 0] as V3);
     arm.push(cuff.map(() => mid));
-    surface(out, arm, true, c, P(s * 0.3, armY(0.3), 0));
-    // The open hand, its fingers a little raised, and the thumb.
+    surface(out, arm, true, c, P(s * (0.1 + 0.2 * REACH), armY(0.3), 0));
+    // The open hand, palm forward, about a ninth of the figure from wrist to fingertip as on
+    // the real statue: a broad palm, four fingers held together and a little raised, the thumb up.
     const hy = armY(0.45);
-    ellipsoid(out, P, [s * 0.448, hy, 0.002], [0.03, 0.019, 0.008], s * 0.18, c);
-    ellipsoid(out, P, [s * 0.437, hy + 0.017, 0.006], [0.006, 0.013, 0.006], s * -0.4, c);
+    ellipsoid(out, P, [s * (WRIST + 0.03), hy + 0.001, 0.003], [0.036, 0.024, 0.0095], s * 0.06, c);
+    for (const [dy, len] of [
+      [0.0145, 0.025],
+      [0.005, 0.029],
+      [-0.0045, 0.028],
+      [-0.0135, 0.023],
+    ]) {
+      const fx = WRIST + 0.043 + len * 0.95;
+      ellipsoid(out, P, [s * fx, hy + dy + 0.002, 0.002], [len, 0.0062, 0.0068], s * 0.08, c);
+    }
+    ellipsoid(out, P, [s * (WRIST + 0.027), hy + 0.024, 0.009], [0.008, 0.017, 0.0075], s * -0.6, c);
   }
 
   // The head on its neck, bowed forward from the neck, hair falling to the jaw.

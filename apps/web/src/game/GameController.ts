@@ -12,7 +12,7 @@ import {
   type Command,
   type EntityId,
 } from "@afterfall/core";
-import { generateVariedCity, type CityMap } from "@afterfall/world";
+import { generateVariedCity, type CityMap, type CitySize } from "@afterfall/world";
 import { GameRenderer, type PostMode, type QualityMode } from "@afterfall/renderer";
 import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
@@ -100,12 +100,12 @@ export class GameController {
    * in a valley, a river with its bridges. The classic grid is still there for a player
    * who wants it, and for the browser tests, which place things by its blocks.
    */
-  newGame(seed: number, map?: CityMap, style: "varied" | "classic" = "varied"): void {
+  newGame(seed: number, map?: CityMap, style: "varied" | "classic" = "varied", size: CitySize = "medium"): void {
     if (!map && style === "classic") {
       this.attach(new Simulation({ seed }));
       return;
     }
-    const city = map ?? generateVariedCity(seed);
+    const city = map ?? generateVariedCity(seed, { size });
     this.attach(new Simulation({ seed: city.seed, map: city }));
   }
 

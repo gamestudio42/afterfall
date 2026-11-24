@@ -6,13 +6,31 @@ import { useGame, useT } from "../app/hooks";
 import { useUi } from "../app/store";
 import { HelpContent } from "../components/Help";
 import { RealPlacePicker } from "../components/RealPlacePicker";
-import type { CityMap } from "@afterfall/world";
+import { CITY_SIZES, type CityMap, type CitySize } from "@afterfall/world";
 
 type View = "main" | "new" | "load" | "help";
 type CityStyle = "varied" | "classic";
 
-/** The street plan the player last chose for a generated city, remembered per browser. */
+/** The street plan and size the player last chose for a generated city, remembered per browser. */
 const STYLE_KEY = "afterfall.cityStyle";
+const SIZE_KEY = "afterfall.citySize";
+
+function readSize(): CitySize {
+  try {
+    const v = localStorage.getItem(SIZE_KEY);
+    return v && v in CITY_SIZES ? (v as CitySize) : "medium";
+  } catch {
+    return "medium";
+  }
+}
+
+function remember(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Private window or blocked storage: the choice just is not remembered.
+  }
+}
 
 function readStyle(): CityStyle {
   try {
@@ -40,15 +58,16 @@ export function MainMenu() {
   const [style, setStyleState] = useState<CityStyle>(readStyle);
   const setStyle = (next: CityStyle) => {
     setStyleState(next);
-    try {
-      localStorage.setItem(STYLE_KEY, next);
-    } catch {
-      // Private window or blocked storage: the choice just is not remembered.
-    }
+    remember(STYLE_KEY, next);
+  };
+  const [size, setSizeState] = useState<CitySize>(readSize);
+  const setSize = (next: CitySize) => {
+    setSizeState(next);
+    remember(SIZE_KEY, next);
   };
 
   const start = () => {
-    game.newGame(Number(seed) || 1, undefined, style);
+    game.newGame(Number(seed) || 1, undefined, style, size);
     set({ screen: "game", showHelp: true });
   };
 
@@ -164,6 +183,18 @@ export function MainMenu() {
                 </button>
               </div>
             </div>
+            {style === "varied" && (
+              <div className="field">
+                <span>{t("menu.citySize")}</span>
+                <div className="row">
+                  {(Object.keys(CITY_SIZES) as CitySize[]).map((k) => (
+                    <button key={k} className={size === k ? "chip active" : "chip"} onClick={() => setSize(k)} data-testid={`size-${k}`}>
+                      {t(`menu.size.${k}`, { m: CITY_SIZES[k] })}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <label className="field">
               <span>{t("menu.seed")}</span>
               <div className="row">

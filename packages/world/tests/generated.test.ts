@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { distToPolyline } from "@afterfall/shared";
-import { CellKind, NavGrid, generateVariedCity, isWalkableKind, type CityMap } from "../src";
+import { CITY_SIZES, CellKind, NavGrid, generateVariedCity, isWalkableKind, type CityMap, type CitySize } from "../src";
 
 /** Cells reachable on foot from a point. */
 function flood(g: NavGrid, x: number, y: number): Uint8Array {
@@ -63,6 +63,23 @@ describe("the varied generated city", () => {
       for (const b of m.buildings) expect(reach[g.cellOf(b.entrance.x, b.entrance.y)], `seed ${seed} ${b.id}`).toBe(1);
       m.buildings.forEach((b, i) => expect(b.index).toBe(i));
     }
+  });
+
+  it("comes in four sizes, up to 800 m across, never larger than asked for", () => {
+    for (const size of Object.keys(CITY_SIZES) as CitySize[]) {
+      const side = CITY_SIZES[size];
+      for (let seed = 1; seed <= 6; seed++) {
+        const m = generateVariedCity(seed, { size });
+        expect(m.width, `${size} seed ${seed}`).toBeLessThanOrEqual(side);
+        expect(m.width).toBeGreaterThan(side * 0.85);
+        expect(m.height).toBeGreaterThan(side * 0.65);
+        const g = NavGrid.fromCity(m);
+        const reach = flood(g, m.spawnPoints[0].x, m.spawnPoints[0].y);
+        for (const b of m.buildings) expect(reach[g.cellOf(b.entrance.x, b.entrance.y)], `${size} seed ${seed} ${b.id}`).toBe(1);
+      }
+    }
+    // More city, not the same city stretched: the huge one has several times the buildings.
+    expect(generateVariedCity(5, { size: "huge" }).buildings.length).toBeGreaterThan(generateVariedCity(5).buildings.length * 2.5);
   });
 
   it("puts a river in a valley that only its bridges cross", () => {

@@ -25,7 +25,14 @@ export type Layout = "grid" | "river";
 /** Metres between relief nodes, as on an imported map. */
 const RELIEF_CELL = 4;
 const CELL = 2;
-/** Fewest buildings a generated map may have, and the kinds it must have. */
+/**
+ * The sizes a player can ask for: about how many metres the map runs across. The biggest
+ * real place loads at 600 m; 800 m is a generated city's own, about 3.5 times the area of
+ * the 420 by 352 m classic grid.
+ */
+export const CITY_SIZES = { small: 350, medium: 450, large: 600, huge: 800 } as const;
+export type CitySize = keyof typeof CITY_SIZES;
+/** Fewest buildings a medium map may have (scaled by area for the others), and the kinds it must have. */
 const MIN_BUILDINGS = 40;
 /** Half the widest escarpment face, and 3 m more. */
 const SCARP_CLEAR = 11;
@@ -36,6 +43,8 @@ const NAME_SUFFIXES = ["Esperança", "Cinzento", "Aurora", "Ferro", "Silêncio",
 export interface VariedOptions {
   /** Force a site, for tests and screenshots. */
   site?: Site;
+  /** How big a city to lay out; medium when absent. */
+  size?: CitySize;
 }
 
 export function generateVariedCity(seed: number, opts: VariedOptions = {}): CityMap {
@@ -60,16 +69,27 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
   const site: Site = opts.site ?? rng.weighted<Site>({ hills: 30, valley: 30, escarpment: 20, rolling: 20 });
   const layout: Layout = site === "valley" ? "river" : "grid";
 
-  // Blocks of uneven sizes between streets of two widths, one of them an avenue.
-  const cols = rng.int(5, 7);
-  const rows = rng.int(4, 6);
+  // Blocks of uneven sizes between streets of two widths, an avenue every few blocks. The
+  // map is a little wider than it is tall and never larger than the size asked for: the
+  // blocks are drawn at random, then scaled together to fill it.
+  const size = CITY_SIZES[opts.size ?? "medium"];
+  const k = size / CITY_SIZES.medium;
   const snap = (v: number) => Math.round(v / CELL) * CELL;
-  const blockW = Array.from({ length: cols }, () => snap(rng.range(40, 72)));
-  const blockH = Array.from({ length: rows }, () => snap(rng.range(40, 66)));
+  const wantW = size * rng.range(0.88, 1);
+  const wantH = size * rng.range(0.72, 0.95);
+  const cols = Math.max(4, Math.round(wantW / 67));
+  const rows = Math.max(4, Math.round(wantH / 64));
   const roadW = Array.from({ length: cols + 1 }, () => 10);
   const roadH = Array.from({ length: rows + 1 }, () => 10);
-  roadW[rng.int(1, cols - 1)] = 16;
-  roadH[rng.int(1, rows - 1)] = 16;
+  for (let a = 0; a < Math.max(1, Math.round(cols / 6)); a++) roadW[rng.int(1, cols - 1)] = 16;
+  for (let a = 0; a < Math.max(1, Math.round(rows / 6)); a++) roadH[rng.int(1, rows - 1)] = 16;
+  const fill = (n: number, lo: number, hi: number, total: number) => {
+    const raw = Array.from({ length: n }, () => rng.range(lo, hi));
+    const sum = raw.reduce((x, y) => x + y, 0);
+    return raw.map((v) => Math.max(36, Math.min(80, snap((v * total) / sum))));
+  };
+  const blockW = fill(cols, 40, 72, wantW - roadW.reduce((x, y) => x + y, 0));
+  const blockH = fill(rows, 40, 66, wantH - roadH.reduce((x, y) => x + y, 0));
   const xs: number[] = [];
   const ys: number[] = [];
   let x = 0;
@@ -94,7 +114,7 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
     riverW = snap(rng.range(18, 26));
     const x0 = width * rng.range(0.4, 0.6);
     const amp = rng.range(14, 32);
-    const wave = rng.range(220, 340);
+    const wave = rng.range(220, 340) * Math.sqrt(k);
     const phase = rng.range(0, Math.PI * 2);
     river = [];
     for (let py = -20; py <= height + 20; py += 12) {
@@ -107,12 +127,12 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
   // Superblocks: a few interior cross streets between two blocks are left out.
   const cut = new Set<string>();
   if (layout === "grid") {
-    const n = rng.int(1, 3);
-    for (let k = 0; k < n; k++) cut.add(`${rng.int(1, cols - 1)}:${rng.int(0, rows - 1)}`);
+    const n = rng.int(1, Math.max(3, Math.round((cols * rows) / 10)));
+    for (let c = 0; c < n; c++) cut.add(`${rng.int(1, cols - 1)}:${rng.int(0, rows - 1)}`);
   }
 
   // The relief.
-  const relief = makeRelief(rng, site, width, height, riverDist);
+  const relief = makeRelief(rng, site, width, height, riverDist, k);
   // On an escarpment, the band too steep to build on.
   const scarp = relief.scarp;
 
@@ -123,8 +143,8 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
   const bridgeRows = new Set<number>();
   if (river) {
     const interior = rng.shuffle(Array.from({ length: rows + 1 }, (_, j) => j).filter((j) => j > 0 && j < rows));
-    const n = Math.min(interior.length, rng.int(1, 3));
-    for (let k = 0; k < n; k++) bridgeRows.add(interior[k]);
+    const n = Math.min(interior.length, rng.int(1, Math.max(3, Math.round(rows / 3))));
+    for (let b = 0; b < n; b++) bridgeRows.add(interior[b]);
   }
   const bank = 3;
   const addRoad = (id: string, a: Vec2, b: Vec2, w: number, bridged: boolean) => {
@@ -393,7 +413,7 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
     b.id = `g${i}`;
   });
   map.buildings = buildings;
-  if (buildings.length < MIN_BUILDINGS) return null;
+  if (buildings.length < Math.round(MIN_BUILDINGS * Math.min(1, k * k))) return null;
   for (const type of ESSENTIAL) if (!buildings.some((b) => b.type === type)) return null;
   return map;
 }
@@ -516,7 +536,8 @@ function fbm(seed: number, wave: number, amp: number): (x: number, y: number) =>
   };
 }
 
-function makeRelief(rng: Rng, site: Site, width: number, height: number, riverDist: (x: number, y: number) => number): Relief {
+/** `k` is the map's size against a medium one: hills and valleys grow with it. */
+function makeRelief(rng: Rng, site: Site, width: number, height: number, riverDist: (x: number, y: number) => number, k: number): Relief {
   const noiseSeed = Math.floor(rng.next() * 2 ** 31);
   let field: (x: number, y: number) => number;
   let scarp: ((x: number, y: number) => number) | undefined;
@@ -524,12 +545,12 @@ function makeRelief(rng: Rng, site: Site, width: number, height: number, riverDi
     case "hills": {
       // One or two round hills, off the centre, with rolling ground between them. The
       // steepest flank stays under a grade of 0.3: built on, climbed slowly.
-      const n = rng.int(1, 2);
+      const n = rng.int(1, k > 1.2 ? 3 : 2);
       const hills = Array.from({ length: n }, () => ({
         x: width * rng.range(0.2, 0.8),
         y: height * rng.range(0.2, 0.8),
         h: rng.range(16, 28),
-        s: rng.range(70, 105),
+        s: rng.range(70, 105) * Math.sqrt(k),
       }));
       const roll = fbm(noiseSeed, 110, 3);
       field = (x, y) =>
@@ -555,7 +576,7 @@ function makeRelief(rng: Rng, site: Site, width: number, height: number, riverDi
     case "valley": {
       // A river on a flat floor between slopes that rise away from it on both sides.
       const rise = rng.range(12, 22);
-      const reach = rng.range(110, 160);
+      const reach = rng.range(110, 160) * Math.sqrt(k);
       const roll = fbm(noiseSeed, 100, 3);
       field = (x, y) => {
         const d = riverDist(x, y);

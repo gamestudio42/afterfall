@@ -9,6 +9,18 @@ import { RealPlacePicker } from "../components/RealPlacePicker";
 import type { CityMap } from "@afterfall/world";
 
 type View = "main" | "new" | "load" | "help";
+type CityStyle = "varied" | "classic";
+
+/** The street plan the player last chose for a generated city, remembered per browser. */
+const STYLE_KEY = "afterfall.cityStyle";
+
+function readStyle(): CityStyle {
+  try {
+    return localStorage.getItem(STYLE_KEY) === "classic" ? "classic" : "varied";
+  } catch {
+    return "varied";
+  }
+}
 
 export function MainMenu() {
   const t = useT();
@@ -25,9 +37,18 @@ export function MainMenu() {
   }, [view]);
 
   const [mapKind, setMapKind] = useState<"procedural" | "real">("procedural");
+  const [style, setStyleState] = useState<CityStyle>(readStyle);
+  const setStyle = (next: CityStyle) => {
+    setStyleState(next);
+    try {
+      localStorage.setItem(STYLE_KEY, next);
+    } catch {
+      // Private window or blocked storage: the choice just is not remembered.
+    }
+  };
 
   const start = () => {
-    game.newGame(Number(seed) || 1);
+    game.newGame(Number(seed) || 1, undefined, style);
     set({ screen: "game", showHelp: true });
   };
 
@@ -124,6 +145,25 @@ export function MainMenu() {
         )}
         {view === "new" && mapKind === "procedural" && (
           <div className="menu-buttons">
+            <div className="field">
+              <span>{t("menu.cityStyle")}</span>
+              <div className="row">
+                <button
+                  className={style === "varied" ? "chip active" : "chip"}
+                  onClick={() => setStyle("varied")}
+                  data-testid="style-varied"
+                >
+                  {t("menu.styleVaried")}
+                </button>
+                <button
+                  className={style === "classic" ? "chip active" : "chip"}
+                  onClick={() => setStyle("classic")}
+                  data-testid="style-classic"
+                >
+                  {t("menu.styleClassic")}
+                </button>
+              </div>
+            </div>
             <label className="field">
               <span>{t("menu.seed")}</span>
               <div className="row">

@@ -12,7 +12,7 @@ import {
   type Command,
   type EntityId,
 } from "@afterfall/core";
-import type { CityMap } from "@afterfall/world";
+import { generateVariedCity, type CityMap } from "@afterfall/world";
 import { GameRenderer, type PostMode, type QualityMode } from "@afterfall/renderer";
 import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
@@ -94,9 +94,19 @@ export class GameController {
   // Lifecycle
   // -------------------------------------------------------------------
 
-  /** Starts a game on a generated city, or on an imported real map when one is given. */
-  newGame(seed: number, map?: CityMap): void {
-    this.attach(new Simulation({ seed: map?.seed ?? seed, map }));
+  /**
+   * Starts a game on a generated city, or on an imported real map when one is given. A
+   * generated city is drawn by the varied generator: relief, an uneven street plan and,
+   * in a valley, a river with its bridges. The classic grid is still there for a player
+   * who wants it, and for the browser tests, which place things by its blocks.
+   */
+  newGame(seed: number, map?: CityMap, style: "varied" | "classic" = "varied"): void {
+    if (!map && style === "classic") {
+      this.attach(new Simulation({ seed }));
+      return;
+    }
+    const city = map ?? generateVariedCity(seed);
+    this.attach(new Simulation({ seed: city.seed, map: city }));
   }
 
   load(data: string): void {

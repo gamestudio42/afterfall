@@ -171,6 +171,12 @@ export interface CityMap {
   spawnPoints: Vec2[];
   /** Set for imported maps; absent for procedural ones. */
   source?: MapSource;
+  /**
+   * Set for a city drawn by the varied generator (generated.ts): the site and street plan
+   * it was given. Such a map is kept whole in saves, like an imported one, because the
+   * classic generator is what a seed alone rebuilds.
+   */
+  generated?: { site: string; layout: string };
 }
 
 export interface CityOptions {

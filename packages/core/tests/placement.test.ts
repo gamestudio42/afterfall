@@ -6,6 +6,7 @@ import { createSimulation, deserialize, serialize, type Simulation } from "../sr
 import { destroyStructure } from "../src/systems/infected";
 import { foldYaw, placementAt, placementYaw, structureCells } from "../src/systems/placement";
 import { cancelTask, finishStructure, placeStructures, taskSystem } from "../src/systems/tasks";
+import { movementSystem } from "../src/systems/movement";
 import { pickBase } from "./autoplay";
 
 function started(seed = 3): Simulation {
@@ -541,6 +542,43 @@ describe("where a gate opens", () => {
     const crawl = path("infected");
     // The infected go round the end of the wall, if at all.
     if (crawl) expect(crawl.expanded).toBeGreaterThan(walk.expanded);
+  });
+});
+
+describe("a diagonal wall holds a crowd", () => {
+  it("no infected squeezes between two cells of it that touch only at a corner", () => {
+    const sim = started();
+    const [x, y] = freeSpot(sim, 22, 22);
+    const pts: [number, number][] = [
+      [x + 11, y + 1],
+      [x + 21, y + 11],
+      [x + 11, y + 21],
+      [x + 1, y + 11],
+    ];
+    pts.forEach((p, i) => placeStructures(sim, "wall", lineCells(p, pts[(i + 1) % 4])));
+    finishAll(sim);
+    const g = sim.grid;
+    const tx = (x + 11.5) * g.cell;
+    const ty = (y + 11.5) * g.cell;
+    // A crowd all round, each walking straight at the middle of the diamond.
+    const crowd = Array.from({ length: 80 }, (_, k) => {
+      const a = (k / 80) * Math.PI * 2;
+      return sim.spawnInfected("walker", tx + Math.cos(a) * 30, ty + Math.sin(a) * 30, -1);
+    });
+    const inside = (e: (typeof crowd)[number]) => {
+      const dx = Math.abs(e.transform!.x / g.cell - (x + 11.5));
+      const dy = Math.abs(e.transform!.y / g.cell - (y + 11.5));
+      return dx + dy < 9;
+    };
+    let through = 0;
+    for (let t = 0; t < 900; t++) {
+      for (const e of crowd) e.mover!.path = [{ x: tx, y: ty }];
+      (sim as unknown as { rebuildHashes(): void }).rebuildHashes();
+      movementSystem(sim);
+      through = Math.max(through, crowd.filter(inside).length);
+    }
+    // Checking only where a step ended let most of them through, at every step of the stair.
+    expect(through).toBe(0);
   });
 });
 

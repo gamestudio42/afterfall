@@ -66,7 +66,7 @@ export function movementSystem(sim: Simulation): void {
       const dy = target.y - t.y;
       const d = Math.hypot(dx, dy);
       if (d <= Math.max(ARRIVE_EPS, budget)) {
-        if (sim.grid.passable(target.x, target.y, agent) || !sim.grid.passable(t.x, t.y, agent)) {
+        if (canStep(sim, t.x, t.y, target.x, target.y, agent) || !sim.grid.passable(t.x, t.y, agent)) {
           t.x = target.x;
           t.y = target.y;
         }
@@ -78,11 +78,11 @@ export function movementSystem(sim: Simulation): void {
       const nx = t.x + (dx / d) * budget;
       const ny = t.y + (dy / d) * budget;
       t.heading = Math.atan2(dy, dx);
-      if (sim.grid.passable(nx, ny, agent)) {
+      if (canStep(sim, t.x, t.y, nx, ny, agent)) {
         t.x = nx;
         t.y = ny;
-      } else if (sim.grid.passable(nx, t.y, agent)) t.x = nx;
-      else if (sim.grid.passable(t.x, ny, agent)) t.y = ny;
+      } else if (canStep(sim, t.x, t.y, nx, t.y, agent)) t.x = nx;
+      else if (canStep(sim, t.x, t.y, t.x, ny, agent)) t.y = ny;
       budget = 0;
     }
     // Stuck detection: replan if no real progress for a while.
@@ -169,8 +169,26 @@ function separate(sim: Simulation, e: Entity): void {
   if (px === 0 && py === 0) return;
   const nx = t.x + px;
   const ny = t.y + py;
-  if (sim.grid.passable(nx, ny, agent)) {
+  if (canStep(sim, t.x, t.y, nx, ny, agent)) {
     t.x = nx;
     t.y = ny;
   }
+}
+
+/**
+ * Whether a body may move from one point to another, at most a cell away. The end has to
+ * be walkable, and a step into a diagonal cell may not cut its corner: a diagonal wall is
+ * a staircase of cells that touch only at their corners, and checking the end alone let a
+ * crowd pressed against one squeeze through at every step of it.
+ */
+export function canStep(sim: Simulation, x0: number, y0: number, x1: number, y1: number, agent: "survivor" | "infected"): boolean {
+  const g = sim.grid;
+  if (!g.passable(x1, y1, agent)) return false;
+  const c = g.cell;
+  const ax = Math.floor(x0 / c);
+  const ay = Math.floor(y0 / c);
+  const bx = Math.floor(x1 / c);
+  const by = Math.floor(y1 / c);
+  if (ax === bx || ay === by) return true;
+  return g.passable((bx + 0.5) * c, (ay + 0.5) * c, agent) && g.passable((ax + 0.5) * c, (by + 0.5) * c, agent);
 }

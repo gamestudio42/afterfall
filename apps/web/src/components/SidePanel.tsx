@@ -1,24 +1,43 @@
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { BALANCE, BUILDING_FUNCTIONS, BUILDING_TYPES, STRUCTURES, bagTotal, type BuildingFunction } from "@afterfall/content";
 import { outstanding, type Entity, type Simulation, type Stance } from "@afterfall/core";
 import { useFrame, useGame, useT } from "../app/hooks";
+import { PORTRAIT_LAYOUT, useMedia } from "../app/media";
 import { useUi } from "../app/store";
 import { Bag, Meter, Row } from "./common";
 
 export function SidePanel() {
   useFrame();
+  const t = useT();
   const game = useGame();
   const sim = game.sim!;
   const units = useUi((s) => s.selectedUnits);
   const building = useUi((s) => s.selectedBuilding);
   const structure = useUi((s) => s.selectedStructure);
+  const portrait = useMedia(PORTRAIT_LAYOUT);
+  const selectionKey = `${units.join(",")}|${building}|${structure}`;
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  // A new selection starts collapsed, so reading it is a choice and the map stays up.
+  const open = openFor === selectionKey;
   let body: ReactElement | null = null;
   if (units.length > 0) body = <UnitsPanel sim={sim} ids={units} />;
   else if (structure >= 0 && sim.state.entities.has(structure)) body = <StructurePanel sim={sim} id={structure} />;
   else if (building >= 0) body = <BuildingPanel sim={sim} index={building} />;
   if (!body) return null;
+  if (portrait && !open) {
+    return (
+      <button className="panel-tab" data-testid="open-panel" onClick={() => setOpenFor(selectionKey)}>
+        {t("panel.open")}
+      </button>
+    );
+  }
   return (
     <aside className="side-panel" data-testid="side-panel">
+      {portrait && (
+        <button className="chip panel-close" data-testid="close-panel" onClick={() => setOpenFor(null)}>
+          {t("panel.close")}
+        </button>
+      )}
       {body}
     </aside>
   );

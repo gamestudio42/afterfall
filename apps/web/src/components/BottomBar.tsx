@@ -157,8 +157,8 @@ export function BottomBar() {
           {t("bar.tasks")}
         </button>
         <div className="squads">
-          <span className="muted">{t("bar.squads")}</span>
-          {sim.state.squads.length === 0 && <small className="muted">{t("bar.noSquads")}</small>}
+          <span className="muted squad-label">{t("bar.squads")}</span>
+          {sim.state.squads.length === 0 && <small className="muted squad-hint">{t("bar.noSquads")}</small>}
           {sim.state.squads.map((s) => (
             <button
               key={s.id}
@@ -170,7 +170,7 @@ export function BottomBar() {
           ))}
         </div>
         <div className="views">
-          <span className="muted">{t("bar.view")}</span>
+          <span className="muted view-label">{t("bar.view")}</span>
           {(["none", "resources", "danger"] as OverlayMode[]).map((m) => (
             <button
               key={m}

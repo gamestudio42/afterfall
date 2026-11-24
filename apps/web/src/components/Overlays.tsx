@@ -2,6 +2,7 @@ import { EVENTS, RESOURCE_IDS, STRUCTURES, type ResourceBag } from "@afterfall/c
 import { getReport } from "@afterfall/core";
 import { TICKS_PER_GAME_MINUTE } from "@afterfall/shared";
 import { useFrame, useGame, useT } from "../app/hooks";
+import { useTouchUi } from "../app/media";
 import { useUi } from "../app/store";
 import { alertKey } from "../i18n";
 import { Bag } from "./common";
@@ -106,6 +107,7 @@ export function Banner() {
   useFrame();
   const t = useT();
   const game = useGame();
+  const touch = useTouchUi();
   const buildMode = useUi((s) => s.buildMode);
   const speed = useUi((s) => s.speed);
   const sim = game.sim!;
@@ -131,6 +133,22 @@ export function Banner() {
         <small data-testid="build-rotate">
           {t("banner.buildRotate")} · {t(info?.manual ? "banner.angleManual" : "banner.angleAuto")}
         </small>
+        {touch && (
+          <div className="banner-touch">
+            <button data-testid="touch-turn-left" onClick={() => game.turnBuild(-1)}>
+              {t("banner.turnLeft")}
+            </button>
+            <button data-testid="touch-turn-right" onClick={() => game.turnBuild(1)}>
+              {t("banner.turnRight")}
+            </button>
+            <button data-testid="touch-align" onClick={() => game.alignBuild()}>
+              {t("banner.align")}
+            </button>
+            <button data-testid="touch-cancel-build" onClick={() => game.cancelBuild()}>
+              {t("banner.cancelBuild")}
+            </button>
+          </div>
+        )}
         <div data-testid="build-cost" className={`banner-cost ${short ? "short" : ""}`}>
           <small>{t("banner.buildCount", { count })}</small>
           <Bag bag={cost} />

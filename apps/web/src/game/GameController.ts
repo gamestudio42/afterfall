@@ -19,6 +19,7 @@ import { putSave } from "../app/saves";
 import { useUi, type Speed } from "../app/store";
 import { translate } from "../i18n";
 import { AudioDirector, type DirectorStats } from "@afterfall/audio";
+import { LONG_PRESS_MS, TAP_SLOP, grabPan, pinchFactor, twistDelta } from "./touch";
 
 /** One press of R turns a single wall or gate by this much. */
 const ROTATE_STEP = Math.PI / 12;
@@ -46,6 +47,16 @@ export class GameController {
   /** What the build banner shows: how many pieces the preview holds and how they are turned. */
   buildInfo: { count: number; capped: boolean; manual: boolean; steep?: boolean } | null = null;
   private rightDown: { x: number; y: number; rotating: boolean } | null = null;
+  /** Live fingers on the canvas. Mouse and keyboard never write this. */
+  private touchPoints = new Map<number, { x: number; y: number }>();
+  private touchMode: "pending" | "pan" | "build" | "pinch" | "box" = "pending";
+  private touchStart: { x: number; y: number; cell?: [number, number] } = { x: 0, y: 0 };
+  private touchLast = { x: 0, y: 0 };
+  private touchPinch = { dist: 0, angle: 0, midX: 0, midY: 0 };
+  private touchHold = 0;
+  private touchToken = 0;
+  /** Swallows the click a touch synthesizes, so a tap is not also a mouse click. */
+  private ignoreMouse = false;
   private uiTimer = 0;
   private lastDay = 0;
   fps = 60;
@@ -294,7 +305,7 @@ export class GameController {
     if (this.keys.has("d") || this.keys.has("arrowright")) r += speed;
     if (this.keys.has("a") || this.keys.has("arrowleft")) r -= speed;
     const m = this.mouse;
-    if (m.inside && !this.leftDown && !this.rightDown) {
+    if (m.inside && !this.leftDown && !this.rightDown && !this.ignoreMouse) {
       const w = this.canvas.clientWidth;
       const h = this.canvas.clientHeight;
       if (m.x < EDGE) r -= speed;
@@ -320,7 +331,7 @@ export class GameController {
     return [(x / this.canvas.clientWidth) * 2 - 1, -(y / this.canvas.clientHeight) * 2 + 1];
   }
 
-  private local(ev: MouseEvent): { x: number; y: number } {
+  private local(ev: { clientX: number; clientY: number }): { x: number; y: number } {
     const r = this.canvas.getBoundingClientRect();
     return { x: ev.clientX - r.left, y: ev.clientY - r.top };
   }
@@ -355,6 +366,11 @@ export class GameController {
     this.on(window, "keyup", (e) => this.onKey(e, false));
     this.on(window, "blur", () => this.keys.clear());
     this.on(window, "resize", () => this.resize());
+    this.on(c, "touchstart", (e) => this.onTouchStart(e), { passive: false });
+    this.on(c, "touchmove", (e) => this.onTouchMove(e), { passive: false });
+    this.on(c, "touchend", (e) => this.onTouchEnd(e), { passive: false });
+    this.on(c, "touchcancel", (e) => this.onTouchEnd(e), { passive: false });
+    this.disposers.push(() => window.clearTimeout(this.touchHold));
   }
 
   private onKey(e: KeyboardEvent, down: boolean): void {
@@ -377,23 +393,9 @@ export class GameController {
       else ui.set({ selectedUnits: [], selectedBuilding: -1, selectedStructure: -1 });
       this.renderer.buildPreview = null;
     } else if (key === "r" && ui.buildMode && sim) {
-      // Turn the next piece. It starts from the angle the piece would take on its own
-      // (the wall it joins, the street it faces), so one press is a small turn off that,
-      // not a jump back to the grid.
-      const kind = ui.buildMode;
-      const end = this.cellAt(this.mouse.x, this.mouse.y);
-      const base = this.currentYaw(kind, end ? this.buildCells(kind, end)[0] : null);
-      const next = base + (e.shiftKey ? -1 : 1) * ROTATE_STEP;
-      // A panel looks the same half a turn on; a tower, farm or well does not.
-      this.buildYaw = isAxial(kind) ? foldYaw(next) : foldTurn(next);
-      if (this.buildInfo) this.setBuildInfo({ ...this.buildInfo, manual: true });
-      this.updateBuildPreview(kind, this.mouse);
+      this.turnBuild(e.shiftKey ? -1 : 1);
     } else if (key === "t" && ui.buildMode && sim) {
-      // Back to automatic: the piece lines up with the wall it joins or the street again.
-      this.buildYaw = null;
-      // The banner must not wait on the pointer being over a cell to say so.
-      if (this.buildInfo) this.setBuildInfo({ ...this.buildInfo, manual: false });
-      this.updateBuildPreview(ui.buildMode, this.mouse);
+      this.alignBuild();
     } else if (key === "f4") {
       // Bloom and grade: auto follows the driver, and F4 overrides it either way.
       e.preventDefault();
@@ -452,6 +454,7 @@ export class GameController {
   }
 
   private onDown(e: MouseEvent): void {
+    if (this.ignoreMouse) return;
     const p = this.local(e);
     if (e.button === 0) {
       const ui = useUi.getState();
@@ -462,6 +465,7 @@ export class GameController {
   }
 
   private onMove(e: MouseEvent): void {
+    if (this.ignoreMouse) return;
     const p = this.local(e);
     const prev = { ...this.mouse };
     this.mouse = { x: p.x, y: p.y, inside: p.x >= 0 && p.y >= 0 && p.x <= this.canvas.clientWidth && p.y <= this.canvas.clientHeight };
@@ -492,6 +496,7 @@ export class GameController {
   }
 
   private onUp(e: MouseEvent): void {
+    if (this.ignoreMouse) return;
     const p = this.local(e);
     const ui = useUi.getState();
     if (e.button === 2 && this.rightDown) {
@@ -699,6 +704,212 @@ export class GameController {
       // A single wall or gate shows where it will really sit: on the line it joins.
       frame: yaw !== undefined && isAxial(kind) ? previewFrame(this.sim!, cells[0][0], cells[0][1], yaw) : undefined,
     };
+  }
+
+  /** One step of R. Shift is a turn the other way. Touch buttons call this too. */
+  turnBuild(direction: 1 | -1): void {
+    const ui = useUi.getState();
+    if (!ui.buildMode || !this.sim) return;
+    const kind = ui.buildMode;
+    const end = this.cellAt(this.mouse.x, this.mouse.y);
+    const base = this.currentYaw(kind, end ? this.buildCells(kind, end)[0] : null);
+    const next = base + direction * ROTATE_STEP;
+    // A panel looks the same half a turn on; a tower, farm or well does not.
+    this.buildYaw = isAxial(kind) ? foldYaw(next) : foldTurn(next);
+    if (this.buildInfo) this.setBuildInfo({ ...this.buildInfo, manual: true });
+    this.updateBuildPreview(kind, this.mouse);
+  }
+
+  /** Back to automatic: the piece lines up with the wall it joins or the street again. */
+  alignBuild(): void {
+    const ui = useUi.getState();
+    if (!ui.buildMode || !this.sim) return;
+    this.buildYaw = null;
+    if (this.buildInfo) this.setBuildInfo({ ...this.buildInfo, manual: false });
+    this.updateBuildPreview(ui.buildMode, this.mouse);
+  }
+
+  cancelBuild(): void {
+    useUi.getState().set({ buildMode: null });
+    this.buildYaw = null;
+    this.renderer.buildPreview = null;
+  }
+
+  private notePointer(p: { x: number; y: number }): void {
+    // `inside` stays false so a finger at the screen edge does not also edge-scroll.
+    this.mouse = { x: p.x, y: p.y, inside: false };
+  }
+
+  private grabCamera(dx: number, dy: number): void {
+    const cam = this.renderer.rts;
+    const pan = grabPan(dx, dy, cam.distance, cam.camera.fov, this.canvas.clientHeight);
+    cam.pan(pan.right, pan.forward);
+  }
+
+  private rememberPinch(a: { x: number; y: number }, b: { x: number; y: number }): void {
+    this.touchPinch = {
+      dist: Math.hypot(b.x - a.x, b.y - a.y),
+      angle: Math.atan2(b.y - a.y, b.x - a.x),
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
+    };
+  }
+
+  private onTouchStart(e: TouchEvent): void {
+    e.preventDefault();
+    this.ignoreMouse = true;
+    this.touchToken += 1;
+    for (const t of Array.from(e.changedTouches)) this.touchPoints.set(t.identifier, this.local(t));
+    this.beginTouch();
+  }
+
+  private beginTouch(): void {
+    window.clearTimeout(this.touchHold);
+    const pts = [...this.touchPoints.values()];
+    if (pts.length >= 2) {
+      this.touchMode = "pinch";
+      if (useUi.getState().dragRect) useUi.getState().set({ dragRect: null });
+      this.rememberPinch(pts[0], pts[1]);
+      return;
+    }
+    const p = pts[0];
+    if (!p) return;
+    const ui = useUi.getState();
+    this.touchMode = "pending";
+    this.touchStart = {
+      x: p.x,
+      y: p.y,
+      cell: ui.buildMode ? (this.cellAt(p.x, p.y) ?? undefined) : undefined,
+    };
+    this.touchLast = { x: p.x, y: p.y };
+    this.notePointer(p);
+    if (ui.buildMode && ui.screen === "game") this.updateBuildPreview(ui.buildMode, p);
+    else if (ui.screen === "game") {
+      this.touchHold = window.setTimeout(() => {
+        if (this.touchMode === "pending") this.touchMode = "box";
+      }, LONG_PRESS_MS);
+    }
+  }
+
+  private onTouchMove(e: TouchEvent): void {
+    e.preventDefault();
+    for (const t of Array.from(e.changedTouches)) this.touchPoints.set(t.identifier, this.local(t));
+    const pts = [...this.touchPoints.values()];
+    if (pts.length >= 2) {
+      window.clearTimeout(this.touchHold);
+      if (useUi.getState().dragRect) useUi.getState().set({ dragRect: null });
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const angle = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
+      const midX = (pts[0].x + pts[1].x) / 2;
+      const midY = (pts[0].y + pts[1].y) / 2;
+      if (this.touchMode !== "pinch") {
+        this.touchMode = "pinch";
+        this.rememberPinch(pts[0], pts[1]);
+        return;
+      }
+      const cam = this.renderer.rts;
+      cam.zoom(pinchFactor(this.touchPinch.dist, dist));
+      cam.rotate(twistDelta(this.touchPinch.angle, angle));
+      this.grabCamera(midX - this.touchPinch.midX, midY - this.touchPinch.midY);
+      this.touchPinch = { dist, angle, midX, midY };
+      return;
+    }
+    const p = pts[0];
+    if (!p) return;
+    this.notePointer(p);
+    const ui = useUi.getState();
+    const moved = Math.hypot(p.x - this.touchStart.x, p.y - this.touchStart.y);
+    if (ui.buildMode) {
+      if (this.touchMode === "pending" && moved > TAP_SLOP) {
+        window.clearTimeout(this.touchHold);
+        this.touchMode = "build";
+      }
+      if (this.touchMode === "pending" || this.touchMode === "build") this.updateBuildPreview(ui.buildMode, p);
+    } else if (this.touchMode === "box") {
+      ui.set({ dragRect: { x0: this.touchStart.x, y0: this.touchStart.y, x1: p.x, y1: p.y } });
+    } else if (this.touchMode === "pending" && moved > TAP_SLOP) {
+      window.clearTimeout(this.touchHold);
+      this.touchMode = "pan";
+    }
+    if (this.touchMode === "pan") this.grabCamera(p.x - this.touchLast.x, p.y - this.touchLast.y);
+    this.touchLast = p;
+  }
+
+  private onTouchEnd(e: TouchEvent): void {
+    e.preventDefault();
+    const lifted = e.changedTouches.length ? this.local(e.changedTouches[e.changedTouches.length - 1]) : this.touchLast;
+    for (const t of Array.from(e.changedTouches)) this.touchPoints.delete(t.identifier);
+    if (this.touchPoints.size > 0) {
+      // A finger left over keeps panning or pinching. It must not become a tap.
+      window.clearTimeout(this.touchHold);
+      const pts = [...this.touchPoints.values()];
+      if (pts.length >= 2) {
+        this.touchMode = "pinch";
+        this.rememberPinch(pts[0], pts[1]);
+      } else {
+        this.touchMode = "pan";
+        this.touchLast = pts[0];
+      }
+      return;
+    }
+    this.finishTouch(lifted);
+    const token = this.touchToken;
+    window.setTimeout(() => {
+      if (this.touchToken === token) this.ignoreMouse = false;
+    }, 800);
+  }
+
+  private finishTouch(p: { x: number; y: number }): void {
+    window.clearTimeout(this.touchHold);
+    const mode = this.touchMode;
+    this.touchMode = "pending";
+    this.mouse.inside = false;
+    const ui = useUi.getState();
+    if (!this.sim || ui.screen !== "game" || mode === "pan" || mode === "pinch") {
+      if (ui.dragRect) ui.set({ dragRect: null });
+      return;
+    }
+    if (mode === "box") {
+      const rect = ui.dragRect;
+      if (rect && Math.hypot(rect.x1 - rect.x0, rect.y1 - rect.y0) > TAP_SLOP) this.boxSelect(rect, false);
+      else this.touchTap(p.x, p.y, true);
+      if (ui.dragRect) ui.set({ dragRect: null });
+      return;
+    }
+    if (ui.buildMode && (mode === "build" || mode === "pending")) {
+      const moved = Math.hypot(p.x - this.touchStart.x, p.y - this.touchStart.y) > TAP_SLOP;
+      this.placeBuild(ui.buildMode, p, false, moved ? this.touchStart.cell : undefined);
+      return;
+    }
+    this.touchTap(p.x, p.y, false);
+  }
+
+  /** Tap: select. With a selection, a tap on the ground, a building or an infected is the order. */
+  private touchTap(x: number, y: number, add: boolean): void {
+    const ui = useUi.getState();
+    if (ui.buildMode) {
+      this.placeBuild(ui.buildMode, { x, y }, false, undefined);
+      return;
+    }
+    const unit = this.pickUnit(x, y);
+    if (unit >= 0) {
+      if (!add && ui.selectedUnits.length === 1 && ui.selectedUnits[0] === unit) {
+        ui.set({ selectedUnits: [], selectedBuilding: -1, selectedStructure: -1 });
+        return;
+      }
+      this.clickSelect(x, y, add);
+      return;
+    }
+    if (!add && ui.selectedUnits.length > 0) {
+      const structure = this.renderer.pickStructure(...this.ndc(x, y));
+      if (structure >= 0) {
+        ui.set({ selectedStructure: structure, selectedBuilding: -1, selectedUnits: [] });
+        return;
+      }
+      this.issueOrder(x, y);
+      return;
+    }
+    this.clickSelect(x, y, add);
   }
 
   private placeBuild(kind: StructureKind, p: { x: number; y: number }, keep: boolean, start?: [number, number]): void {

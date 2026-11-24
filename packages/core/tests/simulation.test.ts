@@ -391,7 +391,7 @@ describe("a varied generated city in a save", () => {
     autoplay(sim, 0.2);
     const save = serialize(sim, "valley");
     expect(save.mapId).toBe("generated:3");
-    expect(save.map?.generated).toEqual({ site: "valley", layout: "river" });
+    expect(save.map?.generated).toMatchObject({ site: "valley", layout: "river" });
     const back = deserialize(JSON.parse(JSON.stringify(save)));
     expect(back.city.terrain).toEqual(map.terrain);
     expect(back.city.waters).toEqual(map.waters);

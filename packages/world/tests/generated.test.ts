@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { distToPolyline } from "@afterfall/shared";
-import { CITY_SIZES, CellKind, NavGrid, generateVariedCity, isWalkableKind, type CityMap, type CitySize } from "../src";
+import { CITY_SIZES, CellKind, NavGrid, generateVariedCity, heightAt, isWalkableKind, type CityMap, type CitySize } from "../src";
 
 /** Cells reachable on foot from a point. */
 function flood(g: NavGrid, x: number, y: number): Uint8Array {
@@ -82,6 +82,33 @@ describe("the varied generated city", () => {
     expect(generateVariedCity(5, { size: "huge" }).buildings.length).toBeGreaterThan(generateVariedCity(5).buildings.length * 2.5);
   });
 
+  it("lays its streets square to the map, turned, or turned and bent", () => {
+    const shapes = new Set([...maps.values()].map((m) => m.generated!.shape));
+    expect([...shapes].sort()).toEqual(["bent", "square", "turned"]);
+    for (const m of maps.values()) {
+      // How many streets run along neither axis: none on a square plan, most on the others.
+      const slanted = m.roads.filter((r) => {
+        const p = r.path!;
+        const dx = p[p.length - 1].x - p[0].x;
+        const dy = p[p.length - 1].y - p[0].y;
+        return Math.abs(dx) > 2 && Math.abs(dy) > 2;
+      }).length;
+      if (m.generated!.shape === "square") expect(slanted, `seed ${m.seed}`).toBe(0);
+      else expect(slanted / m.roads.length, `seed ${m.seed}`).toBeGreaterThan(0.5);
+      // Turned, a building is the outline of its lot, turned with the street.
+      if (m.generated!.shape !== "square") expect(m.buildings.every((b) => (b.footprint?.length ?? 0) >= 4)).toBe(true);
+    }
+  });
+
+  it("never draws a street up a cliff: a street climbs an escarpment by a ramp", () => {
+    for (const size of ["medium", "large", "huge"] as CitySize[])
+      for (let seed = 1; seed <= 16; seed++) {
+        const m = generateVariedCity(seed, { size });
+        const limit = m.generated!.site === "escarpment" ? 0.35 : 0.5;
+        expect(steepestStreet(m), `${size} seed ${seed} ${m.generated!.site}`).toBeLessThan(limit);
+      }
+  });
+
   it("puts a river in a valley that only its bridges cross", () => {
     const valleys = [...maps.values()].filter((m) => m.generated!.site === "valley");
     expect(valleys.length).toBeGreaterThan(3);
@@ -128,6 +155,25 @@ describe("the varied generated city", () => {
     }
   });
 });
+
+/** The steepest grade along any street, sampled every 2 m. */
+function steepestStreet(m: CityMap): number {
+  let worst = 0;
+  for (const r of m.roads) {
+    const p = r.path!;
+    for (let i = 1; i < p.length; i++) {
+      const n = Math.max(1, Math.ceil(Math.hypot(p[i].x - p[i - 1].x, p[i].y - p[i - 1].y) / 2));
+      let prev = p[i - 1];
+      for (let s = 1; s <= n; s++) {
+        const q = { x: p[i - 1].x + ((p[i].x - p[i - 1].x) * s) / n, y: p[i - 1].y + ((p[i].y - p[i - 1].y) * s) / n };
+        const d = Math.hypot(q.x - prev.x, q.y - prev.y) || 1;
+        worst = Math.max(worst, Math.abs(heightAt(m.terrain, q.x, q.y) - heightAt(m.terrain, prev.x, prev.y)) / d);
+        prev = q;
+      }
+    }
+  }
+  return worst;
+}
 
 /** Whether a segment comes within `reach` of a polyline. */
 function crosses(a: { x: number; y: number }, b: { x: number; y: number }, line: { x: number; y: number }[], reach: number): boolean {

@@ -176,7 +176,7 @@ export interface CityMap {
    * it was given. Such a map is kept whole in saves, like an imported one, because the
    * classic generator is what a seed alone rebuilds.
    */
-  generated?: { site: string; layout: string };
+  generated?: { site: string; layout: string; shape?: string };
 }
 
 export interface CityOptions {

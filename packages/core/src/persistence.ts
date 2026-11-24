@@ -35,8 +35,7 @@ function isCityMap(value: unknown): value is CityMap {
     Array.isArray(value.roads) &&
     Array.isArray(value.parks) &&
     Array.isArray(value.spawnPoints) &&
-    isRecord(value.source) &&
-    value.source.kind === "osm"
+    ((isRecord(value.source) && value.source.kind === "osm") || isRecord(value.generated))
   );
 }
 
@@ -55,12 +54,15 @@ export function serialize(sim: Simulation, name = "save"): SaveGame {
     worldSeed: st.seed,
     mapId: sim.city.source
       ? `osm:${sim.city.source.lat.toFixed(5)},${sim.city.source.lon.toFixed(5)},${sim.city.source.size}`
-      : `procedural:${st.seed}`,
+      : sim.city.generated
+        ? `generated:${st.seed}`
+        : `procedural:${st.seed}`,
     simulationTick: st.tick,
     rngState: sim.rng.state,
     // Deep copy so the save does not alias live state.
     worldState: JSON.parse(JSON.stringify(worldState)),
-    ...(sim.city.source ? { map: sim.city } : {}),
+    // A varied generated city is kept whole too: a seed alone rebuilds the classic grid.
+    ...(sim.city.source || sim.city.generated ? { map: sim.city } : {}),
   };
 }
 
@@ -113,7 +115,7 @@ export function validate(save: unknown): save is SaveGame {
   if (!isFiniteNumber(ws.rngState)) return false;
   if (typeof ws.hq !== "number" || !Number.isInteger(ws.hq) || ws.hq < -1 || ws.hq >= ws.buildings.length) return false;
 
-  if (save.mapId.startsWith("osm:")) {
+  if (save.mapId.startsWith("osm:") || save.mapId.startsWith("generated:")) {
     if (!isCityMap(save.map)) return false;
     if (save.map.buildings.length !== ws.buildings.length) return false;
   } else if (save.map !== undefined && !isCityMap(save.map)) {
@@ -129,8 +131,8 @@ export function deserialize(raw: SaveGame | string): Simulation {
   } catch {
     throw new Error("Invalid save file: not valid JSON");
   }
-  if (isRecord(parsed) && typeof parsed.mapId === "string" && parsed.mapId.startsWith("osm:") && parsed.map === undefined) {
-    throw new Error("Invalid save file: imported map is missing");
+  if (isRecord(parsed) && typeof parsed.mapId === "string" && /^(osm|generated):/.test(parsed.mapId) && parsed.map === undefined) {
+    throw new Error("Invalid save file: the map is missing");
   }
   if (!validate(parsed)) throw new Error("Invalid save file");
   const save = migrate(parsed);

@@ -8,3 +8,4 @@ export * from "./osm";
 export * from "./landmarks";
 export * from "./terrain";
 export * from "./climate";
+export * from "./generated";

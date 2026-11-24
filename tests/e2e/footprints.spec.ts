@@ -17,7 +17,7 @@ test("the footprint overlay does not survive a new game", async ({ page }) => {
   });
   const after = await page.evaluate(() => {
     const g = (window as unknown as Win).__afterfall;
-    g.newGame(4242);
+    g.newGame(4242, undefined, "classic");
     const feet = g.renderer.scene.children.filter((o: any) => o.name === "feet");
     const built = g.sim.city.buildings.reduce((s: number, b: any) => s + (b.footprint?.length ?? 4), 0);
     return { overlays: feet.length, verts: feet[0]?.geometry.attributes.position.count ?? 0, expected: built * 2 };

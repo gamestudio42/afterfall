@@ -6,6 +6,12 @@ const executablePath = process.env.PW_CHROMIUM ?? (existsSync("/opt/pw-browsers/
 
 const shared = {
   baseURL: "http://localhost:5273",
+  // The specs place pieces and cameras by the classic grid's blocks: start every
+  // generated city on it, as a player who chose it in the menu would.
+  storageState: {
+    cookies: [],
+    origins: [{ origin: "http://localhost:5273", localStorage: [{ name: "afterfall.cityStyle", value: "classic" }] }],
+  },
   viewport: { width: 1440, height: 900 },
 };
 

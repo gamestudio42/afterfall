@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BALANCE } from "@afterfall/content";
 import { Rng, TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick, lineCells, tickAt } from "@afterfall/shared";
-import { CellKind, cityFromOverpass } from "@afterfall/world";
+import { CellKind, cityFromOverpass, generateVariedCity } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass } from "../../world/tests/fixtures/osm";
 import { destroyStructure, emitNoise, hqPerimeter } from "../src/systems/infected";
 import { SAVE_VERSION, createSimulation, deserialize, getReport, serialize, stateHash, type Simulation } from "../src";
@@ -380,6 +380,25 @@ describe("determinism and persistence", () => {
     const save = serialize(started(), "bad-internals");
     (save.worldState as unknown as { tasks: unknown }).tasks = {};
     expect(() => deserialize(save)).toThrow();
+  });
+});
+
+describe("a varied generated city in a save", () => {
+  it("is kept whole and comes back the same, relief and river included", () => {
+    const map = generateVariedCity(3, { site: "valley" });
+    const sim = createSimulation({ seed: map.seed, map });
+    sim.enqueue({ type: "setBase", building: pickBase(sim) });
+    autoplay(sim, 0.2);
+    const save = serialize(sim, "valley");
+    expect(save.mapId).toBe("generated:3");
+    expect(save.map?.generated).toMatchObject({ site: "valley", layout: "river" });
+    const back = deserialize(JSON.parse(JSON.stringify(save)));
+    expect(back.city.terrain).toEqual(map.terrain);
+    expect(back.city.waters).toEqual(map.waters);
+    expect(stateHash(back)).toBe(stateHash(sim));
+    // A seed alone rebuilds the classic grid, so the map has to travel with the save.
+    const bare = { ...save, map: undefined };
+    expect(() => deserialize(bare)).toThrow(/map is missing/);
   });
 });
 

@@ -73,61 +73,141 @@ function buffer(seconds: number): Float32Array {
   return new Float32Array(Math.round(seconds * SYNTH_RATE));
 }
 
-/** A house sparrow's call: three to four short notes, each a quick sweep near 4 kHz. */
+/** A one-pole high-pass. */
+function highpass(x: Float32Array, freq: number): Float32Array {
+  const lo = lowpass(x, freq);
+  const out = new Float32Array(x.length);
+  for (let i = 0; i < x.length; i++) out[i] = x[i] - lo[i];
+  return out;
+}
+
+/**
+ * A small courtyard's reverb (Schroeder: four combs, two all-passes), mixed under the dry
+ * sound and given a tail. A dry synthesized call sounds like a beep from a speaker; heard
+ * off walls it sounds like something out there in the street.
+ */
+function room(x: Float32Array, mix: number, tail = 0.6): Float32Array {
+  const n = x.length + Math.round(tail * SYNTH_RATE);
+  const dry = new Float32Array(n);
+  dry.set(x);
+  const wet = new Float32Array(n);
+  for (const [ms, fb] of [
+    [29.7, 0.78],
+    [37.1, 0.76],
+    [41.1, 0.74],
+    [43.7, 0.72],
+  ]) {
+    const d = Math.round((ms / 1000) * SYNTH_RATE);
+    const line = new Float32Array(n);
+    let damp = 0;
+    for (let i = 0; i < n; i++) {
+      const back = i >= d ? line[i - d] : 0;
+      damp += 0.45 * (back - damp);
+      line[i] = dry[i] + damp * fb;
+      wet[i] += back * 0.25;
+    }
+  }
+  let y = wet;
+  for (const ms of [5, 1.7]) {
+    const d = Math.round((ms / 1000) * SYNTH_RATE);
+    const g = 0.7;
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const back = i >= d ? out[i - d] : 0;
+      const inBack = i >= d ? y[i - d] : 0;
+      out[i] = -g * y[i] + inBack + g * back;
+    }
+    y = out;
+  }
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = dry[i] * (1 - mix) + y[i] * mix;
+  return out;
+}
+
+/**
+ * A sparrow's call: two to four short notes, most of them a fast fall from about 7 kHz to
+ * 3.5 kHz, some a rising "tsip", a few trilled; each with its overtones and a breath of
+ * noise, softened as if heard from across the street and set in a small room's reverb.
+ */
 function chirp(r: () => number): Float32Array {
-  const out = buffer(0.6);
+  const out = buffer(0.7);
   let t0 = 0.01;
-  const notes = 3 + Math.floor(r() * 2);
+  const notes = 2 + Math.floor(r() * 3);
   for (let n = 0; n < notes; n++) {
-    const len = 0.05 + r() * 0.05;
-    const f0 = 3000 + r() * 1400;
-    const sweep = (r() - 0.4) * 2600;
+    const len = 0.045 + r() * 0.05;
+    const rising = r() < 0.3;
+    const f0 = rising ? 2600 + r() * 800 : 6200 + r() * 1400;
+    const f1 = rising ? 5000 + r() * 1200 : 2900 + r() * 900;
+    const trill = r() < 0.35 ? 0.06 : 0;
+    const trillRate = 40 + r() * 25;
     let phase = 0;
     for (let i = 0; i < len * SYNTH_RATE; i++) {
       const t = i / SYNTH_RATE;
       const k = t / len;
-      phase += (2 * Math.PI * (f0 + sweep * k)) / SYNTH_RATE;
-      const env = Math.min(1, t / 0.004) * Math.pow(1 - k, 1.5);
+      const f = f0 * Math.exp(Math.log(f1 / f0) * k) * (1 + trill * Math.sin(2 * Math.PI * trillRate * t));
+      phase += (2 * Math.PI * f) / SYNTH_RATE;
+      const env = Math.min(1, t / 0.003) * Math.pow(Math.sin(Math.PI * Math.min(1, k * 1.15)), 0.6);
+      const voice = Math.sin(phase) + 0.35 * Math.sin(phase * 2) + 0.1 * Math.sin(phase * 3) + (r() * 2 - 1) * 0.08;
       const at = Math.round(t0 * SYNTH_RATE) + i;
-      if (at < out.length) out[at] += (Math.sin(phase) + 0.25 * Math.sin(phase * 2)) * env;
+      if (at < out.length) out[at] += voice * env;
     }
-    t0 += len + 0.03 + r() * 0.06;
+    t0 += len + 0.025 + r() * 0.07;
   }
-  return normalize(out, 0.8);
+  return normalize(room(lowpass(bandpass(out, 4200, 0.45), 6500), 0.3, 0.5), 0.8);
 }
 
-/** A crow: two hoarse caws, a buzzing tone through the throat's resonance. */
+/**
+ * A crow: two or three hoarse caws. A throat's buzz (a pulse train whose period wavers
+ * from cycle to cycle, which is what makes it rasp) shaped by three resonances, with
+ * breath noise through the same resonances, in a room's reverb.
+ */
 function caw(r: () => number): Float32Array {
-  const out = buffer(0.95);
-  for (let c = 0; c < 2; c++) {
-    const start = 0.02 + c * 0.42;
-    const len = 0.3;
-    const f = 470 - c * 30;
-    let phase = 0;
+  const caws = 2 + Math.floor(r() * 2);
+  const out = buffer(0.4 * caws + 0.1);
+  for (let c = 0; c < caws; c++) {
+    const start = Math.round((0.02 + c * (0.36 + r() * 0.06)) * SYNTH_RATE);
+    const len = 0.26 + r() * 0.08;
+    const f0 = 300 - c * 15 + r() * 30;
+    let next = 0;
+    let pulse = 0;
     for (let i = 0; i < len * SYNTH_RATE; i++) {
       const t = i / SYNTH_RATE;
       const k = t / len;
-      phase += (2 * Math.PI * (f * (1 - 0.12 * k) * (1 + 0.02 * Math.sin(t * 2 * Math.PI * 28)))) / SYNTH_RATE;
-      let v = 0;
-      for (let h = 1; h <= 10; h++) v += Math.sin(phase * h) / h;
-      v += (r() * 2 - 1) * 0.6;
-      const env = Math.min(1, t / 0.02) * Math.pow(1 - k, 0.8);
-      out[Math.round(start * SYNTH_RATE) + i] += v * env;
+      if (i >= next) {
+        // Each period jitters by a few percent: the rasp.
+        const period = SYNTH_RATE / (f0 * (1 - 0.15 * k) * (1 + (r() - 0.5) * 0.09));
+        next = i + period;
+        pulse = 0.8 + r() * 0.4;
+      }
+      const glottal = pulse * Math.exp(-(i - (next - SYNTH_RATE / f0)) / 18);
+      pulse *= 0.995;
+      const env = Math.min(1, t / 0.025) * Math.pow(1 - k, 0.7);
+      out[start + i] += (glottal + (r() * 2 - 1) * 0.35) * env;
     }
   }
-  return normalize(bandpass(out, 1300, 1.2), 0.85);
+  const f1 = bandpass(out, 650, 3);
+  const f2 = bandpass(out, 1250, 4);
+  const f3 = bandpass(out, 2600, 5);
+  const voiced = new Float32Array(out.length);
+  for (let i = 0; i < out.length; i++) voiced[i] = f1[i] + f2[i] * 0.8 + f3[i] * 0.35;
+  return normalize(room(voiced, 0.35, 0.7), 0.85);
 }
 
-/** A flock lifting off: a run of soft wing beats in filtered noise. */
+/** A flock lifting off: a scatter of soft wing claps, three birds out of step. */
 function flutter(r: () => number): Float32Array {
-  const out = buffer(0.9);
-  const rate = 16 + r() * 6;
-  for (let i = 0; i < out.length; i++) {
-    const t = i / SYNTH_RATE;
-    const beat = Math.pow(0.5 + 0.5 * Math.sin(2 * Math.PI * rate * t + Math.sin(t * 7) * 2), 3);
-    out[i] = (r() * 2 - 1) * beat * Math.min(1, t / 0.03) * Math.exp(-t * 3.2);
+  const out = buffer(1);
+  for (let bird = 0; bird < 4; bird++) {
+    let t = bird * 0.03 + r() * 0.05;
+    const rate = 11 + r() * 7;
+    while (t < 0.85) {
+      const at = Math.round(t * SYNTH_RATE);
+      const len = Math.round((0.018 + r() * 0.012) * SYNTH_RATE);
+      const gain = (0.6 + r() * 0.4) * Math.exp(-t * 2.4);
+      for (let i = 0; i < len && at + i < out.length; i++) out[at + i] += (r() * 2 - 1) * gain * Math.sin((Math.PI * i) / len);
+      t += (1 / rate) * (0.85 + r() * 0.3);
+    }
   }
-  return normalize(lowpass(bandpass(out, 900, 0.6), 3000), 0.8);
+  return normalize(room(lowpass(highpass(out, 250), 2200), 0.25, 0.4), 0.8);
 }
 
 /** A stray's bark: two short, falling barks, a voice through two mouth resonances. */
@@ -153,7 +233,7 @@ function bark(r: () => number): Float32Array {
   const nose = bandpass(out, 2100, 3);
   const mixed = new Float32Array(out.length);
   for (let i = 0; i < out.length; i++) mixed[i] = mouth[i] + nose[i] * 0.5;
-  return normalize(mixed, 0.9);
+  return normalize(room(mixed, 0.3, 0.6), 0.9);
 }
 
 /** A rat: a few thin squeaks. */
@@ -243,17 +323,40 @@ function wind(r: () => number): Float32Array {
   return normalize(seamless(lowpass(raw, 500), 1), 0.6);
 }
 
-/** Rain: a hiss of fine drops, and now and then a heavier one on metal. */
+/**
+ * Rain: a steady wash, and over it thousands of drops, each a few milliseconds of noise
+ * at its own pitch, most of them faint, a few heavier ones ringing on something hollow.
+ * Pure tones for the drops sounded like a machine beeping.
+ */
 function rain(r: () => number): Float32Array {
-  const raw = buffer(5);
+  const raw = buffer(7);
   for (let i = 0; i < raw.length; i++) raw[i] = r() * 2 - 1;
-  const hiss = bandpass(raw, 3500, 0.5);
-  for (let n = 0; n < 40; n++) {
+  // The wash: noise with the hiss and the rumble taken out of it.
+  const wash = lowpass(highpass(raw, 400), 4500);
+  const drops = new Float32Array(raw.length);
+  const count = 7 * 650;
+  for (let n = 0; n < count; n++) {
     const at = Math.floor(r() * (raw.length - 400));
-    const f = 1800 + r() * 2500;
-    for (let i = 0; i < 300; i++) hiss[at + i] += Math.sin((2 * Math.PI * f * i) / SYNTH_RATE) * Math.exp(-i / 60) * 0.6;
+    const len = Math.round((0.002 + r() * 0.008) * SYNTH_RATE);
+    const gain = Math.pow(r(), 3);
+    const tone = 1500 + r() * 5500;
+    const burst = new Float32Array(len);
+    for (let i = 0; i < len; i++) burst[i] = (r() * 2 - 1) * Math.exp(-i / (len * 0.3));
+    const shaped = bandpass(burst, tone, 1.5 + r() * 2);
+    for (let i = 0; i < len; i++) drops[at + i] += shaped[i] * gain;
   }
-  return normalize(seamless(hiss, 1), 0.5);
+  // Heavier drops off a gutter or a car roof: a noise tap ringing in a narrow band.
+  for (let n = 0; n < 30; n++) {
+    const at = Math.floor(r() * (raw.length - 2000));
+    const tap = new Float32Array(1600);
+    for (let i = 0; i < 40; i++) tap[i] = (r() * 2 - 1) * (1 - i / 40);
+    const ring = bandpass(tap, 1800 + r() * 2200, 14);
+    const gain = 0.6 + r() * 0.8;
+    for (let i = 0; i < ring.length; i++) drops[at + i] += ring[i] * gain;
+  }
+  const out = new Float32Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = wash[i] * 0.35 + drops[i] * 2.2;
+  return normalize(seamless(lowpass(out, 7000), 1), 0.5);
 }
 
 const MAKERS: Record<SynthSound, (r: () => number) => Float32Array> = { chirp, caw, flutter, bark, squeak };

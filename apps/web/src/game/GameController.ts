@@ -20,7 +20,7 @@ import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
 import { useUi, type Speed } from "../app/store";
 import { translate } from "../i18n";
-import { AudioDirector, type DirectorStats } from "@afterfall/audio";
+import { AmbientPlanner, AudioDirector, type DirectorStats } from "@afterfall/audio";
 import { LONG_PRESS_MS, TAP_SLOP, grabPan, pinchFactor, twistDelta } from "./touch";
 
 /** One press of R turns a single wall or gate by this much. */
@@ -224,7 +224,7 @@ export class GameController {
     const listener = this.audioListener();
     this.audio?.update({ fx: sim.fx, alerts: sim.state.alerts, listener });
     this.audio?.setAmbience(sim.clock.phase);
-    this.updateSoundscape(sim, listener);
+    this.updateSoundscape(sim, listener, dt);
     this.updateCamera(dt);
     const r = this.renderer;
     r.selection = { units: ui.selectedUnits, building: ui.selectedBuilding, structure: ui.selectedStructure };
@@ -307,32 +307,44 @@ export class GameController {
   /** O centro da tela no mundo: e daqui que o jogador "ouve". */
   /**
    * The city's own sounds: what the animals did since the last frame, played where they did
-   * it, and the beds under everything. Crickets sing at night and frogs at night near water,
-   * the wind rises with the cloud, and the rain follows the weather. The animals' sounds are
-   * drained every frame, heard or not, so they never pile up.
+   * it, and what the ambient planner (ambient.ts) hears round the listener: the dead close
+   * by, the day's curve, the city far off, and the beds under everything. The animals'
+   * sounds are drained every frame, heard or not, so they never pile up.
    */
-  private updateSoundscape(sim: Simulation, listener: { x: number; y: number }): void {
+  private updateSoundscape(sim: Simulation, listener: { x: number; y: number }, dt: number): void {
     const heard = this.renderer.drainFaunaSounds();
     const audio = this.audio;
     if (!audio) return;
     for (const e of heard) audio.playAt(e.sound, e.x - listener.x, e.z - listener.y);
     const now = performance.now();
-    if (now - this.waterCheckedAt > 1000) {
-      this.waterCheckedAt = now;
+    if (now - this.surroundCheckedAt > 1000) {
+      this.surroundCheckedAt = now;
       this.waterNear = waterAround(sim, listener.x, listener.y);
+      this.zonesNear = zonesAround(sim, listener.x, listener.y);
     }
-    const sc = this.renderer.soundscape(listener.x, listener.y);
-    const night = 1 - sc.daylight;
-    audio.setSoundscape({
-      crickets: night * (1 - sc.rain * 0.8),
-      frogs: night * this.waterNear,
-      wind: 0.35 + 0.5 * sc.cloud,
-      rain: sc.rain,
+    const infected: { dx: number; dy: number }[] = [];
+    sim.infectedHash.query(listener.x, listener.y, 150, (id) => {
+      const t = sim.state.entities.get(id)?.transform;
+      if (t && infected.length < 120) infected.push({ dx: t.x - listener.x, dy: t.y - listener.y });
     });
+    const sc = this.renderer.soundscape(listener.x, listener.y);
+    const plan = this.ambient.update(dt, {
+      hour: sim.clock.hourFloat,
+      daylight: sc.daylight,
+      rain: sc.rain,
+      cloud: sc.cloud,
+      water: this.waterNear,
+      zones: this.zonesNear,
+      infected,
+    });
+    for (const e of plan.events) audio.playAt(e.sound, e.dx, e.dy);
+    audio.setSoundscape(plan.beds);
   }
 
-  private waterCheckedAt = 0;
+  private readonly ambient = new AmbientPlanner(Math.floor(Math.random() * 1e9));
+  private surroundCheckedAt = 0;
   private waterNear = 0;
+  private zonesNear = { residential: 0, commercial: 0, industrial: 0, park: 0 };
 
   private audioListener(): { x: number; y: number } {
     return this.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
@@ -1020,4 +1032,37 @@ function waterAround(sim: Simulation, x: number, y: number): number {
       if (g.kind[g.index(cx, cy)] === CellKind.Water) water++;
     }
   return all ? Math.min(1, (water / all) * 5) : 0;
+}
+
+/**
+ * What kind of district lies within 120 m of a point: the share of the buildings there in
+ * each zone, and of the ground in parks. A street lined with houses creaks and rattles; a
+ * row of warehouses clangs.
+ */
+function zonesAround(sim: Simulation, x: number, y: number): { residential: number; commercial: number; industrial: number; park: number } {
+  const r = 120;
+  const n = { residential: 0, commercial: 0, industrial: 0, park: 0 };
+  let all = 0;
+  for (const b of sim.city.buildings) {
+    const cx = b.rect.x + b.rect.w / 2;
+    const cy = b.rect.y + b.rect.h / 2;
+    if ((cx - x) ** 2 + (cy - y) ** 2 > r * r) continue;
+    all++;
+    if (b.zone === "residential") n.residential++;
+    else if (b.zone === "industrial") n.industrial++;
+    else n.commercial++;
+  }
+  if (all) {
+    n.residential /= all;
+    n.commercial /= all;
+    n.industrial /= all;
+  }
+  let green = 0;
+  for (const p of sim.city.parks) {
+    const cx = p.rect.x + p.rect.w / 2;
+    const cy = p.rect.y + p.rect.h / 2;
+    if ((cx - x) ** 2 + (cy - y) ** 2 < r * r) green += p.rect.w * p.rect.h;
+  }
+  n.park = Math.min(1, green / (Math.PI * r * r * 0.3));
+  return n;
 }

@@ -52,17 +52,31 @@ export const SOUNDS: Record<string, SoundSpec> = {
   flutter: { file: "synth:flutter", gain: 0.45, maxVoices: 3, minGapMs: 250, detune: 200 },
   bark: { file: "synth:bark", gain: 0.55, maxVoices: 2, minGapMs: 350, detune: 150 },
   squeak: { file: "synth:squeak", gain: 0.22, maxVoices: 2, minGapMs: 400, detune: 250 },
+  // The dead, heard before they are seen.
+  moan: { file: "synth:moan", gain: 0.5, maxVoices: 4, minGapMs: 300, detune: 250 },
+  groan: { file: "synth:groan", gain: 0.45, maxVoices: 3, minGapMs: 250, detune: 250 },
+  shuffle: { file: "synth:shuffle", gain: 0.35, maxVoices: 3, minGapMs: 400, detune: 200 },
+  // The night, and the city far off (ambient.ts decides when and where).
+  owl: { file: "synth:owl", gain: 0.3, maxVoices: 1, minGapMs: 3000, detune: 80 },
+  snap: { file: "synth:snap", gain: 0.35, maxVoices: 2, minGapMs: 800, detune: 200 },
+  creak: { file: "synth:creak", gain: 0.3, maxVoices: 2, minGapMs: 1500, detune: 200 },
+  clang: { file: "synth:clang", gain: 0.3, maxVoices: 2, minGapMs: 1500, detune: 150 },
+  can: { file: "synth:can", gain: 0.25, maxVoices: 1, minGapMs: 2000, detune: 200 },
+  fence: { file: "synth:fence", gain: 0.25, maxVoices: 1, minGapMs: 1500, detune: 150 },
+  alarm: { file: "synth:alarm", gain: 0.2, maxVoices: 1, minGapMs: 20000, detune: 60 },
 };
 
 /**
  * Looping beds the soundscape mixes under everything, each at its own ceiling: crickets at
  * night, frogs near water at night, the wind, the rain (synth.ts).
  */
-export const BEDS: Record<"crickets" | "frogs" | "wind" | "rain", { gain: number }> = {
+export const BEDS: Record<"crickets" | "frogs" | "wind" | "rain" | "horde", { gain: number }> = {
   crickets: { gain: 0.16 },
   frogs: { gain: 0.22 },
   wind: { gain: 0.28 },
   rain: { gain: 0.45 },
+  // Many of the dead out of sight: a crowd of moans that swells as they come.
+  horde: { gain: 0.45 },
 };
 
 export type SoundscapeLevels = Partial<Record<keyof typeof BEDS, number>>;

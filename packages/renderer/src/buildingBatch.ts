@@ -214,7 +214,7 @@ export class BuildingBatch {
         add(style, (o) => frustumWalls(poly, scalePoly(poly, 0.78), shoulder, top, o, du, dv, MODULE, MODULE));
       } else {
         add(style, (o) => walls(poly, base, top, o, du, dv, MODULE, MODULE));
-        add("trim", (o) => facadeDetails(poly, base, top, style, du, o));
+        add("trim", (o) => facadeDetails(poly, base, top, style, o));
       }
       // The crown follows the walls: a building whose top stepped in cannot carry a
       // cornice and a roof at the width of its base, or the taper disappears under it.
@@ -530,7 +530,7 @@ function facadeMaterial(group: Group): THREE.MeshStandardMaterial {
 }
 
 /** Shallow floor bands and residential sills cast real highlights and shadows. */
-function facadeDetails(poly: { x: number; y: number }[], base: number, top: number, style: FacadeStyle, du: number, out: Builder): void {
+function facadeDetails(poly: { x: number; y: number }[], base: number, top: number, style: FacadeStyle, out: Builder): void {
   const outer = inflate(poly, 0.09);
   for (let y = Math.max(FLOOR, base); y < Math.min(top, FLOOR * 12); y += FLOOR) {
     walls(outer, y - 0.06, y + 0.06, out, 0, 0, 3, 3);
@@ -538,25 +538,30 @@ function facadeDetails(poly: { x: number; y: number }[], base: number, top: numb
     ring(poly, outer, y - 0.06, -1, out);
   }
   if (style !== "residential") return;
-  let run = du;
   const sign = isCcw(poly) ? 1 : -1;
+  const win = WINDOWS.residential!;
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i],
       b = poly[(i + 1) % poly.length];
     const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (len < 0.1) continue;
+    // Under each window of the wall's whole bays (`facadeSpan`), stretched with them.
+    const bays = Math.round(len / FLOOR);
+    if (bays < 1) continue;
+    const bay = len / bays;
+    const k = bay / FLOOR;
     const dx = (b.x - a.x) / len,
       dz = (b.y - a.y) / len;
     const nx = dz * sign,
       nz = -dx * sign;
-    for (let along = Math.ceil((run - 0.85) / FLOOR) * FLOOR + 0.85 - run; along + 1.5 < len; along += FLOOR) {
-      if (along < 0.15) continue;
+    const width = (win.hw * 2 + 0.2) * k;
+    for (let n = 0; n < bays; n++) {
+      const along = (n * FLOOR + win.cx) * k - width / 2;
       const x = a.x + along * dx,
         z = a.y + along * dz;
       const sill = [
         { x, y: z },
-        { x: x + dx * 1.5, y: z + dz * 1.5 },
-        { x: x + dx * 1.5 + nx * 0.22, y: z + dz * 1.5 + nz * 0.22 },
+        { x: x + dx * width, y: z + dz * width },
+        { x: x + dx * width + nx * 0.22, y: z + dz * width + nz * 0.22 },
         { x: x + nx * 0.22, y: z + nz * 0.22 },
       ];
       // Keep the ground floor flush: a projected sill must not cross a door.
@@ -565,7 +570,6 @@ function facadeDetails(poly: { x: number; y: number }[], base: number, top: numb
         cap(sill, y, out, 3);
       }
     }
-    run += len;
   }
 }
 
@@ -585,10 +589,31 @@ function isCcw(poly: { x: number; y: number }[]): boolean {
 }
 
 /**
+ * Where a wall segment of `len` metres lies across the texture, as [u0, u1].
+ *
+ * A facade module is four bays of 3.2 m. Run on along the perimeter, the bays fell where
+ * they fell, and a window was cut in two by every corner of a building (a playtest
+ * report: windows on the corners). Each wall of a facade now holds a whole number of bays,
+ * stretched or squeezed by up to a third to fit, so it starts and ends on the pier between
+ * two windows; a wall too short for one bay shows only that pier. `du` shifts every wall
+ * of a building by the same whole bays, so neighbours still differ. Any other texture (a
+ * tile, a trim) keeps running along the perimeter.
+ */
+export function facadeSpan(run: number, len: number, du: number, uSize: number): [number, number] {
+  if (uSize !== MODULE) return [run / uSize, (run + len) / uSize];
+  const bays = Math.round(len / FLOOR);
+  if (bays < 1) return [du / uSize, (du + PIER) / uSize];
+  return [du / uSize, (du + bays * FLOOR) / uSize];
+}
+
+/** The plain wall at the start of a bay, before the widest window (the office's) begins. */
+const PIER = 0.08;
+
+/**
  * Wall quads between y0 and y1, wound and lit to face outward (or inward, for
- * the inside of a parapet). U runs along the perimeter without restarting at
- * corners, V runs up the wall; both in metres over the module size, shifted by
- * whole bays and floors.
+ * the inside of a parapet). On a facade each wall holds whole bays (`facadeSpan`); on
+ * anything else U runs along the perimeter. V runs up the wall; both in metres over the
+ * module size, shifted by whole bays and floors.
  */
 function walls(
   poly: { x: number; y: number }[],
@@ -635,8 +660,7 @@ function walls(
       [tri[1], tri[2]] = [tri[2], tri[1]];
       [tri[4], tri[5]] = [tri[5], tri[4]];
     }
-    const u0 = run / uSize;
-    const u1 = (run + len) / uSize;
+    const [u0, u1] = facadeSpan(run, len, du, uSize);
     const v0 = (y0 + dv) / vSize;
     const v1 = (y1 + dv) / vSize;
     // UVs follow the same swap as the vertices.
@@ -813,16 +837,77 @@ function buildLandmark(
   }
 
   if (b.landmark === "spire") {
-    const nave = 0.45;
-    add(style, (o) => walls(poly, 0, h * nave, o, du, dv, MODULE, MODULE));
-    wall(style, poly, ring(0.03), h * nave, h);
-    add("trim", (o) => cornice(ring(1.03), h * nave, h * nave + 0.6, o));
+    church(b, poly, style, du, dv, add);
     return;
   }
 
   // Obelisk: a shaft that starts in the middle of itself and ends in a point.
   add(style, (o) => walls(poly, 0, h * 0.3, o, du, dv, MODULE, MODULE));
   wall(style, poly, ring(0.06), h * 0.3, h);
+}
+
+/**
+ * A church: a nave to the eaves, a hipped roof over it, and a tower with its spire.
+ *
+ * It was the whole footprint drawn in to a point, in the wall's own facade: on a parish
+ * church a steep tent, on a cathedral a pyramid 70 m across covered in office windows
+ * (Sé cathedral in São Paulo, a playtest report: put the roof on). The nave now stands to
+ * about four tenths of the height, in whole storeys; the roof rises from its eaves by a
+ * third of the footprint's width, in the roof tile, closing on an inner outline at the
+ * ridge; and where the tagged height reaches well past the ridge, a square tower turned
+ * with the nave's long side carries a spire to it.
+ */
+function church(
+  b: BuildingDef,
+  poly: { x: number; y: number }[],
+  style: Group,
+  du: number,
+  dv: number,
+  add: (group: Group, fn: (out: Builder) => void) => void,
+): void {
+  const h = b.height;
+  const width = Math.max(4, Math.min(b.rect.w, b.rect.h, Math.sqrt(b.area) * 1.2));
+  const eave = Math.max(FLOOR * 2, Math.min(FLOOR * 5, Math.round((h * 0.4) / FLOOR) * FLOOR));
+  const rise = Math.max(3, Math.min(14, width * 0.33));
+  const ridge = scalePoly(poly, 0.3);
+  add(style, (o) => walls(poly, 0, eave, o, du, dv, MODULE, MODULE));
+  add("trim", (o) => cornice(poly, eave - 0.6, eave, o));
+  add("roof", (o) => frustumWalls(poly, ridge, eave, eave + rise, o, 0, 0, 8, 8));
+  add("roof", (o) => cap(ridge, eave + rise, o, 8));
+  const top = eave + rise;
+  if (h < top + 4) return;
+  // The tower, square to the nave's longest wall, at the middle of the footprint.
+  let cx = 0;
+  let cz = 0;
+  for (const p of poly) {
+    cx += p.x / poly.length;
+    cz += p.y / poly.length;
+  }
+  let ax = 1;
+  let az = 0;
+  let longest = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    const len = Math.hypot(q.x - p.x, q.y - p.y);
+    if (len > longest) {
+      longest = len;
+      ax = (q.x - p.x) / len;
+      az = (q.y - p.y) / len;
+    }
+  }
+  const side = Math.max(2.5, Math.min(7, width * 0.16));
+  const square = (s: number) =>
+    [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ].map(([u, v]) => ({ x: cx + (u * ax - v * az) * (s / 2), y: cz + (u * az + v * ax) * (s / 2) }));
+  const belfry = top + (h - top) * 0.35;
+  add("trim", (o) => walls(square(side), eave, belfry, o, 0, 0, 3, 3));
+  add("trim", (o) => cap(square(side * 1.12), belfry, o, 3));
+  add("roof", (o) => frustumWalls(square(side), square(0.15), belfry, h, o, 0, 0, 8, 8));
 }
 
 /** A flat band between two outlines of the same polygon (`ring` under another name). */
@@ -1565,8 +1650,7 @@ function frustumWalls(
       ny = -ny;
       nz = -nz;
     }
-    const u0 = run / uSize;
-    const u1 = (run + len) / uSize;
+    const [u0, u1] = facadeSpan(run, len, du, uSize);
     const v0 = (y0 + dv) / vSize;
     const v1 = (y1 + dv) / vSize;
     const uvs = [

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { AudioDirector, AMBIENCE, SOUNDS, soundForAlert, soundForFx, spatial, type FxEvent } from "../src";
+import {
+  AudioDirector,
+  AMBIENCE,
+  BEDS,
+  SOUNDS,
+  SYNTH_RATE,
+  synthBed,
+  synthSound,
+  soundForAlert,
+  soundForFx,
+  spatial,
+  type FxEvent,
+} from "../src";
 
 /** Contexto de audio falso: conta as vozes sem tocar nada. */
 class FakeParam {
@@ -11,6 +23,9 @@ class FakeParam {
     this.value = v;
   }
   cancelScheduledValues(): void {}
+  setTargetAtTime(v: number): void {
+    this.value = v;
+  }
 }
 
 class FakeNode {
@@ -224,5 +239,64 @@ describe("volume, mute and ambience", () => {
     audio.setAmbience("unknown");
     expect(audio.stats.ambience).toBeNull();
     expect(ctx.sources.length).toBe(0);
+  });
+});
+
+describe("the city's wildlife and weather, synthesized", () => {
+  const peak = (x: Float32Array) => x.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  const rms = (x: Float32Array) => Math.sqrt(x.reduce((a, v) => a + v * v, 0) / x.length);
+
+  it("makes every sound, audible and never clipping, the same for the same seed", () => {
+    for (const name of ["chirp", "caw", "flutter", "bark", "squeak"] as const) {
+      const a = synthSound(name, 3);
+      expect(a.length, name).toBeGreaterThan(SYNTH_RATE * 0.2);
+      expect(peak(a), name).toBeGreaterThan(0.3);
+      expect(peak(a), name).toBeLessThanOrEqual(1);
+      expect(Array.from(synthSound(name, 3))).toEqual(Array.from(a));
+    }
+    // A sparrow is high and a dog is low: where each is sounding, the chirp crosses zero far
+    // more often.
+    const crossings = (x: Float32Array) => {
+      let n = 0;
+      let voiced = 0;
+      for (let i = 1; i < x.length; i++) {
+        if (Math.abs(x[i]) < 0.05) continue;
+        voiced++;
+        if (Math.sign(x[i]) !== Math.sign(x[i - 1])) n++;
+      }
+      return n / voiced;
+    };
+    expect(crossings(synthSound("chirp"))).toBeGreaterThan(crossings(synthSound("bark")) * 2);
+  });
+
+  it("loops its beds without a click at the seam", () => {
+    for (const name of Object.keys(BEDS) as (keyof typeof BEDS)[]) {
+      const bed = synthBed(name);
+      expect(rms(bed), name).toBeGreaterThan(0.02);
+      // The jump from the last sample to the first is no bigger than a typical step inside.
+      let step = 0;
+      for (let i = 1; i < bed.length; i++) step = Math.max(step, Math.abs(bed[i] - bed[i - 1]));
+      expect(Math.abs(bed[0] - bed[bed.length - 1]), name).toBeLessThanOrEqual(step + 1e-6);
+    }
+  });
+
+  it("plays a sound where it happened, quieter far away, and nothing out of range", () => {
+    const { ctx, audio } = director();
+    expect(audio.playAt("bark", 20, 0)).toBe(true);
+    expect(audio.playAt("caw", 5000, 0)).toBe(false);
+    expect(ctx.sources.length).toBe(1);
+  });
+
+  it("starts a bed the first time it is asked for, and eases it toward its level", () => {
+    const { ctx, audio } = director();
+    const buffers: Record<string, AudioBuffer> = {};
+    for (const name of Object.keys(BEDS)) buffers[`synth:bed:${name}`] = {} as AudioBuffer;
+    audio.setBuffers(buffers);
+    audio.setSoundscape({ crickets: 0, rain: 1 });
+    // Silent beds are not started at all.
+    expect(ctx.sources.filter((s) => s.loop).length).toBe(1);
+    audio.setSoundscape({ rain: 0.5 });
+    expect(ctx.sources.filter((s) => s.loop).length).toBe(1);
+    expect(ctx.gains[ctx.gains.length - 1].gain.value).toBeCloseTo(0.5 * BEDS.rain.gain);
   });
 });

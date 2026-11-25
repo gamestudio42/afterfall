@@ -7,7 +7,20 @@
  * on `window`, `document` or the browser clock — only on `ctx.currentTime`.
  */
 
-import { AMBIENCE, SOUNDS, ambienceForPhase, soundForAlert, soundForFx, spatial, type AlertEvent, type FxEvent } from "./sounds";
+import {
+  AMBIENCE,
+  BEDS,
+  SOUNDS,
+  ambienceForPhase,
+  isSynth,
+  soundForAlert,
+  soundForFx,
+  spatial,
+  type AlertEvent,
+  type FxEvent,
+  type SoundscapeLevels,
+} from "./sounds";
+import { SYNTH_RATE, synthBed, synthSound, type SynthBed, type SynthSound } from "./synth";
 
 export interface DirectorOptions {
   /** Prefixo dos arquivos, normalmente `import.meta.env.BASE_URL`. */
@@ -63,6 +76,7 @@ export class AudioDirector {
   private muted = false;
   private ambienceName: string | null = null;
   private readonly beds = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>();
+  private readonly soundscape = new Map<string, { src: AudioBufferSourceNode; gain: GainNode; level: number }>();
 
   constructor(ctx: BaseAudioContext, options: DirectorOptions = {}) {
     this.ctx = ctx;
@@ -73,11 +87,28 @@ export class AudioDirector {
     this.volume = options.master ?? 0.8;
     this.master.gain.value = this.volume;
     this.master.connect(ctx.destination);
+    this.makeSynth();
+  }
+
+  /** The wildlife and weather sounds, synthesized once (synth.ts) into buffers like the files. */
+  private makeSynth(): void {
+    // A context that cannot make buffers (a test double) simply has no wildlife.
+    if (typeof this.ctx.createBuffer !== "function") return;
+    const toBuffer = (samples: Float32Array) => {
+      const b = this.ctx.createBuffer(1, samples.length, SYNTH_RATE);
+      b.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
+      return b;
+    };
+    for (const spec of Object.values(SOUNDS))
+      if (isSynth(spec.file)) this.buffers.set(spec.file, toBuffer(synthSound(spec.file.slice(6) as SynthSound)));
+    for (const name of Object.keys(BEDS) as SynthBed[]) this.buffers.set(`synth:bed:${name}`, toBuffer(synthBed(name)));
   }
 
   /** Carrega e decodifica todos os sons da tabela e as camas de ambiencia. */
   async load(): Promise<void> {
-    const files = [...new Set([...Object.values(SOUNDS).map((s) => s.file), ...Object.values(AMBIENCE).map((a) => a.file)])];
+    const files = [...new Set([...Object.values(SOUNDS).map((s) => s.file), ...Object.values(AMBIENCE).map((a) => a.file)])].filter(
+      (f) => !isSynth(f),
+    );
     await Promise.all(
       files.map(async (file) => {
         try {
@@ -179,6 +210,44 @@ export class AudioDirector {
     for (const alert of alertNew) {
       const name = soundForAlert(alert.key);
       if (name) this.play(name, 1, 0);
+    }
+  }
+
+  /** Plays a sound where something happened, `dx`/`dy` from the listener in world metres. */
+  playAt(name: string, dx: number, dy: number): boolean {
+    const { gain, pan } = spatial(dx, dy, this.range);
+    if (gain <= 0.02) return false;
+    return this.play(name, gain, pan);
+  }
+
+  /**
+   * Sets each looping bed toward a level from 0 to 1 of its ceiling (`BEDS`), eased over
+   * about a second. A bed starts the first time it is asked for and then keeps running,
+   * silent when its level is 0.
+   */
+  setSoundscape(levels: SoundscapeLevels): void {
+    const now = this.ctx.currentTime;
+    for (const [name, level] of Object.entries(levels) as [keyof typeof BEDS, number][]) {
+      let bed = this.soundscape.get(name);
+      if (!bed) {
+        if (level <= 0) continue;
+        const buffer = this.buffers.get(`synth:bed:${name}`);
+        if (!buffer) continue;
+        const src = this.ctx.createBufferSource();
+        src.buffer = buffer;
+        src.loop = true;
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0;
+        src.connect(gain);
+        gain.connect(this.master);
+        src.start(now);
+        bed = { src, gain, level: 0 };
+        this.soundscape.set(name, bed);
+      }
+      const target = Math.max(0, Math.min(1, level)) * BEDS[name].gain;
+      if (Math.abs(target - bed.level) < 0.005) continue;
+      bed.level = target;
+      bed.gain.gain.setTargetAtTime(target, now, 0.8);
     }
   }
 

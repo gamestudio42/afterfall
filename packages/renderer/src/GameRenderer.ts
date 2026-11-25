@@ -29,6 +29,7 @@ import { placeLitter, type LitterKind } from "./litter";
 import type { ReclamationField } from "./reclamation";
 import { Doors } from "./doors";
 import { buildContactShadows } from "./contact";
+import { Fauna, type FaunaEvent } from "./fauna";
 import { SkyDome, buildOutskirts, disposeOutskirts, placeOutskirts, setOutskirtsArt, skyColors, skyInView } from "./sky";
 import { Rain, WEATHER, easeWeather, weatherFor, type WeatherKind, type WeatherState } from "./weather";
 import { CharacterBatch, CharacterMotion } from "./characters";
@@ -168,6 +169,8 @@ export class GameRenderer {
   private tracerAge = new Float32Array(MAX_TRACERS);
   private tracerNext = 0;
   private lastFxSeq = 0;
+  private fauna: Fauna | null = null;
+  private faunaFxSeq = 0;
   private structureIds: EntityId[] = [];
   private blueprintIds: EntityId[] = [];
   /** One instanced mesh per material per kind, once `art/structures` lands. */
@@ -871,6 +874,14 @@ export class GameRenderer {
     // building maps now, and let applyArt handle anything that lands later.
     this.buildings.setArt(this.art);
     this.scene.add(this.buildings.mesh);
+    // Birds, strays and rats: scenery that lives in the city (fauna.ts).
+    if (this.fauna) {
+      this.scene.remove(this.fauna.group);
+      this.fauna.dispose();
+    }
+    this.fauna = new Fauna(city, city.seed ?? 1);
+    this.faunaFxSeq = sim.fxSeq;
+    this.scene.add(this.fauna.group);
     // The city drawn round a generated map: the same buildings, painted once in their
     // type's colour, shut and dark. Not picked, not played, and not shadowed.
     if (this.decorBuildings) {
@@ -1251,6 +1262,7 @@ export class GameRenderer {
       this.updatePreview(sim);
       this.updateFx(sim, dt);
     }
+    if (sim && this.fauna) this.updateFauna(sim, dt);
     this.vfx.update(dt, this.rts.camera);
     this.draw();
   }
@@ -1756,6 +1768,48 @@ export class GameRenderer {
     });
     this.preview.count = n;
     uploadInstances(this.preview);
+  }
+
+  /** Moves the animals, feeding them the shots and noises since the last frame. */
+  private updateFauna(sim: Simulation, dt: number): void {
+    const noises: { x: number; z: number }[] = [];
+    for (const fx of sim.fx) {
+      if (fx.seq <= this.faunaFxSeq) continue;
+      if (fx.type === "shot" || fx.type === "noise" || fx.type === "collapse") noises.push({ x: fx.x, z: fx.y });
+    }
+    this.faunaFxSeq = sim.fxSeq;
+    const near = (hash: Simulation["infectedHash"], x: number, z: number, r: number) => {
+      let hit = false;
+      hash.query(x, z, r, (id) => {
+        if (hit) return;
+        const t = sim.state.entities.get(id)?.transform;
+        if (t && (t.x - x) ** 2 + (t.y - z) ** 2 < r * r) hit = true;
+      });
+      return hit;
+    };
+    this.fauna!.update(dt, {
+      infectedNear: (x, z, r) => near(sim.infectedHash, x, z, r),
+      survivorNear: (x, z, r) => near(sim.survivorHash, x, z, r),
+      noises,
+      walkable: (x, z) => sim.grid.passable(x, z, "survivor"),
+      path: (x0, z0, x1, z1) => sim.grid.findPath(x0, z0, x1, z1, "survivor", 4000)?.points.map((p) => ({ x: p.x, z: p.y })) ?? null,
+      daylight: this.daylight,
+    });
+  }
+
+  /** What the animals did that can be heard since the last call, for the audio director. */
+  drainFaunaSounds(): FaunaEvent[] {
+    return this.fauna?.drain() ?? [];
+  }
+
+  /** How many flocks sit near a point, and the weather, for the soundscape. */
+  soundscape(x: number, z: number): { flocks: number; daylight: number; rain: number; cloud: number } {
+    return {
+      flocks: this.fauna?.near(x, z).flocks ?? 0,
+      daylight: this.daylight,
+      rain: this.weatherNow.rain,
+      cloud: this.weatherNow.cloud,
+    };
   }
 
   private updateFx(sim: Simulation, dt: number): void {

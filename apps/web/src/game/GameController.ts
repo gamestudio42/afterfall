@@ -14,7 +14,7 @@ import {
   type Command,
   type EntityId,
 } from "@afterfall/core";
-import { generateVariedCity, type CityMap, type CitySize } from "@afterfall/world";
+import { CellKind, generateVariedCity, type CityMap, type CitySize } from "@afterfall/world";
 import { GameRenderer, type PostMode, type QualityMode } from "@afterfall/renderer";
 import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
@@ -221,8 +221,10 @@ export class GameController {
     const simStart = performance.now();
     sim.update(dt * 1000, speed);
     const simMs = performance.now() - simStart;
-    this.audio?.update({ fx: sim.fx, alerts: sim.state.alerts, listener: this.audioListener() });
+    const listener = this.audioListener();
+    this.audio?.update({ fx: sim.fx, alerts: sim.state.alerts, listener });
     this.audio?.setAmbience(sim.clock.phase);
+    this.updateSoundscape(sim, listener);
     this.updateCamera(dt);
     const r = this.renderer;
     r.selection = { units: ui.selectedUnits, building: ui.selectedBuilding, structure: ui.selectedStructure };
@@ -303,6 +305,35 @@ export class GameController {
   }
 
   /** O centro da tela no mundo: e daqui que o jogador "ouve". */
+  /**
+   * The city's own sounds: what the animals did since the last frame, played where they did
+   * it, and the beds under everything. Crickets sing at night and frogs at night near water,
+   * the wind rises with the cloud, and the rain follows the weather. The animals' sounds are
+   * drained every frame, heard or not, so they never pile up.
+   */
+  private updateSoundscape(sim: Simulation, listener: { x: number; y: number }): void {
+    const heard = this.renderer.drainFaunaSounds();
+    const audio = this.audio;
+    if (!audio) return;
+    for (const e of heard) audio.playAt(e.sound, e.x - listener.x, e.z - listener.y);
+    const now = performance.now();
+    if (now - this.waterCheckedAt > 1000) {
+      this.waterCheckedAt = now;
+      this.waterNear = waterAround(sim, listener.x, listener.y);
+    }
+    const sc = this.renderer.soundscape(listener.x, listener.y);
+    const night = 1 - sc.daylight;
+    audio.setSoundscape({
+      crickets: night * (1 - sc.rain * 0.8),
+      frogs: night * this.waterNear,
+      wind: 0.35 + 0.5 * sc.cloud,
+      rain: sc.rain,
+    });
+  }
+
+  private waterCheckedAt = 0;
+  private waterNear = 0;
+
   private audioListener(): { x: number; y: number } {
     return this.renderer.groundPoint(0, 0) ?? { x: 0, y: 0 };
   }
@@ -973,4 +1004,20 @@ function initialPost(): PostMode {
     /* storage unavailable */
   }
   return "auto";
+}
+
+/** How much open water lies within 60 m of a point, 0 to 1: a river along the view is 1. */
+function waterAround(sim: Simulation, x: number, y: number): number {
+  const g = sim.grid;
+  let water = 0;
+  let all = 0;
+  for (let dy = -60; dy <= 60; dy += 6)
+    for (let dx = -60; dx <= 60; dx += 6) {
+      const cx = Math.floor((x + dx) / g.cell);
+      const cy = Math.floor((y + dy) / g.cell);
+      if (!g.inBounds(cx, cy)) continue;
+      all++;
+      if (g.kind[g.index(cx, cy)] === CellKind.Water) water++;
+    }
+  return all ? Math.min(1, (water / all) * 5) : 0;
 }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPopulation } from "./helpers";
 
 type Win = { __afterfall: any; __afterfallUi: any };
 
@@ -21,9 +22,8 @@ async function start(page: Page) {
         Math.hypot(a.entrance.x - center.x, a.entrance.y - center.y) - Math.hypot(b.entrance.x - center.x, b.entrance.y - center.y),
     )[0];
     g.command({ type: "setBase", building: b.index });
-    g.step(1 / 60, 1);
   });
-  await expect(page.getByTestId("pop")).toHaveText("4");
+  await expectPopulation(page, "4");
 }
 
 test("the default city teaches selection, shows markers, and remembers dismissed guidance", async ({ page }, info) => {

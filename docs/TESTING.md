@@ -34,6 +34,16 @@ speed, and checks portrait navigation at 390 × 844. `COMMUNITY_SHOT=1 pnpm test
 tests/e2e/community.spec.ts --workers=1` captures the group and detail panels.
 These are controlled UI regressions, not a naturally played night.
 
+Worksite feedback has read-only accounting checks in
+`packages/core/tests/worksite.test.ts`: delivered/in-transit exclusion from stock
+needs, partial work despite a shortfall, work-hour boundaries, finite task types
+and conservative percentages. `tests/e2e/worksites.spec.ts` uses a controlled
+half-built wall line to verify queue priority, inspection of the next blueprint,
+piece/job percentages, supply labels and cancellation preserving the finished
+piece, then discovers and inspects an automatically created repair. A conversion
+fixture checks night/worker feedback and portrait navigation.
+`WORKSITE_SHOT=1 pnpm test:e2e tests/e2e/worksites.spec.ts --workers=1` captures it.
+
 ## Character art and animation
 
 `packages/renderer/tests/characters.test.ts` checks distance-driven gait,

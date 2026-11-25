@@ -1,7 +1,9 @@
+import type { Task } from "@afterfall/core";
 import { STRUCTURES, type StructureKind } from "@afterfall/content";
 import { useFrame, useGame, useT } from "../app/hooks";
 import { useUi } from "../app/store";
 import { Bag } from "./common";
+import { Worksite } from "./Worksite";
 import type { OverlayMode } from "@afterfall/renderer";
 
 const KINDS: StructureKind[] = ["wall", "gate", "tower", "farm", "well"];
@@ -59,31 +61,7 @@ export function BottomBar() {
           {[...sim.state.tasks.values()]
             .sort((a, b) => b.priority - a.priority || a.id - b.id)
             .map((task) => (
-              <div key={task.id} className="task-row" data-testid={`task-${task.id}`}>
-                <span className={`dot ${task.status}`} title={t(`status.${task.status}`)} />
-                <strong>{t(`task.${task.type}`)}</strong>
-                <small className="muted">
-                  {t(`status.${task.status}`)} · {t("tasks.workers", { n: task.assigned.length, max: task.maxWorkers })} ·{" "}
-                  {t("tasks.priority", { n: task.priority })}
-                </small>
-                {task.type === "guard" && task.status === "pending" && <small className="muted">{t("tasks.guardWait")}</small>}
-                <button
-                  data-testid={`task-up-${task.id}`}
-                  disabled={task.priority >= 100}
-                  title={t("tasks.raise")}
-                  onClick={() => game.command({ type: "setTaskPriority", task: task.id, priority: Math.min(100, task.priority + 10) })}
-                >
-                  ↑
-                </button>
-                <button
-                  data-testid={`task-down-${task.id}`}
-                  disabled={task.priority <= 0}
-                  title={t("tasks.lower")}
-                  onClick={() => game.command({ type: "setTaskPriority", task: task.id, priority: Math.max(0, task.priority - 10) })}
-                >
-                  ↓
-                </button>
-              </div>
+              <TaskRow key={task.id} task={task} />
             ))}
         </div>
       )}
@@ -205,5 +183,79 @@ export function BottomBar() {
         </button>
       </div>
     </footer>
+  );
+}
+
+function TaskRow({ task }: { task: Task }) {
+  const t = useT();
+  const game = useGame();
+  const ui = useUi();
+  const sim = game.sim!;
+  const structures = task.structures.map((id) => sim.state.entities.get(id)).filter((e) => !!e?.structure);
+  const target = structures.find((e) => !e!.structure!.built) ?? structures[0];
+  const building = task.building >= 0 ? sim.state.buildings[task.building] : undefined;
+  const destination = task.convertTo
+    ? t(`fn.${task.convertTo}`)
+    : building
+      ? t(building.fn === "none" ? `building.${sim.city.buildings[building.index].type}` : `fn.${building.fn}`)
+      : target?.structure
+        ? t(`struct.${target.structure.kind}`)
+        : "";
+  const inspect = () => {
+    if (!building && !target) return;
+    ui.set({
+      selectedUnits: [],
+      selectedBuilding: building?.index ?? -1,
+      selectedStructure: building ? -1 : target!.id,
+      buildMode: null,
+      buildRejection: null,
+      drawer: null,
+    });
+    game.focusSelection();
+  };
+  return (
+    <div className="task-row" data-testid={`task-${task.id}`}>
+      <div className="task-heading">
+        <span className={`dot ${task.status}`} aria-hidden="true" />
+        <strong>
+          {t(`task.${task.type}`)}
+          {destination && ` · ${destination}`}
+        </strong>
+      </div>
+      <small className="muted">
+        {t(`status.${task.status}`)} · {t("tasks.workers", { n: task.assigned.length, max: task.maxWorkers })} ·{" "}
+        {t("tasks.priority", { n: task.priority })}
+      </small>
+      {task.type === "build" && (
+        <small>{t("worksite.pieces", { n: structures.filter((e) => e!.structure!.built).length, total: structures.length })}</small>
+      )}
+      <Worksite sim={sim} task={task} compact />
+      {task.type === "guard" && task.status === "pending" && <small className="muted">{t("tasks.guardWait")}</small>}
+      <div className="task-actions">
+        <button disabled={!building && !target} data-testid={`task-focus-${task.id}`} onClick={inspect}>
+          {t("worksite.inspect")}
+        </button>
+        <span className="task-priority">
+          <button
+            data-testid={`task-up-${task.id}`}
+            disabled={task.priority >= 100}
+            title={t("tasks.raise")}
+            aria-label={t("tasks.raise")}
+            onClick={() => game.command({ type: "setTaskPriority", task: task.id, priority: Math.min(100, task.priority + 10) })}
+          >
+            ↑
+          </button>
+          <button
+            data-testid={`task-down-${task.id}`}
+            disabled={task.priority <= 0}
+            title={t("tasks.lower")}
+            aria-label={t("tasks.lower")}
+            onClick={() => game.command({ type: "setTaskPriority", task: task.id, priority: Math.max(0, task.priority - 10) })}
+          >
+            ↓
+          </button>
+        </span>
+      </div>
+    </div>
   );
 }

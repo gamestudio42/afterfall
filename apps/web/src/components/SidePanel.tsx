@@ -1,10 +1,11 @@
 import { useState, type ReactElement } from "react";
 import { BALANCE, BUILDING_FUNCTIONS, BUILDING_TYPES, STRUCTURES, bagTotal, type BuildingFunction } from "@afterfall/content";
-import { outstanding, type Entity, type Simulation, type Stance } from "@afterfall/core";
+import { type Entity, type Simulation, type Stance } from "@afterfall/core";
 import { useFrame, useGame, useT } from "../app/hooks";
 import { PORTRAIT_LAYOUT, useMedia } from "../app/media";
 import { useUi } from "../app/store";
 import { Bag, Meter, Row } from "./common";
+import { Worksite } from "./Worksite";
 
 export function SidePanel() {
   useFrame();
@@ -105,7 +106,12 @@ function BuildingPanel({ sim, index }: { sim: Simulation; index: number }) {
               <Bag bag={st.storage} />
             </>
           )}
-          {repair && <p className="note">{t("panel.repairing")}</p>}
+          {repair && (
+            <>
+              <h4>{t("panel.repairing")}</h4>
+              <Worksite sim={sim} task={repair} />
+            </>
+          )}
         </div>
       )}
       {st.fn === "lab" && st.hp > 0 && (
@@ -173,10 +179,8 @@ function BuildingPanel({ sim, index }: { sim: Simulation; index: number }) {
           <h4>{t("panel.convert")}</h4>
           {task ? (
             <>
-              <Row label={t("panel.converting", { fn: t(`fn.${task.convertTo}`) })}>{Math.round((task.progress / task.work) * 100)}%</Row>
-              <Meter value={task.progress} max={task.work} color="#6fd0ff" />
-              {task.status === "blocked" && <p className="note warn">{t("panel.waiting")}</p>}
-              <Row label={t("panel.workers")}>{task.assigned.length}</Row>
+              <p>{t("panel.converting", { fn: t(`fn.${task.convertTo}`) })}</p>
+              <Worksite sim={sim} task={task} />
               <button className="wide" onClick={() => game.command({ type: "cancelTask", task: task.id })}>
                 {t("panel.cancel")}
               </button>
@@ -385,6 +389,7 @@ function StructurePanel({ sim, id }: { sim: Simulation; id: number }) {
   const s = e.structure!;
   const def = STRUCTURES[s.kind];
   const task = s.task >= 0 ? sim.state.tasks.get(s.task) : undefined;
+  const repair = [...sim.state.tasks.values()].find((t) => t.type === "repair" && t.structures.includes(id));
   return (
     <>
       <div className="panel-head">
@@ -405,11 +410,11 @@ function StructurePanel({ sim, id }: { sim: Simulation; id: number }) {
         )}
         {!s.built && task && (
           <>
-            <Row label={t("panel.progress")}>{Math.round((task.progress / task.work) * 100)}%</Row>
-            <Meter value={task.progress} max={task.work} color="#6fd0ff" />
-            <Row label={t("panel.workers")}>{task.assigned.length}</Row>
-            {bagTotal(outstanding(task)) > 0 && <Bag bag={outstanding(task)} />}
-            {task.status === "blocked" && <p className="note warn">{t("panel.waiting")}</p>}
+            <Row label={t("worksite.pieceProgress")}>
+              <span data-testid="piece-progress">{Math.min(100, Math.floor((s.progress / def.work) * 100))}%</span>
+            </Row>
+            <Meter value={s.progress} max={def.work} color="#6fd0ff" />
+            <Worksite sim={sim} task={task} showProgress={task.structures.length > 1} />
           </>
         )}
         {s.built && task && (
@@ -419,6 +424,12 @@ function StructurePanel({ sim, id }: { sim: Simulation; id: number }) {
               .filter(Boolean)
               .join(", ") || "—"}
           </Row>
+        )}
+        {s.built && repair && (
+          <>
+            <h4>{t("panel.repairing")}</h4>
+            <Worksite sim={sim} task={repair} />
+          </>
         )}
         <button className="wide" onClick={() => game.command({ type: "demolish", structure: id })}>
           {s.built ? t("panel.demolish") : t("panel.cancel")}

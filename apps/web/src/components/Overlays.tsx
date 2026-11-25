@@ -155,6 +155,7 @@ export function Banner() {
           {short && <small>{t("banner.buildShort")}</small>}
           {info?.capped && <small>{t("banner.buildCapped")}</small>}
           {info?.steep && <small data-testid="build-steep">{t("banner.buildSteep")}</small>}
+          {info?.street && <small data-testid="build-street">{t("banner.buildStreet")}</small>}
         </div>
       </div>
     );

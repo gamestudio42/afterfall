@@ -86,6 +86,9 @@ export function placementAt(sim: Simulation, kind: StructureKind, cx: number, cy
       continue;
     }
     if (g.kind[i] !== CellKind.Free) return null;
+    // A garden needs soil and a well needs digging: neither goes on a paved street. Walls,
+    // gates and towers do, since closing a street is how a settlement is walled in.
+    if (onPaving(kind) && g.road[i]) return null;
     // Nothing stands on ground steeper than this: a wall on a hillside would hang in the air.
     if (g.steep && g.steep[i] > BALANCE.terrainBuildGrade) return null;
   }
@@ -112,6 +115,17 @@ function passesThrough(sim: Simulation, cx: number, cy: number): boolean {
     return g.kind[i] === CellKind.Gate || isWalkableKind(g.kind[i]);
   };
   return (open(cx - 1, cy) && open(cx + 1, cy)) || (open(cx, cy - 1) && open(cx, cy + 1));
+}
+
+/** Whether a structure is kept off paved streets (a farm, a well). */
+export function onPaving(kind: StructureKind): boolean {
+  return kind === "farm" || kind === "well";
+}
+
+/** Whether any cell this structure would cover is a paved street. */
+export function coversStreet(sim: Simulation, kind: StructureKind, cx: number, cy: number, yaw = 0): boolean {
+  const cells = structureCells(sim, kind, cx, cy, yaw);
+  return !!cells && cells.some((i) => sim.grid.road[i] === 1);
 }
 
 /** The blueprint waiting to take a wall's place, or -1. */

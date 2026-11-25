@@ -1,10 +1,12 @@
 import { BALANCE, STRUCTURES, type StructureKind } from "@afterfall/content";
 import {
   Simulation,
+  coversStreet,
   deserialize,
   foldTurn,
   foldYaw,
   isAxial,
+  onPaving,
   placementAt,
   placementYaw,
   previewFrame,
@@ -45,7 +47,7 @@ export class GameController {
   private buildYaw: number | null = null;
   private buildYawKind: StructureKind | null = null;
   /** What the build banner shows: how many pieces the preview holds and how they are turned. */
-  buildInfo: { count: number; capped: boolean; manual: boolean; steep?: boolean } | null = null;
+  buildInfo: { count: number; capped: boolean; manual: boolean; steep?: boolean; street?: boolean } | null = null;
   private rightDown: { x: number; y: number; rotating: boolean } | null = null;
   /** Live fingers on the canvas. Mouse and keyboard never write this. */
   private touchPoints = new Map<number, { x: number; y: number }>();
@@ -660,7 +662,14 @@ export class GameController {
   private setBuildInfo(next: NonNullable<GameController["buildInfo"]>): void {
     const prev = this.buildInfo;
     this.buildInfo = next;
-    if (prev && prev.count === next.count && prev.capped === next.capped && prev.manual === next.manual && prev.steep === next.steep)
+    if (
+      prev &&
+      prev.count === next.count &&
+      prev.capped === next.capped &&
+      prev.manual === next.manual &&
+      prev.steep === next.steep &&
+      prev.street === next.street
+    )
       return;
     const ui = useUi.getState();
     ui.set({ frame: ui.frame + 1 });
@@ -705,6 +714,8 @@ export class GameController {
       manual: this.buildYaw !== null,
       // A red piece on a hillside is the slope, not a bug: say so.
       steep: cells.some(([x, y], i) => !valid[i] && this.tooSteep(kind, x, y)),
+      // Likewise a farm or a well on the street: it is the paving, so say so.
+      street: onPaving(kind) && cells.some(([x, y], i) => !valid[i] && coversStreet(this.sim!, kind, x, y, yaw ?? 0)),
     });
     this.renderer.buildPreview = {
       kind,

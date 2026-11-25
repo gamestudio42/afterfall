@@ -61,6 +61,11 @@ export class NavGrid {
    */
   elev: Float32Array | null = null;
   steep: Float32Array | null = null;
+  /**
+   * 1 where a street (or a site's footpath) runs: walked like open ground, but paved. A
+   * farm or a well is not laid on it (placement.ts).
+   */
+  readonly road: Uint8Array;
 
   private gScore: Float64Array;
   private cameFrom: Int32Array;
@@ -87,6 +92,7 @@ export class NavGrid {
     this.kind = new Uint8Array(n);
     this.buildingAt = new Int32Array(n).fill(-1);
     this.structureAt = new Int32Array(n).fill(-1);
+    this.road = new Uint8Array(n);
     this.gScore = new Float64Array(n);
     this.cameFrom = new Int32Array(n);
     this.stamp = new Uint32Array(n);
@@ -524,9 +530,8 @@ export function stampTerrain(
     terrain?: TerrainDef;
   },
 ): void {
-  if (!t.waters?.length && !t.rails?.length && !t.walls?.length && !t.monuments?.length && !t.terrain) return;
-  const n = g.cols * g.rows;
-  const road = new Uint8Array(n);
+  const road = g.road;
+  road.fill(0);
   const near = (path: Vec2[], reach: number, mark: (i: number) => void) => {
     for (let k = 1; k < path.length; k++) {
       const a = path[k - 1];
@@ -557,6 +562,7 @@ export function stampTerrain(
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) road[y * g.cols + x] = 1;
     }
   }
+  if (!t.waters?.length && !t.rails?.length && !t.walls?.length && !t.monuments?.length && !t.terrain) return;
   const stamp = (i: number, kind: CellKind, over: CellKind[]) => {
     if (road[i] || !over.includes(g.kind[i])) return;
     g.kind[i] = kind;

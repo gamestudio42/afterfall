@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lineCells, lineFrame } from "@afterfall/shared";
-import { CellKind, cityFromOverpass } from "@afterfall/world";
+import { CellKind, cityFromOverpass, generateVariedCity } from "@afterfall/world";
 import { FIXTURE_CENTER, syntheticOverpass, syntheticTerrain } from "../../world/tests/fixtures/osm";
 import { createSimulation, deserialize, serialize, type Simulation } from "../src";
 import { destroyStructure } from "../src/systems/infected";
@@ -16,7 +16,10 @@ function started(seed = 3): Simulation {
   return sim;
 }
 
-/** A free spot near the base with room for a run of `len` walls east of it, and a clear row around it. */
+/**
+ * A free spot near the base with room for a run of `len` walls east of it, and a clear row
+ * around it, off the streets (a farm or a well cannot go on one).
+ */
 function freeSpot(sim: Simulation, len = 6, rows = 2): [number, number] {
   const g = sim.grid;
   const hq = sim.hqEntrance();
@@ -28,7 +31,8 @@ function freeSpot(sim: Simulation, len = 6, rows = 2): [number, number] {
       for (let x = hx - r; x <= hx + r; x++) {
         let ok = true;
         for (let dy = -2; dy <= rows && ok; dy++)
-          for (let dx = -2; dx < len + 2 && ok; dx++) ok = !!placementAt(sim, "wall", x + dx, y + dy);
+          for (let dx = -2; dx < len + 2 && ok; dx++)
+            ok = !!placementAt(sim, "wall", x + dx, y + dy) && g.road[g.index(x + dx, y + dy)] === 0;
         if (ok) return [x, y];
       }
   throw new Error("no free spot");
@@ -579,6 +583,40 @@ describe("a diagonal wall holds a crowd", () => {
     }
     // Checking only where a step ended let most of them through, at every step of the stair.
     expect(through).toBe(0);
+  });
+});
+
+describe("what goes on a street", () => {
+  /** A street cell with a clear square of street round it, far from any door. */
+  function streetSpot(sim: Simulation, size: number): [number, number] {
+    const g = sim.grid;
+    for (let y = 2; y < g.rows - size - 2; y++)
+      for (let x = 2; x < g.cols - size - 2; x++) {
+        let ok = true;
+        for (let dy = 0; dy < size && ok; dy++) for (let dx = 0; dx < size && ok; dx++) ok = g.road[g.index(x + dx, y + dy)] === 1;
+        if (ok && placementAt(sim, "wall", x, y)) return [x, y];
+      }
+    throw new Error("no street");
+  }
+
+  it("never a farm or a well, while walls, gates and towers close it", () => {
+    for (const sim of [started(), createSimulation({ seed: 3, map: generateVariedCity(3) })]) {
+      if (sim.state.hq < 0) {
+        sim.enqueue({ type: "setBase", building: pickBase(sim) });
+        sim.tick();
+      }
+      const [x, y] = streetSpot(sim, 4);
+      expect(placementAt(sim, "farm", x, y)).toBeNull();
+      expect(placementAt(sim, "well", x, y)).toBeNull();
+      expect(placementAt(sim, "wall", x, y)).not.toBeNull();
+      expect(placementAt(sim, "gate", x, y)).not.toBeNull();
+      expect(placementAt(sim, "tower", x, y)).not.toBeNull();
+      // Nor a farm with only a corner on the street, nor one turned onto it.
+      expect(placementAt(sim, "farm", x - 1, y - 1, 0.4)).toBeNull();
+      // Off the street a farm still goes where it went.
+      const [fx, fy] = freeSpot(sim, 6, 6);
+      expect(placementAt(sim, "farm", fx, fy)).not.toBeNull();
+    }
   });
 });
 

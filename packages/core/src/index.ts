@@ -4,7 +4,17 @@ export * from "./commands";
 export * from "./persistence";
 export * from "./report";
 export { taskSite, outstanding } from "./systems/tasks";
-export { placementAt, placementYaw, previewFrame, structureCells, isAxial, foldYaw, foldTurn } from "./systems/placement";
+export {
+  placementAt,
+  placementYaw,
+  previewFrame,
+  structureCells,
+  isAxial,
+  foldYaw,
+  foldTurn,
+  coversStreet,
+  onPaving,
+} from "./systems/placement";
 export { efficiency } from "./systems/util";
 export { EVENT_TIMEOUT_TICKS } from "./systems/events";
 

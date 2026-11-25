@@ -2,6 +2,7 @@ import { TICKS_PER_DAY, TICKS_PER_GAME_MINUTE, clockFromTick } from "@afterfall/
 import { CellKind } from "@afterfall/world";
 import { BALANCE, BUILDING_FUNCTIONS, RESOURCE_IDS, STRUCTURES, TECHS, type ResourceBag } from "@afterfall/content";
 import type { Simulation } from "../src";
+import { placementAt } from "../src/systems/placement";
 
 /**
  * Picks a central, reasonably large building as headquarters. A player who
@@ -265,8 +266,10 @@ export function autoplay(sim: Simulation, days: number, onTick?: (sim: Simulatio
   }
 }
 /**
- * Finds a free corner near the base for a structure, without covering a
- * building door. Returns the anchor cells (top-left corner) or null.
+ * Finds a free corner near the base for a structure, without covering a building door,
+ * by the game's own placement rule (so off the street for a farm or a well: the bot put
+ * every one of them on the street in front of its base). Returns the anchor cells
+ * (top-left corner) or null.
  */
 export function freeSpot(sim: Simulation, kind: "farm" | "well" | "tower" | "wall" | "gate"): [number, number][] | null {
   const g = sim.grid;
@@ -276,7 +279,7 @@ export function freeSpot(sim: Simulation, kind: "farm" | "well" | "tower" | "wal
   const cx = Math.floor(b.entrance.x / g.cell);
   const cy = Math.floor(b.entrance.y / g.cell);
   const entrances = new Set(sim.city.buildings.map((o) => g.cellOf(o.entrance.x, o.entrance.y)));
-  for (let ring = 2; ring <= 14; ring++) {
+  for (let ring = 2; ring <= 30; ring++) {
     for (let dy = -ring; dy <= ring; dy++) {
       for (let dx = -ring; dx <= ring; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
@@ -286,6 +289,7 @@ export function freeSpot(sim: Simulation, kind: "farm" | "well" | "tower" | "wal
         if (fp.length !== def.size * def.size) continue;
         if (!fp.every((i) => g.kind[i] === CellKind.Free && g.structureAt[i] === -1)) continue;
         if (def.solid && fp.some((i) => entrances.has(i))) continue;
+        if (!placementAt(sim, kind, x, y)) continue;
         return [[x, y]];
       }
     }

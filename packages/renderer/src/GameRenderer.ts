@@ -29,7 +29,7 @@ import { placeLitter, type LitterKind } from "./litter";
 import type { ReclamationField } from "./reclamation";
 import { Doors } from "./doors";
 import { buildContactShadows } from "./contact";
-import { SkyDome, buildOutskirts, placeOutskirts, skyColors, skyInView } from "./sky";
+import { SkyDome, buildOutskirts, disposeOutskirts, outskirtStreets, placeOutskirts, setOutskirtsArt, skyColors, skyInView } from "./sky";
 import { Rain, WEATHER, easeWeather, weatherFor, type WeatherKind, type WeatherState } from "./weather";
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
@@ -616,6 +616,7 @@ export class GameRenderer {
       }
     }
     if (this.buildings) this.buildings.setArt(art);
+    if (this.outskirts) setOutskirtsArt(this.outskirts, art);
     this.doors?.setMap(art.door);
     this.vfx?.setAtlas(art.spark_atlas);
     this.vfx?.setMuzzleAtlas(art.muzzle_atlas);
@@ -884,12 +885,14 @@ export class GameRenderer {
     this.scene.add(this.contact);
     if (this.outskirts) {
       this.scene.remove(this.outskirts);
-      this.outskirts.geometry.dispose();
-      (this.outskirts.material as THREE.Material).dispose();
+      disposeOutskirts(this.outskirts);
     }
     this.outskirts = buildOutskirts(
       placeOutskirts(city, city.seed ?? 1).map((b) => (city.terrain ? { ...b, y: heightAt(city.terrain, b.x, b.z) } : b)),
+      outskirtStreets(city),
+      (x, z) => heightAt(city.terrain, x, z),
     );
+    setOutskirtsArt(this.outskirts, this.art);
     this.scene.add(this.outskirts);
     this.refreshBuildingColors();
     this.dressStreets(sim);
@@ -987,7 +990,7 @@ export class GameRenderer {
   private postFx: PostFx | null = null;
   private skyEnv: THREE.Texture | null = null;
   private contact: THREE.Mesh | null = null;
-  private outskirts: THREE.InstancedMesh | null = null;
+  private outskirts: THREE.Group | null = null;
   private skyDome = new SkyDome();
   private rain: Rain | null = null;
   private weatherNow: WeatherState = { ...WEATHER.clear };

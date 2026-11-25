@@ -16,6 +16,23 @@ function plane(x: number, z: number, w: number, d: number, y: number): THREE.Buf
 }
 
 /**
+ * The map with the city drawn round it folded in: its streets, parks, bridges and (for the
+ * reclamation field, which reads their footprints) its buildings. Only for drawing: the
+ * buildings' indices past the map's are not the simulation's.
+ */
+export function withDecor(city: CityMap): CityMap {
+  const d = city.decor;
+  if (!d) return city;
+  return {
+    ...city,
+    roads: [...city.roads, ...d.roads],
+    parks: [...city.parks, ...d.parks],
+    bridges: [...(city.bridges ?? []), ...d.bridges],
+    buildings: [...city.buildings, ...d.buildings],
+  };
+}
+
+/**
  * A street's centre line carried out of the map to the end of the outskirts, from a metre
  * inside the edge so it joins the street on the map, in 10 m steps the relief can drape.
  */
@@ -242,7 +259,7 @@ function worldUv(geo: THREE.BufferGeometry, tile: number): void {
  * one has streets and buildings and nothing else, so its base has to be paved — painting
  * it grass turned a dense neighbourhood into a lawn with buildings standing on it.
  */
-export function buildCityGround(city: CityMap): {
+export function buildCityGround(map: CityMap): {
   group: THREE.Group;
   materials: GroundMaterials;
   /** True for an imported map: streets and footprints, no blocks. */
@@ -251,6 +268,9 @@ export function buildCityGround(city: CityMap): {
   reclamation: ReclamationField;
   reclamationTexture: THREE.DataTexture;
 } {
+  // The streets, sidewalks, parks and bridges of the city drawn round a generated map
+  // (decor) are laid with the map's own, in the same meshes and materials.
+  const city = withDecor(map);
   const group = new THREE.Group();
   group.name = "ground";
   const field = buildReclamation(city);

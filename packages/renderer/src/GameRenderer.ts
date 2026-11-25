@@ -9,7 +9,7 @@ import { BuildingBatch, buildingSeat, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
 import { heightAt } from "@afterfall/world";
 import { drape, groundNormal, rayGround, terrainTop } from "./terrainMesh";
-import { ARID_GROUND_TINT, buildCityGround, TEXTURED_TINT, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
+import { ARID_GROUND_TINT, buildCityGround, TEXTURED_TINT, withDecor, URBAN_GROUND_TINT, type GroundMaterials } from "./cityMeshes";
 import { WATER_TIME } from "./water";
 import { decalGeometry, placeDecals } from "./decals";
 import { loadArtTextures, type ArtTextures } from "./textures";
@@ -616,6 +616,7 @@ export class GameRenderer {
       }
     }
     if (this.buildings) this.buildings.setArt(art);
+    this.decorBuildings?.setArt(art);
     if (this.outskirts) setOutskirtsArt(this.outskirts, art);
     this.doors?.setMap(art.door);
     this.vfx?.setAtlas(art.spark_atlas);
@@ -850,7 +851,9 @@ export class GameRenderer {
     this.vegetation = new Vegetation(ground.group.getObjectByName("park-tree-fallback"));
     ground.group.add(this.vegetation.group);
     // Crowns and their shadows are the frame on a CPU rasteriser: keep an even sixth.
-    void this.vegetation.load(city, this.artBase, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.16 : 1);
+    // The ring of city drawn round a generated map grows as the map does: its parks' trees,
+    // and what seeded itself in its lots.
+    void this.vegetation.load(withDecor(city), this.artBase, ground.reclamation, isSoftwareRenderer(this.gpuName) ? 0.16 : 1);
     this.groundMats = ground.materials;
     this.groundImported = ground.imported;
     this.groundArid = city.climate === "arid";
@@ -868,6 +871,26 @@ export class GameRenderer {
     // building maps now, and let applyArt handle anything that lands later.
     this.buildings.setArt(this.art);
     this.scene.add(this.buildings.mesh);
+    // The city drawn round a generated map: the same buildings, painted once in their
+    // type's colour, shut and dark. Not picked, not played, and not shadowed.
+    if (this.decorBuildings) {
+      this.scene.remove(this.decorBuildings.mesh);
+      this.decorBuildings.dispose();
+      this.decorBuildings = null;
+    }
+    if (city.decor?.buildings.length) {
+      const decor = new BuildingBatch(city.decor.buildings, city.terrain);
+      decor.mesh.castShadow = false;
+      decor.mesh.name = "decor-buildings";
+      city.decor.buildings.forEach((b, i) => {
+        tmpC.setHex(BUILDING_TYPES[b.type].color).multiplyScalar(0.82);
+        decor.setColors(i, tmpC, tmpC, 0);
+      });
+      decor.commitColors();
+      decor.setArt(this.art);
+      this.decorBuildings = decor;
+      this.scene.add(decor.mesh);
+    }
     if (this.doors) {
       this.scene.remove(this.doors.group);
       this.doors.dispose();
@@ -880,7 +903,7 @@ export class GameRenderer {
       this.contact.geometry.dispose();
       (this.contact.material as THREE.Material).dispose();
     }
-    this.contact = buildContactShadows(city.buildings);
+    this.contact = buildContactShadows([...city.buildings, ...(city.decor?.buildings ?? [])]);
     this.contact.geometry = drape(this.contact.geometry, city.terrain);
     this.scene.add(this.contact);
     if (this.outskirts) {
@@ -989,6 +1012,7 @@ export class GameRenderer {
   private skyEnv: THREE.Texture | null = null;
   private contact: THREE.Mesh | null = null;
   private outskirts: THREE.Group | null = null;
+  private decorBuildings: BuildingBatch | null = null;
   private skyDome = new SkyDome();
   private rain: Rain | null = null;
   private weatherNow: WeatherState = { ...WEATHER.clear };
@@ -1334,6 +1358,7 @@ export class GameRenderer {
     fog.near = lerp(lerp(150, 185, daylight), 45, w.fog) + pull;
     fog.far = lerp(lerp(520, 620, daylight), 330, w.fog) + pull;
     this.buildings?.setNight(1 - daylight);
+    this.decorBuildings?.setNight(1 - daylight);
     if (this.doorGlow) {
       const lit = Math.max(0, Math.min(1, (1 - daylight) * 1.2 - 0.1));
       (this.doorGlow.material as THREE.MeshBasicMaterial).opacity = lit * 0.55;

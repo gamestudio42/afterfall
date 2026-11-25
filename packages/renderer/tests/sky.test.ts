@@ -137,6 +137,22 @@ describe("outskirts", () => {
     expect(boxes.every((b) => b.yaw === undefined)).toBe(true);
   });
 
+  it("stands past the ring of city drawn round a generated map, and leaves from its streets", () => {
+    const varied = generateVariedCity(1);
+    const ring = varied.decor!.ring;
+    for (const b of placeOutskirts(varied, 3)) {
+      const dx = Math.max(-ring - b.x, b.x - varied.width - ring, 0);
+      const dz = Math.max(-ring - b.z, b.z - varied.height - ring, 0);
+      expect(Math.hypot(dx, dz)).toBeGreaterThan(OUTSKIRTS_NEAR - 20);
+    }
+    const streets = outskirtStreets(varied);
+    expect(streets.length).toBeGreaterThan(8);
+    for (const s of streets) {
+      const onEdge = s.x < -ring + 1.5 || s.z < -ring + 1.5 || s.x > varied.width + ring - 1.5 || s.z > varied.height + ring - 1.5;
+      expect(onEdge).toBe(true);
+    }
+  });
+
   it("is the same for the same seed and thins out with distance", () => {
     expect(placeOutskirts(map, 3)).toEqual(boxes);
     const dist = (b: { x: number; z: number }) => Math.hypot(Math.max(-b.x, b.x - map.width, 0), Math.max(-b.z, b.z - map.height, 0));

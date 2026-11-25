@@ -41,6 +41,8 @@ export const ARID_GROWTH = 0.4;
 
 /** Texels per side at most; a generated city fits at one metre a texel. */
 const MAX_TEXELS = 512;
+/** With a ring of drawn city round the map (decor), which about doubles the span. */
+const MAX_TEXELS_RING = 768;
 /** Margin past the map edge, so the ground just beyond it is covered too. */
 const MARGIN = 24;
 
@@ -110,12 +112,16 @@ export function distanceField(mask: Uint8Array, cols: number, rows: number): Flo
 }
 
 export function buildReclamation(city: CityMap): ReclamationField {
-  const x0 = -MARGIN,
-    z0 = -MARGIN;
-  const span = Math.max(city.width, city.height) + MARGIN * 2;
-  const cell = Math.max(1, span / MAX_TEXELS);
-  const cols = Math.ceil((city.width + MARGIN * 2) / cell);
-  const rows = Math.ceil((city.height + MARGIN * 2) / cell);
+  // A generated city's ring of drawn blocks wears the field too, or it would read as
+  // another city: the same soil, growth and wear, at a little less resolution.
+  const ring = city.decor?.ring ?? 0;
+  const margin = MARGIN + ring;
+  const x0 = -margin,
+    z0 = -margin;
+  const span = Math.max(city.width, city.height) + margin * 2;
+  const cell = Math.max(1, span / (ring ? MAX_TEXELS_RING : MAX_TEXELS));
+  const cols = Math.ceil((city.width + margin * 2) / cell);
+  const rows = Math.ceil((city.height + margin * 2) / cell);
   const n = cols * rows;
   const road = new Uint8Array(n);
   const building = new Uint8Array(n);

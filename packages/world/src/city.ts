@@ -177,6 +177,12 @@ export interface CityMap {
    * classic generator is what a seed alone rebuilds.
    */
   generated?: { site: string; layout: string; shape?: string };
+  /**
+   * The city round a generated map: real streets, blocks and buildings in a ring `ring`
+   * metres wide past its edge, drawn as the map is and not played (no navigation, no
+   * selection). Absent on imported maps and on maps made before it.
+   */
+  decor?: { ring: number; roads: RoadDef[]; buildings: BuildingDef[]; parks: ParkDef[]; bridges: BridgeDef[] };
 }
 
 export interface CityOptions {

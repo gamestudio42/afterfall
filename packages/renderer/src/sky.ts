@@ -241,13 +241,17 @@ export const OUTSKIRTS_FAR = 340;
 export function outskirtStreets(city: CityMap): OutskirtStreet[] {
   const out: OutskirtStreet[] = [];
   const edge = 1;
-  const onBorder = (x: number, z: number) => x < edge || z < edge || x > city.width - edge || z > city.height - edge;
+  // With a ring of drawn city round the map (decor), its streets leave at the ring's edge.
+  const ring = city.decor?.ring ?? 0;
+  const roads = city.decor ? city.decor.roads : city.roads;
+  const onBorder = (x: number, z: number) =>
+    x < -ring + edge || z < -ring + edge || x > city.width + ring - edge || z > city.height + ring - edge;
   const add = (x: number, z: number, fx: number, fz: number, width: number) => {
     const len = Math.hypot(x - fx, z - fz) || 1;
     if (!onBorder(x, z) || out.some((s) => Math.hypot(s.x - x, s.z - z) < 4)) return;
     out.push({ x, z, dx: (x - fx) / len, dz: (z - fz) / len, width });
   };
-  for (const r of city.roads) {
+  for (const r of roads) {
     if (r.trail) continue;
     if (r.path && r.path.length > 1) {
       const p = r.path;
@@ -288,24 +292,27 @@ export function placeOutskirts(city: CityMap, seed = 1): OutskirtBox[] {
   // The lots run along the map's streets: square to the map, a turned city's outskirts
   // stood askew to every street that left it (a playtest report).
   const grain = streetGrain(city);
+  const ring = city.decor?.ring ?? 0;
   const cos = Math.cos(grain);
   const sin = Math.sin(grain);
   const mx = city.width / 2;
   const mz = city.height / 2;
   // Square to the map, the lots start at its corner as they always did.
-  const ox = grain ? -(Math.hypot(city.width, city.height) / 2 + OUTSKIRTS_FAR) : -mx - OUTSKIRTS_FAR;
-  const oz = grain ? ox : -mz - OUTSKIRTS_FAR;
-  const nx = Math.ceil((grain ? -ox * 2 : city.width + OUTSKIRTS_FAR * 2) / pitch);
-  const nz = Math.ceil((grain ? -oz * 2 : city.height + OUTSKIRTS_FAR * 2) / pitch);
+  const far0 = OUTSKIRTS_FAR + ring;
+  const ox = grain ? -(Math.hypot(city.width, city.height) / 2 + far0) : -mx - far0;
+  const oz = grain ? ox : -mz - far0;
+  const nx = Math.ceil((grain ? -ox * 2 : city.width + far0 * 2) / pitch);
+  const nz = Math.ceil((grain ? -oz * 2 : city.height + far0 * 2) / pitch);
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
       const pu = ox + (i + 0.5) * pitch;
       const pv = oz + (j + 0.5) * pitch;
       const cx = mx + pu * cos - pv * sin;
       const cz = mz + pu * sin + pv * cos;
-      // Distance outside the map's rectangle; zero or less means inside it.
-      const dx = Math.max(-cx, cx - city.width, 0);
-      const dz = Math.max(-cz, cz - city.height, 0);
+      // Distance outside the map's rectangle (and the ring drawn round it); zero or less
+      // means inside it.
+      const dx = Math.max(-ring - cx, cx - city.width - ring, 0);
+      const dz = Math.max(-ring - cz, cz - city.height - ring, 0);
       const dist = Math.hypot(dx, dz);
       if (dist < OUTSKIRTS_NEAR || dist > OUTSKIRTS_FAR) continue;
       const far = (dist - OUTSKIRTS_NEAR) / (OUTSKIRTS_FAR - OUTSKIRTS_NEAR);
@@ -320,7 +327,7 @@ export function placeOutskirts(city: CityMap, seed = 1): OutskirtBox[] {
       // Turned, a block's corner reaches past its half-width: keep it off the map.
       if (grain) {
         const reach = Math.hypot(w, d) / 2;
-        if (Math.hypot(Math.max(-x, x - city.width, 0), Math.max(-z, z - city.height, 0)) < reach + 6) continue;
+        if (Math.hypot(Math.max(-ring - x, x - city.width - ring, 0), Math.max(-ring - z, z - city.height - ring, 0)) < reach + 6) continue;
       }
       if (onStreet(x, z, Math.hypot(w, d) / 2)) continue;
       const tall = hash(i, j, seed + 5);

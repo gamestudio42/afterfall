@@ -89,37 +89,47 @@ export function placeVegetation(city: CityMap, field: ReclamationField = buildRe
   // Trees that seeded themselves outside the parks, wherever the field is thick.
   let urban = 0;
   const step = 9;
-  for (let gz = 0; gz < city.height; gz += step)
-    for (let gx = 0; gx < city.width; gx += step) {
-      if (out.length >= VEGETATION_CAP || urban >= URBAN_TREE_CAP) return out;
-      const cx = gx / step,
-        cz = gz / step;
-      const x = gx + hash2(cx, cz, seed + 13) * step,
-        z = gz + hash2(cx, cz, seed + 17) * step;
-      const g = growthAt(field, x, z);
-      if (g < 0.35 || hash2(cx, cz, seed + 19) > (g - 0.35) * 1.8) continue;
-      if (city.parks.some((p) => inPark(p, x, z)) || inWater(field, x, z)) continue;
-      if (nearBuilding(x, z, 2.5) || nearRoad(x, z, 1.5) || nearDoor(x, z, 6)) continue;
-      urban++;
-      const t = tree(++index, x, z, 1.25);
-      // In a desert, what took root outside a garden mostly died back to a snag.
-      out.push(city.climate === "arid" && index % 4 !== 0 ? { ...t, species: "dead" } : t);
-    }
+  // The map first, then the city drawn round it (decor), so the map's own growth is the
+  // same with or without it.
+  const ring = city.decor?.ring ?? 0;
+  const regions: [number, number, number, number, boolean][] = [[0, 0, city.width, city.height, false]];
+  if (ring) regions.push([-ring, -ring, city.width + ring, city.height + ring, true]);
+  const inMap = (x: number, z: number) => x >= 0 && z >= 0 && x < city.width && z < city.height;
+  for (const [x0, z0, x1, z1, outside] of regions)
+    for (let gz = z0; gz < z1; gz += step)
+      for (let gx = x0; gx < x1; gx += step) {
+        if (out.length >= VEGETATION_CAP || urban >= URBAN_TREE_CAP) return out;
+        if (outside && inMap(gx, gz)) continue;
+        const cx = gx / step,
+          cz = gz / step;
+        const x = gx + hash2(cx, cz, seed + 13) * step,
+          z = gz + hash2(cx, cz, seed + 17) * step;
+        const g = growthAt(field, x, z);
+        if (g < 0.35 || hash2(cx, cz, seed + 19) > (g - 0.35) * 1.8) continue;
+        if (city.parks.some((p) => inPark(p, x, z)) || inWater(field, x, z)) continue;
+        if (nearBuilding(x, z, 2.5) || nearRoad(x, z, 1.5) || nearDoor(x, z, 6)) continue;
+        urban++;
+        const t = tree(++index, x, z, 1.25);
+        // In a desert, what took root outside a garden mostly died back to a snag.
+        out.push(city.climate === "arid" && index % 4 !== 0 ? { ...t, species: "dead" } : t);
+      }
 
   // Brush against the walls, where the field is thickest.
-  for (let gz = 0; gz < city.height; gz += 4)
-    for (let gx = 0; gx < city.width; gx += 4) {
-      if (out.length >= VEGETATION_CAP) return out;
-      const cx = gx / 4,
-        cz = gz / 4;
-      const x = gx + hash2(cx, cz, seed + 23) * 4,
-        z = gz + hash2(cx, cz, seed + 29) * 4;
-      const g = growthAt(field, x, z);
-      if (g < 0.72 || hash2(cx, cz, seed + 31) > 0.35) continue;
-      if (city.parks.some((p) => inPark(p, x, z)) || inWater(field, x, z)) continue;
-      if (nearBuilding(x, z, 0.7) || nearRoad(x, z, 0.8) || nearDoor(x, z, 4)) continue;
-      out.push({ species: "bush", x, z, scale: 0.8 + g * 0.7, yaw: x * 0.7 + z, shade: 0.72 + hash2(cx, cz, seed + 37) * 0.25 });
-    }
+  for (const [x0, z0, x1, z1, outside] of regions)
+    for (let gz = z0; gz < z1; gz += 4)
+      for (let gx = x0; gx < x1; gx += 4) {
+        if (out.length >= VEGETATION_CAP) return out;
+        if (outside && inMap(gx, gz)) continue;
+        const cx = gx / 4,
+          cz = gz / 4;
+        const x = gx + hash2(cx, cz, seed + 23) * 4,
+          z = gz + hash2(cx, cz, seed + 29) * 4;
+        const g = growthAt(field, x, z);
+        if (g < 0.72 || hash2(cx, cz, seed + 31) > 0.35) continue;
+        if (city.parks.some((p) => inPark(p, x, z)) || inWater(field, x, z)) continue;
+        if (nearBuilding(x, z, 0.7) || nearRoad(x, z, 0.8) || nearDoor(x, z, 4)) continue;
+        out.push({ species: "bush", x, z, scale: 0.8 + g * 0.7, yaw: x * 0.7 + z, shade: 0.72 + hash2(cx, cz, seed + 37) * 0.25 });
+      }
   return out;
 }
 

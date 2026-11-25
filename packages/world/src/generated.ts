@@ -13,7 +13,7 @@ import {
 } from "@afterfall/shared";
 import type { BridgeDef, BuildingDef, CityMap, ParkDef, RoadDef, WaterDef } from "./city";
 import { CellKind, NavGrid, isWalkableKind } from "./navgrid";
-import type { TerrainDef } from "./terrain";
+import { heightAt, type TerrainDef } from "./terrain";
 
 /**
  * A generated city with relief and an irregular street plan.
@@ -45,6 +45,13 @@ export const CITY_SIZES = { small: 350, medium: 450, large: 600, huge: 800 } as 
 export type CitySize = keyof typeof CITY_SIZES;
 /** Fewest buildings a medium map may have (scaled by area for the others), and the kinds it must have. */
 const MIN_BUILDINGS = 40;
+/**
+ * How far the city carries on past the map's edge, by size: real blocks, streets and
+ * buildings, drawn but not played. A plain box skyline stands beyond it (sky.ts).
+ */
+const RING: Record<CitySize, number> = { small: 140, medium: 140, large: 120, huge: 90 };
+const RING_MAX = 140;
+
 /** Half the widest escarpment face, and 3 m more. */
 const SCARP_CLEAR = 11;
 const ESSENTIAL: BuildingType[] = ["hospital", "police", "school", "supermarket"];
@@ -162,6 +169,12 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
       const t = (py / wave) * Math.PI * 2 + phase;
       river.push({ x: x0 + amp * Math.sin(t) + amp * 0.3 * Math.sin(t * 2.3 + 1), y: py });
     }
+    // On out through the city round the map, straight: the relief past the edge is the
+    // edge's own, held, and a straight valley floor is what it holds.
+    const first = river[0];
+    const last = river[river.length - 1];
+    river.unshift({ x: first.x, y: -RING_MAX - 40 });
+    river.push({ x: last.x, y: height + RING_MAX + 40 });
   }
   const riverDist = (px: number, py: number) => (river ? distToPolyline(px, py, river) - riverW / 2 : Infinity);
 
@@ -422,6 +435,29 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
     };
   });
 
+  const decor = ringCity({
+    seed,
+    size: opts.size ?? "medium",
+    width,
+    height,
+    toMap,
+    outline,
+    shape,
+    bend,
+    us,
+    vs,
+    roadW,
+    roadH,
+    blockW,
+    blockH,
+    cut,
+    bridgeRows,
+    riverDist,
+    relief,
+    lots,
+    rowsBridged: !!river,
+  });
+
   const map: CityMap = {
     seed,
     name: `${rng.pick(NAME_PREFIXES)} ${rng.pick(NAME_SUFFIXES)}`,
@@ -441,6 +477,7 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
     terrain: relief.def,
     spawnPoints: [],
     generated: { site, layout, shape },
+    decor,
   };
 
   // Doors: on the street side of each lot, on the first free cell out from its wall.
@@ -506,6 +543,247 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
   if (buildings.length < Math.round(MIN_BUILDINGS * Math.min(1, k * k))) return null;
   for (const type of ESSENTIAL) if (!buildings.some((b) => b.type === type)) return null;
   return map;
+}
+
+interface RingInput {
+  seed: number;
+  size: CitySize;
+  width: number;
+  height: number;
+  toMap: (u: number, v: number) => Vec2;
+  outline: (r: Rect, step?: number) => Vec2[];
+  shape: Shape;
+  bend: number;
+  us: number[];
+  vs: number[];
+  roadW: number[];
+  roadH: number[];
+  blockW: number[];
+  blockH: number[];
+  cut: Set<string>;
+  bridgeRows: Set<number>;
+  riverDist: (x: number, y: number) => number;
+  relief: Relief;
+  lots: Lot[];
+  rowsBridged: boolean;
+}
+
+/**
+ * The city round the map: the same street grid carried on outward for a ring of blocks,
+ * with the same lots and the same buildings, and the map's own lots that fell past its
+ * edge. It is drawn as the map is and played not at all. Drawn from its own random
+ * stream, so the map inside is exactly the one it was without it.
+ */
+function ringCity(o: RingInput): NonNullable<CityMap["decor"]> {
+  const rng = new Rng(deriveSeed(o.seed, "varied:ring"));
+  const ring = RING[o.size];
+  const typeFor = (zone: Zone): BuildingType =>
+    zone === "industrial"
+      ? rng.weighted<BuildingType>({ warehouse: 80, gasStation: 12, office: 8 })
+      : rng.weighted<BuildingType>({ house: 62, apartment: 30, shop: 5, pharmacy: 3 });
+  const snap = (v: number) => Math.round(v / CELL) * CELL;
+  const outer: Rect = { x: -ring, y: -ring, w: o.width + ring * 2, h: o.height + ring * 2 };
+  // The plan's half extent that covers the ring once turned.
+  const reach = Math.hypot(o.width + ring * 2, o.height + ring * 2) / 2 + 40;
+
+  // Grid lines carried outward: streets of 10 m between blocks of 40 to 72 m.
+  const grow = (starts: number[], widths: number[], blocks: number[], lo: number, hi: number) => {
+    const s = [...starts];
+    const w = [...widths];
+    const b = [...blocks];
+    let added = 0;
+    while (s[0] > lo) {
+      const bw = snap(rng.range(40, 72));
+      s.unshift(s[0] - bw - 10);
+      w.unshift(10);
+      b.unshift(bw);
+      added++;
+    }
+    while (s[s.length - 1] + w[w.length - 1] < hi) {
+      const bw = snap(rng.range(40, 72));
+      b.push(bw);
+      s.push(s[s.length - 1] + w[w.length - 1] + bw);
+      w.push(10);
+    }
+    return { s, w, b, added };
+  };
+  const gu = grow(o.us, o.roadW, o.blockW, -reach, reach);
+  const gv = grow(o.vs, o.roadH, o.blockH, -reach, reach);
+  const cols = gu.b.length;
+  const rows = gv.b.length;
+  const isOriginal = (i: number, j: number) =>
+    i >= gu.added && i < gu.added + o.blockW.length && j >= gv.added && j < gv.added + o.blockH.length;
+
+  // Streets in the ring only: each grid line clipped to the four strips round the map.
+  const strips: Rect[] = [
+    { x: -ring, y: -ring, w: ring, h: o.height + ring * 2 },
+    { x: o.width, y: -ring, w: ring, h: o.height + ring * 2 },
+    { x: 0, y: -ring, w: o.width, h: ring },
+    { x: 0, y: o.height, w: o.width, h: ring },
+  ];
+  const roads: RoadDef[] = [];
+  const bridges: BridgeDef[] = [];
+  const addRoad = (a: Vec2, b: Vec2, w: number, bridged: boolean) => {
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const steps = Math.max(1, Math.ceil(len / (o.bend ? 4 : len)));
+    const line: Vec2[] = [];
+    for (let s = 0; s <= steps; s++) line.push(o.toMap(a.x + ((b.x - a.x) * s) / steps, a.y + ((b.y - a.y) * s) / steps));
+    for (const strip of strips)
+      for (const piece of clipPolylineToRect(line, strip)) {
+        let run: Vec2[] = [];
+        const wet: Vec2[] = [];
+        const flush = () => {
+          if (run.length > 1 && polylineLength(run) >= 6) {
+            const path = simplifyLine(run);
+            roads.push({ id: `ring${roads.length}`, rect: lineBounds(path, w), horizontal: isHorizontal(path), path, width: w });
+          }
+          run = [];
+        };
+        for (const p of densify(piece, 2)) {
+          const d = o.riverDist(p.x, p.y);
+          if (bridged && d < 1) wet.push(p);
+          if (bridged || d > 3) run.push(p);
+          else flush();
+        }
+        flush();
+        if (wet.length > 1) bridges.push({ id: `ringBridge${bridges.length}`, polygon: deck(wet, w) });
+      }
+  };
+  for (let j = 0; j <= rows; j++) {
+    const v = gv.s[j] + gv.w[j] / 2;
+    const original = j - gv.added;
+    const bridged = o.rowsBridged && (o.bridgeRows.has(original) || (original < 0 || original > o.blockH.length ? rng.chance(0.5) : false));
+    addRoad({ x: -reach, y: v }, { x: reach, y: v }, gv.w[j], bridged);
+  }
+  for (let i = 0; i <= cols; i++) {
+    const u = gu.s[i] + gu.w[i] / 2;
+    let from = -reach;
+    for (let j = 0; j < rows; j++) {
+      if (!o.cut.has(`${i - gu.added}:${j - gv.added}`)) continue;
+      addRoad({ x: u, y: from }, { x: u, y: gv.s[j] + gv.w[j] / 2 }, gu.w[i], false);
+      from = gv.s[j + 1] + gv.w[j + 1] / 2;
+    }
+    addRoad({ x: u, y: from }, { x: u, y: reach }, gu.w[i], false);
+  }
+
+  // Lots that lie wholly in the ring, clear of the water, on ground that does not climb.
+  const inRing = (r: Rect, gap: number) => {
+    let low = Infinity;
+    let high = -Infinity;
+    for (let u = r.x; u <= r.x + r.w + 1e-6; u += Math.max(2, r.w / Math.ceil(r.w / 4)))
+      for (let v = r.y; v <= r.y + r.h + 1e-6; v += Math.max(2, r.h / Math.ceil(r.h / 4))) {
+        const p = o.toMap(u, v);
+        if (p.x < outer.x || p.y < outer.y || p.x > outer.x + outer.w || p.y > outer.y + outer.h) return false;
+        if (p.x > -3 && p.y > -3 && p.x < o.width + 3 && p.y < o.height + 3) return false;
+        if (o.riverDist(p.x, p.y) < gap) return false;
+        const h = heightAt(o.relief.def, p.x, p.y);
+        low = Math.min(low, h);
+        high = Math.max(high, h);
+      }
+    return high - low < 2.5;
+  };
+  const lots: Lot[] = o.lots.filter((l) => inRing(l.rect, 4));
+  const parks: ParkDef[] = [];
+  const MARGIN = 4;
+  for (let j = 0; j < rows; j++)
+    for (let i = 0; i < cols; i++) {
+      if (isOriginal(i, j)) continue;
+      const rect = { x: gu.s[i] + gu.w[i], y: gv.s[j] + gv.w[j], w: gu.b[i], h: gv.b[j] };
+      const zone: Zone = rng.chance(0.12) ? "park" : rng.chance(0.3) ? "industrial" : "residential";
+      if (zone === "park") {
+        if (!inRing(rect, 2)) continue;
+        const polygon = o.outline(rect, o.bend ? 8 : 0);
+        const trees: Vec2[] = [];
+        const n = Math.round((rect.w * rect.h) / 260);
+        for (let t = 0; t < n; t++) trees.push(o.toMap(rect.x + rng.range(4, rect.w - 4), rect.y + rng.range(4, rect.h - 4)));
+        parks.push({ id: `ringPark${parks.length}`, rect: polygonBounds(polygon), polygon, trees });
+        continue;
+      }
+      if (zone === "industrial") {
+        for (const top of [true, false])
+          lots.push({
+            type: typeFor("industrial"),
+            zone,
+            rect: {
+              x: rect.x + MARGIN,
+              y: top ? rect.y + MARGIN : rect.y + rect.h / 2 + MARGIN,
+              w: rect.w - MARGIN * 2,
+              h: rect.h / 2 - MARGIN * 2,
+            },
+            side: top ? -1 : 1,
+          });
+        continue;
+      }
+      const n = Math.max(2, Math.round(rect.w / rng.range(18, 24)));
+      const lotW = rect.w / n;
+      const lotH = rect.h / 2;
+      for (let r = 0; r < 2; r++)
+        for (let c = 0; c < n; c++) {
+          const type = typeFor("residential");
+          const big = type === "apartment" || type === "office";
+          const fw = lotW - MARGIN * 2;
+          const fh = lotH - MARGIN * 2;
+          const w = fw * (big ? rng.range(0.8, 1) : rng.range(0.6, 0.95));
+          const hh = fh * (big ? rng.range(0.75, 1) : rng.range(0.55, 0.9));
+          lots.push({
+            type,
+            zone,
+            rect: {
+              x: rect.x + c * lotW + MARGIN + (fw - w) / 2,
+              y: r === 0 ? rect.y + MARGIN : rect.y + lotH + MARGIN + (fh - hh),
+              w,
+              h: hh,
+            },
+            side: r === 0 ? -1 : 1,
+          });
+        }
+    }
+
+  const buildings: BuildingDef[] = lots
+    .filter((l) => inRing(l.rect, 4))
+    .map((l, index) => {
+      const def = BUILDING_TYPES[l.type];
+      const floors = rng.int(def.floors[0], def.floors[1]);
+      const footprint = o.outline(l.rect, o.bend ? 10 : 0);
+      const mu = l.rect.x + l.rect.w / 2;
+      const edge = l.side > 0 ? l.rect.y + l.rect.h : l.rect.y;
+      const wall = o.toMap(mu, edge);
+      const out = o.toMap(mu, edge + l.side);
+      const len = Math.hypot(out.x - wall.x, out.y - wall.y) || 1;
+      const facing = { x: (out.x - wall.x) / len, y: (out.y - wall.y) / len };
+      return {
+        id: `ring${index}`,
+        index,
+        type: l.type,
+        zone: l.zone,
+        rect: polygonBounds(footprint),
+        ...(o.shape === "square" ? {} : { footprint }),
+        area: Math.round(polygonArea(footprint)),
+        floors,
+        height: floors * 3.2 + 0.6,
+        entrance: { x: wall.x + facing.x * 1.5, y: wall.y + facing.y * 1.5 },
+        facing,
+      };
+    });
+  return { ring, roads, buildings, parks, bridges };
+}
+
+/** A bridge deck over the wet stretch of a street, and a few metres onto each bank. */
+function deck(wet: Vec2[], w: number): Vec2[] {
+  const p0 = wet[0];
+  const p1 = wet[wet.length - 1];
+  const dl = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
+  const dx = (p1.x - p0.x) / dl;
+  const dy = (p1.y - p0.y) / dl;
+  const half = w / 2 + 1.5;
+  const a0 = { x: p0.x - dx * 6, y: p0.y - dy * 6 };
+  const a1 = { x: p1.x + dx * 6, y: p1.y + dy * 6 };
+  return [
+    { x: a0.x - dy * half, y: a0.y + dx * half },
+    { x: a1.x - dy * half, y: a1.y + dx * half },
+    { x: a1.x + dy * half, y: a1.y - dx * half },
+    { x: a0.x + dy * half, y: a0.y - dx * half },
+  ];
 }
 
 function distToSegment(x: number, y: number, a: Vec2, b: Vec2): number {

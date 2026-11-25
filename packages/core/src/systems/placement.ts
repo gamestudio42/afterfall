@@ -67,10 +67,23 @@ export function structureCells(sim: Simulation, kind: StructureKind, cx: number,
 const SAMPLES = 4;
 const COVERED = 1;
 
+export type PlacementProblem = "bounds" | "occupied" | "street" | "steep" | "entrance" | "gate";
+
+/** One verdict supplies both the rules and the player's explanation. */
 export function placementAt(sim: Simulation, kind: StructureKind, cx: number, cy: number, yaw = 0): Placement | null {
+  const result = inspectPlacement(sim, kind, cx, cy, yaw);
+  return typeof result === "string" ? null : result;
+}
+
+export function placementProblem(sim: Simulation, kind: StructureKind, cx: number, cy: number, yaw = 0): PlacementProblem | null {
+  const result = inspectPlacement(sim, kind, cx, cy, yaw);
+  return typeof result === "string" ? result : null;
+}
+
+function inspectPlacement(sim: Simulation, kind: StructureKind, cx: number, cy: number, yaw = 0): Placement | PlacementProblem {
   const g = sim.grid;
   const cells = structureCells(sim, kind, cx, cy, yaw);
-  if (!cells) return null;
+  if (!cells) return "bounds";
   let replaces = -1;
   for (const i of cells) {
     const owner = g.structureAt[i];
@@ -78,23 +91,23 @@ export function placementAt(sim: Simulation, kind: StructureKind, cx: number, cy
       // A gate goes into a finished wall: the wall stands until the gate is done, so the
       // line never opens while it is being built.
       const wall = kind === "gate" ? sim.state.entities.get(owner) : undefined;
-      if (!wall?.structure || wall.structure.kind !== "wall" || !wall.structure.built || replacedBy(sim, owner) >= 0) return null;
+      if (!wall?.structure || wall.structure.kind !== "wall" || !wall.structure.built || replacedBy(sim, owner) >= 0) return "occupied";
       // A panel cut back to a corner is half a gateway: the gate model squeezed into it.
       const l = wall.structure.line;
-      if (l && l.stretch < nominalStretch(l.yaw) - 1e-6) return null;
+      if (l && l.stretch < nominalStretch(l.yaw) - 1e-6) return "gate";
       replaces = owner;
       continue;
     }
-    if (g.kind[i] !== CellKind.Free) return null;
+    if (g.kind[i] !== CellKind.Free) return "occupied";
     // A garden needs soil and a well needs digging: neither goes on a paved street. Walls,
     // gates and towers do, since closing a street is how a settlement is walled in.
-    if (onPaving(kind) && g.road[i]) return null;
+    if (onPaving(kind) && g.road[i]) return "street";
     // Nothing stands on ground steeper than this: a wall on a hillside would hang in the air.
-    if (g.steep && g.steep[i] > BALANCE.terrainBuildGrade) return null;
+    if (g.steep && g.steep[i] > BALANCE.terrainBuildGrade) return "steep";
   }
   // Do not seal off building doors.
-  if (kind !== "farm" && touchesEntrance(sim, cells)) return null;
-  if (kind === "gate" && !passesThrough(sim, cx, cy)) return null;
+  if (kind !== "farm" && touchesEntrance(sim, cells)) return "entrance";
+  if (kind === "gate" && !passesThrough(sim, cx, cy)) return "gate";
   return { cells, replaces };
 }
 

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { AMBIENCE, BEDS, SOUNDS, isSynth } from "../../packages/audio/src/sounds";
 
 /* A trilha de audio e criada no primeiro gesto; o controller publica o resumo
    em window.__afterfallAudio() para diagnostico e para este teste. */
@@ -46,9 +47,15 @@ test("loads the sound kit and plays an effect the simulation emits", async ({ pa
   await startGame(page);
   expect(await page.evaluate(() => (window as unknown as { __audioContextCreations: number }).__audioContextCreations)).toBe(1);
 
-  // The 9 effects and the 2 ambience beds went through fetch + decodeAudioData, on top of
-  // the 9 sounds the director synthesizes when it starts (5 wildlife calls, 4 beds).
-  await page.waitForFunction(() => (window as unknown as Win).__afterfallAudio?.().loaded === 11 + 9, null, {
+  // Verify all current file and synthesized buffers, then exercise real playback below.
+  const files = new Set([...Object.values(SOUNDS), ...Object.values(AMBIENCE)].map((entry) => entry.file).filter((file) => !isSynth(file)));
+  const synthesized = new Set(
+    Object.values(SOUNDS)
+      .filter((entry) => isSynth(entry.file))
+      .map((entry) => entry.file),
+  );
+  const expectedBuffers = files.size + synthesized.size + Object.keys(BEDS).length;
+  await page.waitForFunction((count) => (window as unknown as Win).__afterfallAudio?.().loaded === count, expectedBuffers, {
     timeout: 20_000,
   });
   const loaded = await page.evaluate(() => (window as unknown as Win).__afterfallAudio!());

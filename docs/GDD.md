@@ -18,6 +18,23 @@ protocol and the current balance baseline are in [PLAYTEST.md](PLAYTEST.md).
 Victory: the cure, or dawn of day 13 (twelve nights). Defeat: the HQ falls or
 everyone dies.
 
+### First-cycle guidance and results
+
+Dismissible contextual tips follow selection, exploration, delivery, defense,
+recall and the first night. Help can restore them. The population control selects
+the community; external survivors have constant-screen-size tactical diamonds
+visible through buildings (blue, white when selected, amber when infected).
+Construction rejection keeps the tool active and explains the blocked footprint.
+Blueprint confirmations and task labels distinguish planned work from completion.
+
+Delivery receipts count only carried supplies accepted by storage. Before the
+first dawn the economy panel shows today's activity. Each dawn pauses for a
+reopenable report of the community after treatment, losses, completed structures,
+HQ condition, resource flows and remaining stock. Pending events and defeat take
+precedence. Closing the report preserves the player's chosen speed, including
+pause. These changes serve pillars 1–4 without changing costs or combat balance;
+their playtest hypothesis and validation limits are recorded in [PLAYTEST.md](PLAYTEST.md).
+
 ## Research and the cure
 
 Searching a school, hospital, police station, office or pharmacy yields research

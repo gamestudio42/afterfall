@@ -60,6 +60,7 @@ function dawn(sim: Simulation): void {
   researchAtDawn(sim);
   if (night >= 1) sim.alert("alert.dawn", { night, alive: sim.survivorCount() }, "success");
   // Medicine: cure infections first, then treat the wounded. Serum halves the dose.
+  const medicineBefore = sim.state.stats.consumed.medicine ?? 0;
   const dose = sim.hasTech("serum") ? 1 : 2;
   for (const e of sim.survivors()) {
     const s = e.survivor;
@@ -82,14 +83,36 @@ function dawn(sim: Simulation): void {
     s.morale = Math.max(0, Math.min(100, s.morale));
   }
   sim.state.moraleBonus *= 0.6;
+  const econ = sim.state.econ;
+  const survivors = [...sim.survivors()];
+  econ.lastDawn = {
+    day: sim.clock.day,
+    alive: survivors.length,
+    wounded: survivors.filter((e) => e.health!.hp < e.health!.max).length,
+    infected: survivors.filter((e) => e.survivor.infected).length,
+    lost: econ.counters ? sim.state.stats.survivorsLost - econ.counters.lost : null,
+    built: econ.counters ? sim.state.stats.structuresBuilt - econ.counters.built : null,
+    hqHp: sim.hqBuilding?.hp ?? 0,
+    hqMaxHp: sim.hqBuilding?.maxHp ?? 0,
+    stock: { ...sim.totals() },
+    medicineUsed: (sim.state.stats.consumed.medicine ?? 0) - medicineBefore,
+  };
+  econ.counters = { lost: sim.state.stats.survivorsLost, built: sim.state.stats.structuresBuilt };
 }
 
 /** Rolls today's flows into yesterday, for the ledger panel. */
 function rollLedger(sim: Simulation): void {
   const econ = sim.state.econ;
-  econ.yesterday = { produced: { ...econ.produced }, consumed: { ...econ.consumed }, wasted: { ...econ.wasted } };
+  econ.yesterday = {
+    produced: { ...econ.produced },
+    consumed: { ...econ.consumed },
+    wasted: { ...econ.wasted },
+    delivered: { ...econ.delivered },
+  };
   econ.produced = {};
   econ.consumed = {};
+  econ.wasted = {};
+  econ.delivered = {};
   econ.day = sim.clock.day;
 }
 

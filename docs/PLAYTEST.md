@@ -1,5 +1,55 @@
 # Playtest and balance protocol
 
+## First-cycle polish — 2026-11-25 (hypothesis)
+
+- **Fantasy / pillars:** reclaim a street and keep its community alive (1–4).
+- **Loop:** choose the headquarters, select survivors, scavenge, deliver, build,
+  return, hold and understand the first dawn.
+- **Hypothesis:** short, dismissible contextual guidance, visible survivor markers,
+  explained placement rejection and delivery/dawn receipts make existing decisions
+  understandable without changing costs, combat, schedules or campaign length.
+- **Watch:** finding the founding group behind buildings; first order and delivery;
+  recovery from an invalid placement; distinguishing queued work from completed
+  defenses; understanding stores, casualties and remaining needs at dawn.
+- **Change again if:** guidance obstructs selection, markers overwhelm the scene,
+  receipts count undelivered goods, old saves break, or dawn interrupts a pending
+  event/defeat or resumes a deliberately paused game.
+- **Observed (agent-operated browser, local baseline `63f1ec6` plus polish):** default varied city, medium size, seed
+  4242; office HQ, one nearby shop explored, automatic workers enabled, one tower
+  built, radio cache event resolved, contextual recall and threat view used.
+  The group remained visible behind roofs. A rejected tower on a slope kept its
+  tool active; a valid placement reported queued work, followed by completion.
+  Guidance stayed in the night step after midnight. At day 2, 06:00 the report
+  paused play: 4 alive, 1 wounded, 0 infected after treatment, 0 lost, 1 structure,
+  HQ 3000/3000, 2 medicine used. Closing, saving, reopening and closing the report
+  preserved a deliberately selected pause. No simulation state was injected in
+  this played session.
+- **Interpretation / decision:** keep this first pass for an uncoached human test.
+  These observations verify the flow, not difficulty, enjoyment or learning.
+- **Accounting boundary:** delivery means carried goods accepted by storage,
+  not all new income. The existing daily consumption ledger covers meals,
+  medicine and event costs; work-site allocations and personal equipment are
+  separate storage withdrawals. Both result panels explain this boundary.
+- **Automated checks on that local baseline:** `pnpm check` passed (471 tests in 54 files), including
+  full storage, delivery aggregation, saved reports, old v2 saves, midnight
+  guidance and placement verdicts. Production build passed. The full Chromium
+  run with two workers had 22 passes, 6 timeouts and 18 optional skips. All six
+  failed scenarios passed on a one-worker rerun after fixing the intermediate
+  toolbar breakpoint (keep the volume slider at 1440 px), giving two-boot tests
+  180 s and making expensive screenshots opt-in. This verifies all 28 active
+  browser scenarios across those runs, not one clean concurrent run. The three
+  new scenarios passed, including save/reload, pause, events and defeat. Targeted
+  TypeScript, lint, formatting and build checks passed after the final changes.
+- **PR base validation:** the polish was isolated onto `main` at `614315a`,
+  excluding the pre-existing soundscape commit. `pnpm check` passed with 465 tests
+  in 53 files and the production build passed on that base. Browser fixtures now
+  drain queued pointer commands while paused and publish seeded event/outcome
+  changes explicitly, rather than relying on software-rendered frame timing.
+  All four focused Chromium scenarios passed across the initial run (audio and
+  saved guidance) and the rerun after fixture synchronization (placement and dawn).
+- **Limits:** no uncoached human session, full campaign, physical mobile device,
+  audible mix review or player-GPU performance measurement in this pass.
+
 A design change is a hypothesis. This file records what we expect, what we
 actually saw, and whether we keep, change or cut the change. Headless tests
 validate behavior; they do not validate feel.

@@ -85,14 +85,20 @@ export function TopBar() {
           }}
         />
       </div>
-      <div className="stat" title={t("hud.pop")}>
+      <button
+        className="stat community-select"
+        title={t("guide.selectAction")}
+        aria-label={t("guide.selectAction")}
+        onClick={() => game.selectSurvivors()}
+        data-testid="select-community"
+      >
         <Icon name="people" size={14} />
         <span className="muted">{t("hud.pop")}</span> <strong data-testid="pop">{pop}</strong>
         <small className={beds < pop ? "warn" : "muted"}>
           {" "}
           / <Icon name="beds" size={12} /> {beds} {t("hud.beds")}
         </small>
-      </div>
+      </button>
       <div className="resources">
         {RESOURCE_IDS.filter((id) => id !== "firearms" || totals.firearms > 0).map((id) => (
           <span
@@ -111,6 +117,11 @@ export function TopBar() {
         </span>
       </div>
       <div className="panels">
+        {sim.state.econ.lastDawn && (
+          <button className="chip" data-testid="open-dawn" onClick={() => set({ showDawn: true, showEcon: false, showResearch: false })}>
+            {t("dawn.open")}
+          </button>
+        )}
         <button
           className={`chip panel-open ${sim.state.research.points > 0 ? "ready" : ""}`}
           data-testid="open-research"

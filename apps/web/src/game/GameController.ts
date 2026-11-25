@@ -8,6 +8,7 @@ import {
   isAxial,
   onPaving,
   placementAt,
+  placementProblem,
   placementYaw,
   previewFrame,
   serialize,
@@ -15,7 +16,7 @@ import {
   type EntityId,
 } from "@afterfall/core";
 import { CellKind, generateVariedCity, type CityMap, type CitySize } from "@afterfall/world";
-import { GameRenderer, type PostMode, type QualityMode } from "@afterfall/renderer";
+import { GameRenderer, SURVIVOR_MARKER_HEIGHT, type PostMode, type QualityMode } from "@afterfall/renderer";
 import { lineCells } from "@afterfall/shared";
 import { putSave } from "../app/saves";
 import { useUi, type Speed } from "../app/store";
@@ -61,6 +62,7 @@ export class GameController {
   private ignoreMouse = false;
   private uiTimer = 0;
   private lastDay = 0;
+  private lastDawn = 0;
   fps = 60;
   private disposers: (() => void)[] = [];
   private audio: AudioDirector | null = null;
@@ -119,8 +121,22 @@ export class GameController {
     this.sim = sim;
     this.renderer.setSimulation(sim);
     this.lastDay = sim.clock.day;
+    this.lastDawn = sim.state.econ.lastDawn?.day ?? sim.state.econ.day;
     const ui = useUi.getState();
-    ui.set({ selectedUnits: [], selectedBuilding: -1, selectedStructure: -1, buildMode: null, speed: 1, lastSpeed: 1, outcomeAck: false });
+    ui.set({
+      selectedUnits: [],
+      selectedBuilding: -1,
+      selectedStructure: -1,
+      buildMode: null,
+      speed: 1,
+      lastSpeed: 1,
+      outcomeAck: false,
+      drawer: null,
+      showDawn: false,
+      showResearch: false,
+      showEcon: false,
+      buildRejection: null,
+    });
     if (sim.state.hq >= 0) {
       const e = sim.hqEntrance();
       this.renderer.rts.jumpTo(e.x, e.y);
@@ -217,9 +233,14 @@ export class GameController {
       this.renderer.buildPreview = null;
     }
     // Hold time while a decision is pending so the player can read it.
-    const speed = sim.state.pendingEvent || (sim.state.outcome && sim.state.outcome.type === "defeat") ? 0 : ui.speed;
+    const speed = sim.state.pendingEvent || ui.showDawn || (sim.state.outcome && sim.state.outcome.type === "defeat") ? 0 : ui.speed;
     const simStart = performance.now();
     sim.update(dt * 1000, speed);
+    const dawn = sim.state.econ.lastDawn;
+    if (dawn && dawn.day > this.lastDawn && !sim.state.pendingEvent && !sim.state.outcome) {
+      this.lastDawn = dawn.day;
+      ui.set({ showDawn: true, showResearch: false, showEcon: false, showHelp: false, buildMode: null });
+    }
     const simMs = performance.now() - simStart;
     const listener = this.audioListener();
     this.audio?.update({ fx: sim.fx, alerts: sim.state.alerts, listener });
@@ -430,6 +451,7 @@ export class GameController {
       this.togglePause();
     } else if (key === "escape") {
       if (ui.buildMode) ui.set({ buildMode: null });
+      else if (ui.showDawn) ui.set({ showDawn: false });
       else if (ui.showHelp) ui.set({ showHelp: false });
       else if (ui.showResearch) ui.set({ showResearch: false });
       else if (ui.showEcon) ui.set({ showEcon: false });
@@ -487,6 +509,19 @@ export class GameController {
 
   focusOn(x: number, y: number): void {
     this.renderer.rts.focus(x, y);
+  }
+
+  showThreats(): void {
+    useUi.getState().set({ overlay: "danger" });
+    this.renderer.overlay = "danger";
+  }
+
+  /** A direct way to find the community even when its doorway is behind a roof. */
+  selectSurvivors(): void {
+    if (!this.sim) return;
+    const ids = [...this.sim.survivors()].map((e) => e.id);
+    useUi.getState().set({ selectedUnits: ids, selectedBuilding: -1, selectedStructure: -1, buildMode: null });
+    this.focusSelection();
   }
 
   private cellAt(px: number, py: number): [number, number] | null {
@@ -582,7 +617,10 @@ export class GameController {
       if (kind === "infected" && !e.infected) continue;
       const s = this.renderer.toScreen(e.transform.x, e.transform.y, 1);
       if (!s.visible) continue;
-      const d = Math.hypot(s.x - x, s.y - y);
+      const marker = e.survivor
+        ? this.renderer.toScreen(e.transform.x, e.transform.y, SURVIVOR_MARKER_HEIGHT + (e.survivor.mounted >= 0 ? 3.4 : 0))
+        : s;
+      const d = Math.min(Math.hypot(s.x - x, s.y - y), Math.hypot(marker.x - x, marker.y - y));
       if (d < bestD) {
         bestD = d;
         best = e.id;
@@ -738,6 +776,7 @@ export class GameController {
     const cells = this.buildCells(kind, end, start);
     const yaw = cells.length === 1 ? this.currentYaw(kind, cells[0]) : undefined;
     const valid = cells.map(([x, y]) => this.cellValid(kind, x, y, yaw ?? 0));
+    if (valid.some(Boolean) && useUi.getState().buildRejection) useUi.getState().set({ buildRejection: null });
     this.setBuildInfo({
       count: valid.filter(Boolean).length,
       // The line stops at the cap, short of the pointer: say so instead of just stopping.
@@ -782,7 +821,7 @@ export class GameController {
   }
 
   cancelBuild(): void {
-    useUi.getState().set({ buildMode: null });
+    useUi.getState().set({ buildMode: null, buildRejection: null });
     this.buildYaw = null;
     this.renderer.buildPreview = null;
   }
@@ -970,6 +1009,14 @@ export class GameController {
     if (!end) return;
     const cells = this.buildCells(kind, end, start);
     const yaw = cells.length === 1 ? this.currentYaw(kind, cells[0]) : undefined;
+    const reasons = cells.map(([x, y]) => placementProblem(this.sim!, kind, x, y, isAxial(kind) ? 0 : (yaw ?? 0)));
+    if (reasons.every((reason) => reason !== null)) {
+      ui.set({ buildRejection: reasons[0] });
+      this.audio?.play("ui", 0.5);
+      this.updateBuildPreview(kind, p);
+      return;
+    }
+    ui.set({ buildRejection: null });
     this.command({ type: "placeStructures", kind, cells, yaw });
     this.renderer.buildPreview = null;
     if (!keep && !isAxial(kind)) ui.set({ buildMode: null });

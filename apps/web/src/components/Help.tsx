@@ -1,4 +1,4 @@
-import { useT } from "../app/hooks";
+import { useGame, useT } from "../app/hooks";
 import { useTouchUi } from "../app/media";
 import { useUi } from "../app/store";
 
@@ -29,13 +29,43 @@ export function HelpContent() {
 }
 
 export function HelpModal() {
+  const game = useGame();
+  const first = !game.sim?.state.started;
+  const dismissed = useUi((s) => s.guideDismissed);
   const t = useT();
   const set = useUi((s) => s.set);
   return (
     <div className="modal-backdrop" onClick={() => set({ showHelp: false })}>
       <div className="modal" onClick={(e) => e.stopPropagation()} data-testid="help">
-        <h2>{t("help.title")}</h2>
-        <HelpContent />
+        <h2>{t(first ? "guide.title" : "help.title")}</h2>
+        {first ? (
+          <>
+            <p className="goal">{t("guide.welcome")}</p>
+            <p>{t("banner.chooseBase")}</p>
+            <p className="muted small">{t("guide.welcomeHint")}</p>
+            <details>
+              <summary>{t("help.title")}</summary>
+              <HelpContent />
+            </details>
+          </>
+        ) : (
+          <HelpContent />
+        )}
+        {dismissed && (
+          <button
+            className="chip"
+            onClick={() => {
+              set({ guideDismissed: false });
+              try {
+                localStorage.setItem("afterfall.guideDismissed", "0");
+              } catch {
+                /* Private storage may be unavailable. */
+              }
+            }}
+          >
+            {t("guide.restore")}
+          </button>
+        )}
         <div className="modal-actions">
           <button className="primary" onClick={() => set({ showHelp: false })}>
             {t("help.close")}

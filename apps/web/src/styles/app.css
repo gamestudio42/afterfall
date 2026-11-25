@@ -1156,6 +1156,11 @@ button.primary:hover:not(:disabled) {
     display: none;
   }
 }
+@media (max-width: 1536px) {
+  .topbar .stat > span.muted {
+    display: none;
+  }
+}
 @media (max-width: 1280px) {
   .topbar .audio input[type="range"],
   .topbar .stat .muted {
@@ -1389,5 +1394,128 @@ button.primary:hover:not(:disabled) {
     bottom: auto;
     left: 8px;
     right: auto;
+  }
+}
+
+/* First-cycle guidance stays beside the action, below the command bar. */
+.first-cycle {
+  position: absolute;
+  top: 62px;
+  left: 12px;
+  width: 276px;
+  max-width: calc(100vw - 24px);
+  padding: 12px;
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  pointer-events: auto;
+}
+.guide-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--accent-2);
+}
+.first-cycle p {
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 6px 0 10px;
+  color: var(--muted);
+}
+.first-cycle > strong {
+  font-size: 15px;
+}
+.first-cycle .guide-heading button {
+  min-width: 28px;
+  min-height: 28px;
+}
+.delivery-receipt {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.delivery-receipt:only-child {
+  margin-top: 0;
+  padding-top: 0;
+  border: 0;
+}
+.delivery-receipt > strong {
+  color: var(--good);
+}
+.delivery-receipt small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+}
+.build-rejection {
+  color: #ffb6a4;
+  margin: 4px 0;
+  max-width: 480px;
+}
+.dawn-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 12px 0;
+  border-block: 1px solid var(--line);
+}
+.dawn-flows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+.dawn-report .bag {
+  line-height: 1.6;
+}
+.dawn-report .goal {
+  color: var(--accent-2);
+}
+.help summary,
+.modal summary {
+  cursor: pointer;
+  margin-block: 12px;
+}
+.tech:disabled:not(.done) {
+  opacity: 1;
+  background: transparent;
+  cursor: not-allowed;
+}
+.tech:disabled:not(.done) strong {
+  color: var(--text);
+}
+.tech:disabled:not(.done) .cost {
+  color: var(--muted);
+}
+@media (max-width: 900px) {
+  .first-cycle {
+    width: 240px;
+    top: 108px;
+  }
+  .first-cycle p {
+    font-size: 12px;
+  }
+  .first-cycle .guide-heading button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .task-row {
+    flex-wrap: wrap;
+  }
+}
+@media (orientation: portrait) and (max-width: 900px) {
+  .first-cycle {
+    top: 150px;
+    width: calc(100vw - 24px);
+    max-height: 34vh;
+    overflow-y: auto;
+  }
+  .hud:has(.side-panel) .first-cycle {
+    display: none;
+  }
+  .dawn-flows {
+    grid-template-columns: 1fr;
   }
 }

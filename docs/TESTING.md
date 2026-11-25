@@ -16,6 +16,15 @@
 
 Simulation cost is measured at about 0.06 ms per tick (Node, 10 survivors and about 40 infected).
 
+First-cycle coverage in `tests/e2e/first-cycle.spec.ts` uses the default medium
+varied city: contextual guidance and its saved preference, survivor markers,
+rejected and accepted construction, dawn pause, report persistence and precedence
+of events/defeat. `FIRST_CYCLE_SHOT=1 pnpm test:e2e tests/e2e/first-cycle.spec.ts
+--workers=1` adds optional screenshots; normal runs keep the behavioral assertions
+without the cost of WebGL capture. Two-boot cases use the same 180 s budget as
+the main save/reload workflow. These fixtures do not substitute for an uncoached
+playtest; see the first-cycle session in [PLAYTEST.md](PLAYTEST.md).
+
 ## Character art and animation
 
 `packages/renderer/tests/characters.test.ts` checks distance-driven gait,

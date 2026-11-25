@@ -150,7 +150,8 @@ export class Fauna {
     const flocks = this.perches.length ? Math.max(4, Math.min(14, Math.round((city.width * city.height) / 25000))) : 0;
     let start = 0;
     for (let f = 0; f < flocks && start < BIRD_MAX; f++) {
-      const crows = rand(seed, f * 7 + 1) < 0.3;
+      // Half the flocks are crows: a dead city draws carrion birds.
+      const crows = rand(seed, f * 7 + 1) < 0.5;
       const size = Math.min(
         BIRD_MAX - start,
         crows ? 4 + Math.floor(rand(seed, f * 7 + 2) * 5) : 8 + Math.floor(rand(seed, f * 7 + 3) * 12),
@@ -272,7 +273,7 @@ export class Fauna {
         // By day a flock moves on now and then; at night it roosts, unless it is scared off.
         if (scared || (day && f.rest <= 0)) this.takeOff(f, scared);
         else if (day && (f.nextCall -= dt) <= 0) {
-          f.nextCall = (f.crows ? 6 : 2.5) + rand(f.seed, Math.floor(this.clock)) * 7;
+          f.nextCall = (f.crows ? 10 : 8) + rand(f.seed, Math.floor(this.clock)) * 14;
           this.events.push({ sound: f.crows ? "caw" : "chirp", x: mid.x, z: mid.z });
         }
       } else {

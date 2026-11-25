@@ -46,8 +46,9 @@ export const SOUNDS: Record<string, SoundSpec> = {
   defeat: { file: "death.wav", gain: 0.9, maxVoices: 1, minGapMs: 3000, detune: 0 },
   ui: { file: "ui_click.wav", gain: 0.5, maxVoices: 2, minGapMs: 40, detune: 0 },
   // The city's wildlife (synth.ts): made when the director starts, not loaded from a file.
-  chirp: { file: "synth:chirp", gain: 0.3, maxVoices: 4, minGapMs: 140, detune: 300 },
-  caw: { file: "synth:caw", gain: 0.42, maxVoices: 2, minGapMs: 500, detune: 120 },
+  // Birdsong stays faint: the city is dead, and a cheerful morning chorus is the wrong mood.
+  chirp: { file: "synth:chirp", gain: 0.12, maxVoices: 2, minGapMs: 400, detune: 300 },
+  caw: { file: "synth:caw", gain: 0.32, maxVoices: 2, minGapMs: 800, detune: 120 },
   flutter: { file: "synth:flutter", gain: 0.45, maxVoices: 3, minGapMs: 250, detune: 200 },
   bark: { file: "synth:bark", gain: 0.55, maxVoices: 2, minGapMs: 350, detune: 150 },
   squeak: { file: "synth:squeak", gain: 0.22, maxVoices: 2, minGapMs: 400, detune: 250 },

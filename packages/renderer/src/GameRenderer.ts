@@ -4,7 +4,7 @@ import { BUILDING_TYPES, INFECTED, STRUCTURES, bagTotal, type StructureKind } fr
 import type { Simulation, EntityId } from "@afterfall/core";
 import { lerp, lineFrame, TICK_SECONDS, type LineFrame } from "@afterfall/shared";
 import { RtsCamera } from "./camera";
-import { wallFrame } from "./structureLayout";
+import { footprintSamples, plinthFrame, wallFrame, type PlinthFrame } from "./structureLayout";
 import { BuildingBatch, buildingSeat, outlineOf } from "./buildingBatch";
 import { selectionGeometry } from "./outline";
 import { heightAt } from "@afterfall/world";
@@ -1577,10 +1577,20 @@ export class GameRenderer {
       const cx = (s.cx + def.size / 2 + (s.line?.ox ?? 0)) * cell;
       const cz = (s.cy + def.size / 2 + (s.line?.oy ?? 0)) * cell;
       // On a slope a piece stands on the highest ground under it, so no end is buried, and
-      // a plinth fills the gap down to the lowest.
-      const seat = this.seatOn(cx, cz, size / 2);
+      // a plinth fills the gap down to the lowest. The plinth is the piece's own footprint,
+      // turned with it: a square to the grid stood askew under a turned farm or tower, and
+      // a wall drawn at an angle stood on a staircase of whole-cell squares (a playtest
+      // report: the bases are out of place).
+      const base = plinthFrame(
+        s.kind,
+        size,
+        s.kind === "wall" || s.kind === "gate" ? (isCorner(s) ? null : wallMeasure(s)) : null,
+        s.line?.yaw,
+      );
+      const seat = this.seatOnFrame(cx, cz, base);
       if (s.built && seat.top - seat.low > 0.15 && plinths < MAX_STRUCTURES) {
-        tmpM.compose(tmpV.set(cx, seat.low - 0.3, cz), tmpQ.identity(), tmpS.set(size, seat.top - seat.low + 0.3, size));
+        tmpQ.setFromAxisAngle(up, base.yaw);
+        tmpM.compose(tmpV.set(cx, seat.low - 0.3, cz), tmpQ, tmpS.set(base.length, seat.top - seat.low + 0.3, base.depth));
         this.plinths.setMatrixAt(plinths++, tmpM);
       }
       if (!s.built) {
@@ -1656,6 +1666,20 @@ export class GameRenderer {
     uploadInstances(this.blueprints);
     this.plinths.count = plinths;
     uploadInstances(this.plinths);
+  }
+
+  /** Highest and lowest ground under a piece's turned footprint: its corners, its middle and along its length. */
+  private seatOnFrame(x: number, z: number, f: PlinthFrame): { top: number; low: number } {
+    const terrain = this.sim?.city.terrain;
+    if (!terrain) return { top: 0, low: 0 };
+    let top = -Infinity;
+    let low = Infinity;
+    for (const [u, v] of footprintSamples(f)) {
+      const h = heightAt(terrain, x + u, z + v);
+      top = Math.max(top, h);
+      low = Math.min(low, h);
+    }
+    return { top, low };
   }
 
   /** Highest and lowest ground under a square of half side `half` around a point. */

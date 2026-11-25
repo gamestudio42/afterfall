@@ -132,6 +132,16 @@ export function DawnModal() {
           {t(report.infected > 0 ? "dawn.needMedicine" : report.hqHp < report.hqMaxHp ? "dawn.needRepairs" : "dawn.next")}
         </p>
         <div className="modal-actions">
+          <button
+            data-testid="review-community"
+            onClick={() => {
+              game.setSpeed(0);
+              game.selectSurvivors();
+              ui.set({ showDawn: false, showHelp: false, showResearch: false, showEcon: false, drawer: null });
+            }}
+          >
+            {t("dawn.reviewCommunity")}
+          </button>
           <button className="primary" data-testid="close-dawn" onClick={() => ui.set({ showDawn: false })}>
             {t("dawn.continue")}
           </button>

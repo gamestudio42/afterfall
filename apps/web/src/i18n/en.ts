@@ -1,4 +1,18 @@
 export const en: Record<string, string> = {
+  "community.summary": "{wounded} wounded · {infected} infected · {hungry} hungry",
+  "community.infected": "Infected · {n}%",
+  "community.wounded": "Wounded",
+  "community.hungry": "Hungry",
+  "community.manualHint": "Manual orders: {n}. These survivors skip automatic jobs and sleep. Use Automatic work to restore their routine.",
+  "community.care": "Care guidance",
+  "community.focus": "Locate on map",
+  "community.all": "All survivors",
+  "community.onTower": "Posted on a watchtower",
+  "community.inside": "Inside: {type}",
+  "community.infectionCare": "Keep medicine in storage for treatment at dawn. Infection continues to advance until treated.",
+  "community.woundCare": "Sleeping indoors slowly restores health. Medicine treats severe wounds at dawn when available.",
+  "community.hungerCare": "Keep food and water in storage for the next meal. Returning home alone does not feed a survivor.",
+  "dawn.reviewCommunity": "Review community · pause",
   "econ.flowHint":
     "Consumption covers meals, medicine and event costs. Materials sent to work sites and personal equipment leave storage separately.",
   "guide.title": "First day · first night",

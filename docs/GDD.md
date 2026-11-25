@@ -35,6 +35,15 @@ precedence. Closing the report preserves the player's chosen speed, including
 pause. These changes serve pillars 1–4 without changing costs or combat balance;
 their playtest hypothesis and validation limits are recorded in [PLAYTEST.md](PLAYTEST.md).
 
+### Community recovery
+
+The existing group selection shows health values, wounds, infection progress,
+hunger, activity and manual/automatic orders for each living survivor. Individual
+inspection explains automatic care, identifies survivors inside buildings or on
+watchtowers, and offers map focus and a return to the group. The dawn report can
+hand off to the current community while explicitly pausing; normal Continue still
+preserves the chosen speed. No care, sleep, meal or work rules change.
+
 ## Research and the cure
 
 Searching a school, hospital, police station, office or pharmacy yields research

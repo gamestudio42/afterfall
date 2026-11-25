@@ -1,5 +1,45 @@
 # Playtest and balance protocol
 
+## Community recovery polish — 2026-11-25 (hypothesis)
+
+- **Fantasy:** keep a handful of survivors alive long enough to make one street work again.
+- **Pillars / loop:** community (4), readable risk (3); return, hold, count and recover.
+- **Hypothesis:** visible infection, wounds, hunger and manual orders in the existing
+  selection panel let players identify who needs attention before sending the group
+  out again. A paused handoff from dawn gives time to inspect the current community.
+- **Slice:** group selection, individual inspection and the first dawn's review action.
+  Reuse return-to-base and automatic-work commands; no new menu, simulation rules,
+  resource costs, thresholds or save fields.
+- **Watch:** identify an infected or hungry member without opening every detail;
+  find that person on the map; understand that manual orders bypass automatic jobs
+  and sleep; return to the group; review dawn without advancing the simulation.
+- **Change again if:** status labels crowd out commands, inspection changes orders,
+  a report snapshot is confused with current conditions, or review resumes time.
+- **Source of truth:** survivor components, current health/max health and current
+  orders; care guidance follows `systems/survivors.ts` and `systems/economy.ts`.
+- **Observed (scripted Chromium, seed 4242, classic city, on merged `main`
+  `a855367`):** a seeded wounded, infected, hungry survivor showed all conditions
+  in the group list; inspection located the survivor, showed the indoor location
+  and restored automatic work through the existing command. A retained dead entity
+  disappeared from the care list. Advancing the hourly system to dawn opened the
+  report; its review action selected the current group and paused without losing
+  the previous 4× resume speed. Portrait inspection and return to the group worked
+  at 390 × 844, without horizontal document overflow.
+- **Visual review:** inspected desktop group/detail captures and the portrait
+  capture. Expanded care prose pushed commands down in the first version, so care
+  guidance now uses an optional disclosure; condition labels stay visible.
+- **Interpretation / decision:** keep for an uncoached human playtest. These seeded
+  browser checks verify UI state and controls, not natural-night survival or learning.
+- **Validation:** final `pnpm check` passed (471 tests in 54 files), as did
+  `pnpm build` and `git diff --check`. The complete Chromium suite passed in one
+  run with two workers: 30 passed, 18 optional captures skipped, 8.0 minutes.
+  `COMMUNITY_SHOT=1` captured both new scenarios on the final code; the group,
+  individual disclosure and portrait screenshots were visually inspected. Checks
+  used an isolated worktree and port 5294 to avoid reusing another checkout's
+  development server. Browser/worker execution required local sandbox escalation.
+- **Limits:** no human session, complete campaign, physical phone, hardware-GPU
+  performance check or audible mix review in this pass.
+
 ## First-cycle polish — 2026-11-25 (hypothesis)
 
 - **Fantasy / pillars:** reclaim a street and keep its community alive (1–4).

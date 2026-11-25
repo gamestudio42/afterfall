@@ -172,7 +172,8 @@ describe("the varied generated city", () => {
       const t = m.terrain!;
       const river = m.waters![0];
       const level = Math.min(...river.path!.map((p) => heightAtNode(t, p.x, p.y)));
-      for (const b of m.buildings) expect(heightAtNode(t, b.entrance.x, b.entrance.y)).toBeGreaterThan(level + 1);
+      // A door's ground may be cut down to its building's base, which still stands clear of the water.
+      for (const b of m.buildings) expect(heightAtNode(t, b.entrance.x, b.entrance.y)).toBeGreaterThan(level + 0.5);
     }
   });
 });

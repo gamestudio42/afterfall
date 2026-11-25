@@ -13,7 +13,7 @@ import {
 } from "@afterfall/shared";
 import type { BridgeDef, BuildingDef, CityMap, ParkDef, RoadDef, WaterDef } from "./city";
 import { CellKind, NavGrid, isWalkableKind } from "./navgrid";
-import { heightAt, type TerrainDef } from "./terrain";
+import { cutBuildingPads, heightAt, padOutlines, type TerrainDef } from "./terrain";
 
 /**
  * A generated city with relief and an irregular street plan.
@@ -540,6 +540,8 @@ function attemptCity(seed: number, attempt: number, opts: VariedOptions): CityMa
     map.buildings = buildings;
   }
   if (!stable || map.spawnPoints.length < 4) return null;
+  // Each building's site is cut into the slope it stands on.
+  map.terrain = cutBuildingPads(map.terrain!, padOutlines(map.buildings), map.roads);
   if (buildings.length < Math.round(MIN_BUILDINGS * Math.min(1, k * k))) return null;
   for (const type of ESSENTIAL) if (!buildings.some((b) => b.type === type)) return null;
   return map;

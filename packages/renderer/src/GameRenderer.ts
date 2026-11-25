@@ -39,6 +39,7 @@ import { isSoftwareRenderer, PostFx, rendererName, type PostMode } from "./post"
 import { ResolutionGovernor } from "./governor";
 import { resolveQuality, TIERS, wantsEffects, type Quality, type QualityMode } from "./quality";
 import { ShadowCadence, snapToTexels } from "./shadowCadence";
+import { SURVIVOR_MARKER_HEIGHT, survivorMarkerScale } from "./survivorMarker";
 
 export type OverlayMode = "none" | "resources" | "danger";
 
@@ -154,6 +155,9 @@ export class GameRenderer {
   private heads: THREE.InstancedMesh;
   private packs: THREE.InstancedMesh;
   private rings: THREE.InstancedMesh;
+  /** Tactical diamonds draw over roofs so an unselected community remains findable. */
+  readonly survivorMarkers: THREE.InstancedMesh;
+  private survivorMarkerBacks: THREE.InstancedMesh;
   private infected: THREE.InstancedMesh;
   private hpBg: THREE.InstancedMesh;
   private hpFg: THREE.InstancedMesh;
@@ -721,6 +725,33 @@ export class GameRenderer {
       MAX_UNITS,
       false,
     );
+    const marker = new THREE.CircleGeometry(1, 4);
+    this.survivorMarkerBacks = this.instanced(
+      marker,
+      new THREE.MeshBasicMaterial({
+        color: 0x11141a,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.95,
+      }),
+      MAX_UNITS,
+      false,
+    );
+    this.survivorMarkers = this.instanced(
+      marker,
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.95,
+      }),
+      MAX_UNITS,
+      false,
+    );
+    this.survivorMarkerBacks.renderOrder = 8;
+    this.survivorMarkers.renderOrder = 9;
     const zombie = new THREE.CapsuleGeometry(0.36, 0.8, 3, 7);
     zombie.translate(0, 0.76, 0);
     this.infected = this.instanced(
@@ -1452,8 +1483,18 @@ export class GameRenderer {
         if (!selected.has(e.id)) tint.offsetHSL((((e.id * 7) % 9) - 4) * 0.006, 0, (((e.id * 37) % 11) - 5) * 0.014);
         this.survivors.setColorAt(su, tint);
         this.unitBatch?.place(e, tmpM, motion, selected.has(e.id), false);
+        const markerY = y + SURVIVOR_MARKER_HEIGHT;
+        const size = survivorMarkerScale(cam.position.distanceTo(tmpV.set(x, markerY, z)), cam.fov, this.canvas.clientHeight);
+        tmpM.compose(tmpV.set(x, markerY, z), barQ, tmpS.setScalar(size));
+        this.survivorMarkerBacks.setMatrixAt(su, tmpM);
+        tmpM.compose(tmpV.set(x, markerY, z), barQ, tmpS.setScalar(size * 0.65));
+        this.survivorMarkers.setMatrixAt(su, tmpM);
+        this.survivorMarkers.setColorAt(su, tmpC.setHex(s.infected ? 0xf0c040 : selected.has(e.id) ? 0xffffff : 0x6fd0ff));
         su++;
-        if (bagTotal(s.carry) > 0) this.packs.setMatrixAt(sp++, tmpM);
+        if (bagTotal(s.carry) > 0) {
+          this.survivors.getMatrixAt(su - 1, tmpM);
+          this.packs.setMatrixAt(sp++, tmpM);
+        }
         if (selected.has(e.id)) {
           tmpM.compose(tmpV.set(x, y, z), tmpQ.identity(), tmpS.set(UNIT_SCALE, 1, UNIT_SCALE));
           this.rings.setMatrixAt(sr++, tmpM);
@@ -1494,6 +1535,8 @@ export class GameRenderer {
     this.infectedBatch?.end();
     this.packs.count = sp;
     this.rings.count = sr;
+    this.survivorMarkers.count = su;
+    this.survivorMarkerBacks.count = su;
     // The capsule only draws the frames before the model lands.
     this.infected.count = this.infectedParts.length > 0 ? 0 : zi;
     this.hpBg.count = bars;
@@ -1502,6 +1545,8 @@ export class GameRenderer {
     uploadInstances(this.heads);
     uploadInstances(this.packs);
     uploadInstances(this.rings);
+    uploadInstances(this.survivorMarkers);
+    uploadInstances(this.survivorMarkerBacks);
     uploadInstances(this.infected);
     uploadInstances(this.hpBg);
     uploadInstances(this.hpFg);
@@ -1850,6 +1895,9 @@ export class GameRenderer {
     this.skyDome.dispose();
     this.rain?.dispose();
     this.skyEnv?.dispose();
+    this.survivorMarkers.geometry.dispose();
+    (this.survivorMarkers.material as THREE.Material).dispose();
+    (this.survivorMarkerBacks.material as THREE.Material).dispose();
     this.renderer.dispose();
   }
 }

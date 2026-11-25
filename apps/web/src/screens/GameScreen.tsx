@@ -1,5 +1,6 @@
 import { useUi } from "../app/store";
 import { BottomBar } from "../components/BottomBar";
+import { FirstCycleGuide, DawnModal } from "../components/FirstCycle";
 import { HelpModal } from "../components/Help";
 import { EconomyModal, ResearchModal } from "../components/Research";
 import { MapCredit } from "../components/MapCredit";
@@ -21,6 +22,8 @@ export function GameScreen() {
       <Minimap />
       <MapCredit />
       <BottomBar />
+      <FirstCycleGuide />
+      <DawnModal />
       <DragRect />
       <DevOverlay />
       <EventModal />

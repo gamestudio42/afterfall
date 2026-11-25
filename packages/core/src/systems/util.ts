@@ -1,4 +1,5 @@
-import { CARRY_CAPACITY, PERSONAL_AMMO_MAX, WEAPONS, bagWeight } from "@afterfall/content";
+import { CARRY_CAPACITY, PERSONAL_AMMO_MAX, RESOURCE_IDS, WEAPONS, addToBag, bagWeight } from "@afterfall/content";
+import { TICKS_PER_GAME_MINUTE } from "@afterfall/shared";
 import type { Simulation } from "../simulation";
 import type { BuildingState, Entity, SkillId, SurvivorComp } from "../state";
 
@@ -74,6 +75,17 @@ export function unloadAndRestock(sim: Simulation, e: Entity, node: BuildingState
   const t = e.transform!;
   if (Object.keys(s.carry).length > 0) {
     const left = sim.deposit(s.carry, t.x, t.y);
+    for (const id of RESOURCE_IDS) {
+      const accepted = (s.carry[id] ?? 0) - (left[id] ?? 0);
+      if (accepted <= 0) continue;
+      const st = sim.state;
+      addToBag((st.stats.delivered ??= {}), id, accepted);
+      addToBag((st.econ.delivered ??= {}), id, accepted);
+      if (!st.delivery || st.tick - st.delivery.fromTick > 30 * TICKS_PER_GAME_MINUTE)
+        st.delivery = { fromTick: st.tick, tick: st.tick, resources: {} };
+      st.delivery.tick = st.tick;
+      addToBag(st.delivery.resources, id, accepted);
+    }
     s.carry = left;
     if (Object.keys(left).length > 0) sim.alertOnce("alert.storageFull", 600, {}, "warning");
   }

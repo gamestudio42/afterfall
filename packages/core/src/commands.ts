@@ -135,9 +135,14 @@ export function applyCommand(sim: Simulation, cmd: Command): void {
     case "setStance":
       for (const e of units(sim, cmd.units)) e.survivor!.stance = cmd.stance;
       return;
-    case "placeStructures":
-      if (placeStructures(sim, cmd.kind, cmd.cells, cmd.yaw)) sim.alert("alert.blueprintPlaced", { kind: cmd.kind }, "info");
+    case "placeStructures": {
+      const task = placeStructures(sim, cmd.kind, cmd.cells, cmd.yaw);
+      if (!task) sim.alert("alert.blueprintRejected", {}, "warning");
+      else if (task.structures.length < cmd.cells.length)
+        sim.alert("alert.blueprintPartial", { n: task.structures.length, total: cmd.cells.length }, "warning");
+      else sim.alert("alert.blueprintPlaced", { kind: cmd.kind, n: task.structures.length }, "info");
       return;
+    }
     case "convert":
       if (startConversion(sim, cmd.building, cmd.fn)) sim.alert("alert.conversionStarted", { fn: cmd.fn }, "info");
       return;

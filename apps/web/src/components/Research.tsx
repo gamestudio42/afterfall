@@ -89,7 +89,8 @@ export function EconomyModal() {
   const set = useUi((s) => s.set);
   const sim = game.sim!;
   const stock = sim.totals();
-  const { produced, consumed, wasted } = sim.state.econ.yesterday;
+  const firstDay = !sim.state.econ.lastDawn && sim.state.econ.day === 1;
+  const { produced, consumed, wasted, delivered } = firstDay ? sim.state.econ : sim.state.econ.yesterday;
   const pop = sim.survivorCount();
   let worst: { id: ResourceId; days: number } | null = null;
   for (const id of RESOURCE_IDS) {
@@ -102,11 +103,12 @@ export function EconomyModal() {
     <div className="modal-backdrop" onClick={() => set({ showEcon: false })}>
       <div className="modal wide-modal" onClick={(e) => e.stopPropagation()} data-testid="economy">
         <h2>{t("econ.title")}</h2>
-        <p className="muted small">{t("econ.subtitle", { day: sim.state.econ.day - 1, pop })}</p>
+        <p className="muted small">{firstDay ? t("econ.today") : t("econ.subtitle", { day: sim.state.econ.day - 1, pop })}</p>
         <table className="ledger">
           <thead>
             <tr>
               <th>{t("econ.resource")}</th>
+              <th>{t("dawn.delivered")}</th>
               <th>{t("econ.produced")}</th>
               <th>{t("econ.consumed")}</th>
               <th>{t("econ.wasted")}</th>
@@ -120,11 +122,12 @@ export function EconomyModal() {
               const used = consumed[id] ?? 0;
               const lost = wasted[id] ?? 0;
               const have = stock[id] ?? 0;
-              const days = used > 0 ? have / used : null;
+              const days = !firstDay && used > 0 ? have / used : null;
               const low = days !== null && days < 2;
               return (
                 <tr key={id} data-testid={`econ-${id}`} className={low ? "low" : undefined}>
                   <td>{t(`res.${id}`)}</td>
+                  <td>{(delivered?.[id] ?? 0).toFixed(0)}</td>
                   <td>{made.toFixed(0)}</td>
                   <td>{used.toFixed(0)}</td>
                   <td className={lost > 0 ? "low" : undefined}>{lost > 0 ? `-${lost.toFixed(0)}` : "—"}</td>
@@ -135,7 +138,8 @@ export function EconomyModal() {
             })}
           </tbody>
         </table>
-        {worst && (
+        <p className="muted small">{t("econ.flowHint")}</p>
+        {!firstDay && worst && (
           <p className="note warn" data-testid="econ-bottleneck">
             {t("econ.bottleneck", { resource: t(`res.${worst.id}`), days: worst.days.toFixed(1) })}
           </p>

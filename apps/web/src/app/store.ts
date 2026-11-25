@@ -23,6 +23,10 @@ export interface UiState {
   showHelp: boolean;
   showResearch: boolean;
   showEcon: boolean;
+  drawer: "build" | "policies" | "tasks" | null;
+  showDawn: boolean;
+  guideDismissed: boolean;
+  buildRejection: string | null;
   showDev: boolean;
   outcomeAck: boolean;
   toast: string | null;
@@ -81,6 +85,10 @@ export const useUi = create<UiState>((set) => ({
   showHelp: false,
   showResearch: false,
   showEcon: false,
+  drawer: null,
+  showDawn: false,
+  guideDismissed: initialFlag("afterfall.guideDismissed", false),
+  buildRejection: null,
   showDev: false,
   outcomeAck: false,
   toast: null,

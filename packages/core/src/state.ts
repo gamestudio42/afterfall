@@ -229,7 +229,26 @@ export interface EconState {
   consumed: ResourceBag;
   /** Resources a full store refused: produced and then lost. */
   wasted: ResourceBag;
-  yesterday: { produced: ResourceBag; consumed: ResourceBag; wasted: ResourceBag };
+  /** Carried supplies actually accepted by storage, separate from production. */
+  delivered?: ResourceBag;
+  yesterday: { produced: ResourceBag; consumed: ResourceBag; wasted: ResourceBag; delivered?: ResourceBag };
+  /** Optional additions keep existing v2 saves readable. */
+  counters?: { lost: number; built: number };
+  lastDawn?: DawnReport;
+}
+
+export interface DawnReport {
+  day: number;
+  alive: number;
+  wounded: number;
+  infected: number;
+  /** Null when an older save has no baseline for this day. */
+  lost: number | null;
+  built: number | null;
+  hqHp: number;
+  hqMaxHp: number;
+  stock: ResourceBag;
+  medicineUsed: number;
 }
 
 export interface Stats {
@@ -238,6 +257,7 @@ export interface Stats {
   survivorsJoined: number;
   structuresBuilt: number;
   buildingsSearched: number;
+  delivered?: ResourceBag;
   produced: ResourceBag;
   consumed: ResourceBag;
   /** Resources a full store refused: produced and then lost. */
@@ -297,6 +317,8 @@ export interface GameState {
   lastAttackTick: number;
   research: ResearchState;
   econ: EconState;
+  /** A small, saved receipt for recent carried deliveries (not ammo restocking). */
+  delivery?: { fromTick: number; tick: number; resources: ResourceBag };
   log: { tick: number; key: string; params: Record<string, string | number> }[];
 }
 

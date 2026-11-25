@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { STRUCTURES, type StructureKind } from "@afterfall/content";
 import { useFrame, useGame, useT } from "../app/hooks";
 import { useUi } from "../app/store";
@@ -13,7 +12,8 @@ export function BottomBar() {
   const game = useGame();
   const sim = game.sim!;
   const ui = useUi();
-  const [open, setOpen] = useState<"build" | "policies" | "tasks" | null>(null);
+  const open = ui.drawer;
+  const setOpen = (drawer: typeof open) => ui.set({ drawer });
   const totals = sim.totals();
   const started = sim.state.started;
   const p = sim.state.policies;
@@ -41,7 +41,9 @@ export function BottomBar() {
                 className={`build-item ${ui.buildMode === k ? "active" : ""}`}
                 data-testid={`build-${k}`}
                 disabled={!ok}
-                onClick={() => ui.set({ buildMode: ui.buildMode === k ? null : k, selectedUnits: [], selectedBuilding: -1 })}
+                onClick={() =>
+                  ui.set({ buildMode: ui.buildMode === k ? null : k, selectedUnits: [], selectedBuilding: -1, buildRejection: null })
+                }
               >
                 <strong>{t(`struct.${k}`)}</strong>
                 <small>{t(`struct.desc.${k}`)}</small>
@@ -61,8 +63,10 @@ export function BottomBar() {
                 <span className={`dot ${task.status}`} title={t(`status.${task.status}`)} />
                 <strong>{t(`task.${task.type}`)}</strong>
                 <small className="muted">
-                  {task.status} · {task.assigned.length}/{task.maxWorkers} · {task.priority}
+                  {t(`status.${task.status}`)} · {t("tasks.workers", { n: task.assigned.length, max: task.maxWorkers })} ·{" "}
+                  {t("tasks.priority", { n: task.priority })}
                 </small>
+                {task.type === "guard" && task.status === "pending" && <small className="muted">{t("tasks.guardWait")}</small>}
                 <button
                   data-testid={`task-up-${task.id}`}
                   disabled={task.priority >= 100}

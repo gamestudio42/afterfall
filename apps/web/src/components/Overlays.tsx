@@ -109,6 +109,7 @@ export function Banner() {
   const game = useGame();
   const touch = useTouchUi();
   const buildMode = useUi((s) => s.buildMode);
+  const rejection = useUi((s) => s.buildRejection);
   const speed = useUi((s) => s.speed);
   const sim = game.sim!;
   if (!sim.state.started)
@@ -129,6 +130,11 @@ export function Banner() {
     return (
       <div className="banner">
         <strong>{t(`struct.${buildMode}`)}</strong>
+        {rejection && (
+          <p className="build-rejection" role="status" data-testid="build-rejection">
+            {t(`build.reject.${rejection}`)}
+          </p>
+        )}
         <small>{t("banner.build")}</small>
         <small data-testid="build-rotate">
           {t("banner.buildRotate")} · {t(info?.manual ? "banner.angleManual" : "banner.angleAuto")}

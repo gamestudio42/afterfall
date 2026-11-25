@@ -6,6 +6,8 @@ export * from "./report";
 export { taskSite, outstanding } from "./systems/tasks";
 export {
   placementAt,
+  placementProblem,
+  type PlacementProblem,
   placementYaw,
   previewFrame,
   structureCells,

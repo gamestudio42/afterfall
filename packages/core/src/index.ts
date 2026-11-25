@@ -3,6 +3,7 @@ export * from "./simulation";
 export * from "./commands";
 export * from "./persistence";
 export * from "./report";
+export { worksiteSummary } from "./worksite";
 export { taskSite, outstanding } from "./systems/tasks";
 export {
   placementAt,

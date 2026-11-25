@@ -44,6 +44,21 @@ watchtowers, and offers map focus and a return to the group. The dawn report can
 hand off to the current community while explicitly pausing; normal Continue still
 preserves the chosen speed. No care, sleep, meal or work rules change.
 
+### Construction progress and supply
+
+The task drawer identifies each job's target, shows finite work progress and
+completed pieces, and can focus/select its next unfinished structure or building.
+Construction, conversion and repair share a read-only summary of delivered,
+in-transit and uncollected materials. A shortfall compares uncollected needs with
+current stores; it does not reserve stock or imply that supplied work must stop.
+Feedback distinguishes blocked materials, waiting automatic workers, delivery and
+off-hours assignment. Guard and production jobs keep their existing status labels.
+
+Selecting a wall blueprint shows that piece's progress separately from the whole
+line's work. Inspecting or reviewing workers changes selection only; priority and
+cancellation retain their existing commands. This serves pillars 1–2 during build
+and preparation, without changing scheduling, pathfinding or construction costs.
+
 ## Research and the cure
 
 Searching a school, hospital, police station, office or pharmacy yields research

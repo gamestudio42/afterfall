@@ -682,20 +682,30 @@ canvas.world.hidden {
   flex-direction: column;
   gap: 8px;
 }
-.tasks {
+.drawer.tasks {
   flex-direction: column;
-  gap: 6px;
-  max-height: 240px;
+  gap: 8px;
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(360px, 45vh);
   overflow-y: auto;
 }
 .task-row {
-  display: grid;
-  grid-template-columns: 10px 110px 1fr auto auto;
-  align-items: center;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   font-size: 12px;
 }
+.task-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .task-row .dot {
+  flex-shrink: 0;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -710,9 +720,35 @@ canvas.world.hidden {
 .task-row .dot.paused {
   background: #7b7b7b;
 }
-.task-row button {
-  padding: 0 6px;
-  line-height: 1.6;
+.task-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.task-priority {
+  display: flex;
+  gap: 6px;
+}
+.task-actions button {
+  min-height: 32px;
+  min-width: 36px;
+}
+.worksite p {
+  margin: 6px 0;
+}
+.worksite-materials {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.worksite-materials small {
+  color: var(--muted);
+}
+.worksite-shortfall {
+  color: var(--warn);
+}
+.worksite .bag {
+  margin-top: 3px;
 }
 .policies label {
   display: flex;

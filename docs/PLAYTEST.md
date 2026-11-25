@@ -1,5 +1,50 @@
 # Playtest and balance protocol
 
+## Construction progress polish — 2026-11-25 (hypothesis)
+
+- **Fantasy / pillars:** reclaim a building and defend a street (1–2).
+- **Loop:** plan, supply, build, locate the unfinished defense, prepare for night.
+- **Hypothesis:** a named destination, honest piece/job progress and visible
+  material flow let the player distinguish a queued blueprint from a defense
+  that is ready, and choose between scavenging, automatic work and waiting.
+- **Slice:** the existing task drawer and construction/conversion panels. Show
+  delivered, in-transit and still-to-fetch materials; compare uncollected needs
+  with current stores without claiming that stock is reserved for this job.
+- **Source of truth:** task cost/delivered/inTransit/progress, structure progress,
+  storage totals and the simulation's existing working hours. No new costs,
+  schedules, worker assignment, pathfinding, save fields or cancellation rules.
+- **Watch:** locate a job from the queue; identify its shortfall and workers;
+  distinguish the selected wall segment from its whole line; inspect night wait.
+- **Change again if:** delivery is counted twice, a partial shortfall is presented
+  as a complete stop, a site is labelled unreachable without path evidence, or
+  expanded task cards obstruct placement and portrait controls.
+- **Observed (scripted Chromium, seed 4242, classic city, merged `main`
+  `519fe79`):** a controlled half-built wall line showed 1/2 pieces complete,
+  50% job progress and 0% on the selected unfinished piece. Inspection selected
+  that second piece. Material labels showed 2 wood delivered, 1 in transit and
+  1 still to collect, with a shortfall of 1 against empty wood storage. Priority
+  still changed through its command, and cancelling the unfinished piece kept
+  the completed wall. A conversion fixture showed off-hours at night, waiting
+  workers by day, and navigation to the community at 390 × 844.
+- **Visual review:** inspected queue, selected-piece and portrait captures. The
+  supply breakdown, map-inspection action and priority controls remained legible.
+- **Interpretation / decision:** keep for human evaluation. Scripted fixtures
+  isolate presentation; they do not establish that new players understand it.
+- **Validation:** `pnpm check` passed (476 tests in 55 files) and the build passed.
+  The initial two browser scenarios passed. The full Chromium run with two workers
+  had 30 passes, 2 failures and 18 optional skips. Both failures were the first-cycle
+  fixture observing population 0 instead of 4 before its UI frame published.
+  That fixture now uses the existing `expectPopulation` helper to drain the actual
+  queued command and publish the UI frame, as the other scenarios already do.
+  The new scenarios passed in the full run, including inspection of a repair
+  created by the actual task system. All three first-cycle scenarios passed on
+  the one-worker rerun (1.3 minutes), validating all 32 active scenarios across
+  the full run and rerun, not one clean concurrent run. Final TypeScript, targeted
+  lint/format checks and `git diff --check` passed. Tests used an isolated worktree
+  on port 5295; browser and test workers needed local sandbox escalation.
+- **Limits:** no uncoached human playtest, complete campaign or physical-device
+  check. This pass does not diagnose path reachability or reserve stock for jobs.
+
 ## Community recovery polish — 2026-11-25 (hypothesis)
 
 - **Fantasy:** keep a handful of survivors alive long enough to make one street work again.

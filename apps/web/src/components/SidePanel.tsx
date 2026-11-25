@@ -224,8 +224,12 @@ function UnitsPanel({ sim, ids }: { sim: Simulation; ids: number[] }) {
   const t = useT();
   const game = useGame();
   const set = useUi((s) => s.set);
-  const units = ids.map((id) => sim.state.entities.get(id)).filter((e): e is Entity => !!e?.survivor);
+  const units = ids.map((id) => sim.state.entities.get(id)).filter((e): e is Entity => !!e?.survivor && (e.health?.hp ?? 0) > 0);
   if (units.length === 0) return null;
+  const wounded = units.filter((e) => e.health!.hp < e.health!.max).length;
+  const infected = units.filter((e) => e.survivor!.infected).length;
+  const hungry = units.filter((e) => e.survivor!.hunger > 0).length;
+  const manual = units.filter((e) => e.survivor!.manual).length;
   const stance = units[0].survivor!.stance;
   const setStance = (s: Stance) => game.command({ type: "setStance", units: ids, stance: s });
   return (
@@ -236,18 +240,37 @@ function UnitsPanel({ sim, ids }: { sim: Simulation; ids: number[] }) {
           {units.length === 1 && <small className="muted">{units[0].survivor!.manual ? t("panel.manual") : t("panel.automatic")}</small>}
         </div>
       </div>
+      {units.length > 1 && (
+        <p className="community-summary" data-testid="community-summary">
+          {t("community.summary", { wounded, infected, hungry })}
+        </p>
+      )}
       {units.length === 1 ? (
         <SurvivorDetail sim={sim} e={units[0]} />
       ) : (
         <div className="unit-list">
           {units.map((e) => (
-            <button key={e.id} className="unit-row" onClick={() => set({ selectedUnits: [e.id] })}>
-              <span>{e.survivor!.name}</span>
-              <Meter value={e.health!.hp} color={e.health!.hp > 60 ? "#5fd36b" : "#e0503c"} />
+            <button key={e.id} className="unit-row" data-testid={`survivor-${e.id}`} onClick={() => set({ selectedUnits: [e.id] })}>
+              <strong>{e.survivor!.name}</strong>
+              <span className="unit-health">
+                {Math.round(e.health!.hp)}/{e.health!.max}
+              </span>
+              <Meter value={e.health!.hp} max={e.health!.max} color={e.health!.hp / e.health!.max > 0.6 ? "#5fd36b" : "#e0503c"} />
+              <small className="unit-conditions">
+                {e.survivor!.infected && <span className="warn">{t("community.infected", { n: Math.round(e.survivor!.infection) })}</span>}
+                {e.health!.hp < e.health!.max && <span>{t("community.wounded")}</span>}
+                {e.survivor!.hunger > 0 && <span className="warn">{t("community.hungry")}</span>}
+                <span>{t(e.survivor!.manual ? "panel.manual" : "panel.automatic")}</span>
+              </small>
               <small className="muted">{activityLabel(t, sim, e)}</small>
             </button>
           ))}
         </div>
+      )}
+      {manual > 0 && (
+        <p className="note small" data-testid="manual-care-hint">
+          {t("community.manualHint", { n: manual })}
+        </p>
       )}
       <div className="panel-section">
         <Row label={t("panel.stance")}>
@@ -292,8 +315,21 @@ function SurvivorDetail({ sim, e }: { sim: Simulation; e: Entity }) {
   const portrait = game.renderer.survivorPortrait();
   return (
     <div className="panel-section">
+      <div className="button-grid survivor-navigation">
+        <button data-testid="focus-survivor" onClick={() => game.focusSelection()}>
+          {t("community.focus")}
+        </button>
+        <button data-testid="back-community" onClick={() => game.selectSurvivors()}>
+          {t("community.all")}
+        </button>
+      </div>
       {portrait && <img className="portrait" src={portrait} alt={s.name} data-testid="portrait" width={72} height={72} />}
       <p className="activity">{activityLabel(t, sim, e)}</p>
+      {(s.inside >= 0 || s.mounted >= 0) && (
+        <p className="muted small" data-testid="survivor-location">
+          {s.mounted >= 0 ? t("community.onTower") : t("community.inside", { type: sim.city.buildings[s.inside].type })}
+        </p>
+      )}
       <Row label={t("panel.health")}>{t("panel.hp", { hp: Math.round(h.hp), max: h.max })}</Row>
       <Meter value={h.hp} max={h.max} color={h.hp > 60 ? "#5fd36b" : h.hp > 30 ? "#f0c040" : "#e0503c"} />
       <Row label={t("panel.morale")}>{Math.round(s.morale)}</Row>
@@ -311,6 +347,14 @@ function SurvivorDetail({ sim, e }: { sim: Simulation; e: Entity }) {
           <Row label={<span className="warn">{t("panel.infection")}</span>}>{Math.round(s.infection)}%</Row>
           <Meter value={s.infection} color="#9fbf6a" />
         </>
+      )}
+      {(s.infected || h.hp < h.max || s.hunger > 0) && (
+        <details className="survivor-care" data-testid="survivor-care">
+          <summary>{t("community.care")}</summary>
+          {s.infected && <p>{t("community.infectionCare")}</p>}
+          {h.hp < h.max && <p>{t("community.woundCare")}</p>}
+          {s.hunger > 0 && <p>{t("community.hungerCare")}</p>}
+        </details>
       )}
       <Row label={t("panel.weapon")}>
         {t(`weapon.${s.weapon}`)}

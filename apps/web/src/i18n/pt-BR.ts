@@ -1,4 +1,21 @@
 export const ptBR: Record<string, string> = {
+  "community.summary": "Feridos: {wounded} · Infectados: {infected} · Fome: {hungry}",
+  "community.infected": "Infectado · {n}%",
+  "community.wounded": "Ferido",
+  "community.hungry": "Com fome",
+  "community.manualHint":
+    "Ordens manuais: {n}. Esses sobreviventes não seguem o trabalho e o sono automáticos. Use Trabalho automático para retomar a rotina.",
+  "community.care": "Como cuidar",
+  "community.focus": "Localizar no mapa",
+  "community.all": "Todos os sobreviventes",
+  "community.onTower": "De guarda em uma torre",
+  "community.inside": "Dentro de: {type}",
+  "community.infectionCare": "Mantenha remédios no estoque para o tratamento ao amanhecer. A infecção continua avançando até ser tratada.",
+  "community.woundCare":
+    "Dormir dentro de um prédio recupera a saúde aos poucos. Remédios tratam ferimentos graves ao amanhecer, quando disponíveis.",
+  "community.hungerCare":
+    "Mantenha comida e água no estoque para a próxima refeição. Voltar à base, por si só, não alimenta o sobrevivente.",
+  "dawn.reviewCommunity": "Revisar comunidade · pausar",
   "econ.flowHint":
     "O consumo inclui refeições, remédios e custos de eventos. Materiais enviados a obras e equipamentos pessoais saem do estoque separadamente.",
   "guide.title": "Primeiro dia · primeira noite",

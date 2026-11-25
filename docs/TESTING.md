@@ -25,6 +25,15 @@ without the cost of WebGL capture. Two-boot cases use the same 180 s budget as
 the main save/reload workflow. These fixtures do not substitute for an uncoached
 playtest; see the first-cycle session in [PLAYTEST.md](PLAYTEST.md).
 
+Community recovery coverage in `tests/e2e/community.spec.ts` seeds care needs
+on a paused classic city and checks the group summary, infection progress,
+individual inspection, indoor location, camera focus, automatic-work command and
+removal of dead members from the selection panel. A second scenario advances the
+hourly system to dawn, verifies the review action pauses while keeping the resume
+speed, and checks portrait navigation at 390 × 844. `COMMUNITY_SHOT=1 pnpm test:e2e
+tests/e2e/community.spec.ts --workers=1` captures the group and detail panels.
+These are controlled UI regressions, not a naturally played night.
+
 ## Character art and animation
 
 `packages/renderer/tests/characters.test.ts` checks distance-driven gait,

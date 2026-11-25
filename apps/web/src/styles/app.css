@@ -547,6 +547,45 @@ canvas.world.hidden {
   text-align: left;
   padding: 6px 8px;
 }
+.community-summary {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.unit-health {
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.unit-row .meter {
+  grid-column: 1 / -1;
+}
+.unit-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  font-size: 11px;
+}
+.unit-conditions span {
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.survivor-care {
+  border-left: 2px solid var(--accent);
+  padding-left: 9px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.survivor-care summary {
+  cursor: pointer;
+  color: var(--text);
+  padding: 6px 0;
+}
+.survivor-navigation {
+  margin: 0 0 12px;
+}
 .unit-row small {
   grid-column: 1 / -1;
 }

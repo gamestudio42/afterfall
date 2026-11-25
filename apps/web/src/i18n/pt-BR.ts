@@ -235,6 +235,7 @@ export const ptBR: Record<string, string> = {
   "banner.buildShort": "falta material em estoque",
   "banner.buildCapped": "máximo de 200 por traçado",
   "banner.buildSteep": "encosta íngreme demais para construir",
+  "banner.buildStreet": "horta e poço não vão na rua",
 
   "outcome.victory": "Vocês sobreviveram",
   "outcome.victoryText": "Doze noites se passaram e a comunidade continua de pé. A reconstrução pode começar.",

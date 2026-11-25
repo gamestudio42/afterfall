@@ -247,7 +247,23 @@ describe("the city's wildlife and weather, synthesized", () => {
   const rms = (x: Float32Array) => Math.sqrt(x.reduce((a, v) => a + v * v, 0) / x.length);
 
   it("makes every sound, audible and never clipping, the same for the same seed", () => {
-    for (const name of ["chirp", "caw", "flutter", "bark", "squeak"] as const) {
+    for (const name of [
+      "chirp",
+      "caw",
+      "flutter",
+      "bark",
+      "squeak",
+      "moan",
+      "groan",
+      "shuffle",
+      "owl",
+      "snap",
+      "creak",
+      "clang",
+      "can",
+      "fence",
+      "alarm",
+    ] as const) {
       const a = synthSound(name, 3);
       expect(a.length, name).toBeGreaterThan(SYNTH_RATE * 0.2);
       expect(peak(a), name).toBeGreaterThan(0.3);

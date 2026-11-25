@@ -12,9 +12,24 @@
 export const SYNTH_RATE = 22050;
 
 /** One-shot sounds, played where something happened. */
-export type SynthSound = "chirp" | "caw" | "flutter" | "bark" | "squeak";
+export type SynthSound =
+  | "chirp"
+  | "caw"
+  | "flutter"
+  | "bark"
+  | "squeak"
+  | "moan"
+  | "groan"
+  | "shuffle"
+  | "owl"
+  | "snap"
+  | "creak"
+  | "clang"
+  | "can"
+  | "fence"
+  | "alarm";
 /** Looping beds, mixed by the soundscape. */
-export type SynthBed = "crickets" | "frogs" | "wind" | "rain";
+export type SynthBed = "crickets" | "frogs" | "wind" | "rain" | "horde";
 
 function rng(seed: number): () => number {
   let a = seed >>> 0;
@@ -359,7 +374,242 @@ function rain(r: () => number): Float32Array {
   return normalize(seamless(lowpass(out, 7000), 1), 0.5);
 }
 
-const MAKERS: Record<SynthSound, (r: () => number) => Float32Array> = { chirp, caw, flutter, bark, squeak };
+// ---------------------------------------------------------------------------
+// The dead
+// ---------------------------------------------------------------------------
+
+/**
+ * A voice: a pulse train whose pitch wavers from cycle to cycle (the throat), shaped by
+ * three resonances (the mouth's vowel), with breath through the same resonances.
+ */
+function voice(
+  r: () => number,
+  seconds: number,
+  f0: number,
+  glide: number,
+  formants: [number, number, number],
+  breath: number,
+  jitter: number,
+): Float32Array {
+  const out = buffer(seconds);
+  let next = 0;
+  let pulse = 0;
+  let last = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / SYNTH_RATE;
+    const k = t / seconds;
+    if (i >= next) {
+      const f = f0 * (1 + glide * k) * (1 + 0.04 * Math.sin(t * 2 * Math.PI * 4.5)) * (1 + (r() - 0.5) * jitter);
+      last = i;
+      next = i + SYNTH_RATE / f;
+      pulse = 0.7 + r() * 0.6;
+    }
+    out[i] = pulse * Math.exp(-(i - last) / 25) + (r() * 2 - 1) * breath;
+  }
+  const [a, b, c] = formants;
+  const f1 = bandpass(out, a, 4);
+  const f2 = bandpass(out, b, 5);
+  const f3 = bandpass(out, c, 6);
+  const shaped = new Float32Array(out.length);
+  for (let i = 0; i < out.length; i++) {
+    const t = i / SYNTH_RATE;
+    // Swells in, sags, and dies away: a moan, not a note.
+    const env = Math.min(1, t / 0.25) * Math.pow(1 - t / seconds, 0.6) * (0.75 + 0.25 * Math.sin(t * 2 * Math.PI * 0.9));
+    shaped[i] = (f1[i] + f2[i] * 0.6 + f3[i] * 0.25) * env;
+  }
+  return shaped;
+}
+
+/** One of the dead, moaning: a long, low "uhhh" that sags in pitch. */
+function moan(r: () => number): Float32Array {
+  const seconds = 1.3 + r() * 1;
+  const v = voice(r, seconds, 95 + r() * 40, -0.25, [420 + r() * 120, 820 + r() * 200, 2400], 0.5, 0.08);
+  return normalize(room(lowpass(v, 3000), 0.35, 0.8), 0.85);
+}
+
+/** A short, wet groan, rougher than a moan. */
+function groan(r: () => number): Float32Array {
+  const seconds = 0.5 + r() * 0.35;
+  const v = voice(r, seconds, 75 + r() * 25, -0.35, [380, 700 + r() * 150, 2200], 0.9, 0.15);
+  return normalize(room(lowpass(v, 2500), 0.3, 0.6), 0.85);
+}
+
+/** Feet dragging on grit: three to five slow scuffs. */
+function shuffle(r: () => number): Float32Array {
+  const out = buffer(2.4);
+  let t = 0.05;
+  const steps = 3 + Math.floor(r() * 3);
+  for (let n = 0; n < steps; n++) {
+    const len = 0.16 + r() * 0.12;
+    const at = Math.round(t * SYNTH_RATE);
+    for (let i = 0; i < len * SYNTH_RATE && at + i < out.length; i++) {
+      const k = i / (len * SYNTH_RATE);
+      // A scrape swells and fades; grit is noise in short crackles.
+      const grit = r() < 0.15 ? 1 : 0.35;
+      out[at + i] += (r() * 2 - 1) * grit * Math.sin(Math.PI * Math.pow(k, 0.6));
+    }
+    t += 0.42 + r() * 0.2;
+  }
+  return normalize(room(lowpass(highpass(out, 300), 1600), 0.25, 0.4), 0.7);
+}
+
+/** Many of the dead at once, out of sight: overlapping moans, a loop of eight seconds. */
+function horde(r: () => number): Float32Array {
+  const out = buffer(8);
+  for (let n = 0; n < 14; n++) wrapAdd(out, Math.floor(r() * out.length), n % 3 ? moan(r) : groan(r));
+  return normalize(lowpass(out, 1800), 0.6);
+}
+
+// ---------------------------------------------------------------------------
+// The night
+// ---------------------------------------------------------------------------
+
+/** An owl: "hoo, hoo-hoooo", soft and breathy, in the dark between buildings. */
+function owl(r: () => number): Float32Array {
+  const out = buffer(2.2);
+  const f = 360 + r() * 60;
+  const hoots: [number, number][] = [
+    [0.05, 0.28],
+    [0.55, 0.18],
+    [0.8, 0.55],
+  ];
+  for (const [start, len] of hoots) {
+    let phase = 0;
+    for (let i = 0; i < len * SYNTH_RATE; i++) {
+      const t = i / SYNTH_RATE;
+      const k = t / len;
+      phase += (2 * Math.PI * f * (1 - 0.05 * k)) / SYNTH_RATE;
+      const env = Math.sin(Math.PI * Math.min(1, k * 1.05)) * Math.min(1, t / 0.04);
+      out[Math.round(start * SYNTH_RATE) + i] += (Math.sin(phase) + (r() * 2 - 1) * 0.06) * env;
+    }
+  }
+  return normalize(room(lowpass(out, 1500), 0.45, 1), 0.7);
+}
+
+/** A twig or a board cracking underfoot somewhere: two sharp cracks with a woody ring. */
+function snap(r: () => number): Float32Array {
+  const out = buffer(0.5);
+  for (const at of [0.01, 0.04 + r() * 0.05]) {
+    const i0 = Math.round(at * SYNTH_RATE);
+    for (let i = 0; i < 0.006 * SYNTH_RATE; i++) out[i0 + i] += (r() * 2 - 1) * (1 - i / (0.006 * SYNTH_RATE));
+  }
+  const wood = bandpass(out, 2200 + r() * 800, 6);
+  const mixed = new Float32Array(out.length);
+  for (let i = 0; i < out.length; i++) mixed[i] = out[i] * 0.6 + wood[i] * 2;
+  return normalize(room(lowpass(mixed, 4000), 0.4, 0.6), 0.7);
+}
+
+// ---------------------------------------------------------------------------
+// The city, far off
+// ---------------------------------------------------------------------------
+
+/** Heard from a block or two away: the highs gone, and the street's echo on it. */
+function far(x: Float32Array, cutoff = 2600): Float32Array {
+  return room(lowpass(x, cutoff), 0.45, 1.2);
+}
+
+/** A gate or a door swinging on a rusted hinge: stick-slip, a run of clicks that slides in pitch. */
+function creak(r: () => number): Float32Array {
+  const seconds = 0.9 + r() * 0.8;
+  const out = buffer(seconds);
+  const f0 = 25 + r() * 20;
+  const f1 = 55 + r() * 40;
+  let next = 0;
+  for (let i = 0; i < out.length; i++) {
+    const k = i / out.length;
+    if (i >= next) {
+      out[i] = 1;
+      next = i + (SYNTH_RATE / (f0 + (f1 - f0) * Math.sin(Math.PI * k * 0.9))) * (1 + (r() - 0.5) * 0.2);
+    }
+  }
+  const a = bandpass(out, 700 + r() * 300, 12);
+  const b = bandpass(out, 1500 + r() * 500, 14);
+  const mixed = new Float32Array(out.length);
+  for (let i = 0; i < out.length; i++) mixed[i] = (a[i] + b[i] * 0.6) * Math.sin((Math.PI * i) / out.length);
+  return normalize(far(mixed, 3000), 0.75);
+}
+
+/** A loose metal sign struck by the wind: inharmonic partials ringing down, and a smaller knock. */
+function clang(r: () => number): Float32Array {
+  const out = buffer(2.2);
+  const f = 170 + r() * 90;
+  const partials = [1, 2.76, 5.4, 8.93];
+  for (const [at, gain] of [
+    [0.01, 1],
+    [0.35 + r() * 0.3, 0.45],
+  ]) {
+    const i0 = Math.round(at * SYNTH_RATE);
+    for (let i = 0; i + i0 < out.length; i++) {
+      const t = i / SYNTH_RATE;
+      let v = 0;
+      partials.forEach((p, n) => (v += (Math.sin(2 * Math.PI * f * p * t + n) / (n + 1)) * Math.exp(-t * (2 + n * 1.5))));
+      out[i0 + i] += v * gain * Math.min(1, t / 0.002);
+    }
+  }
+  return normalize(far(out), 0.8);
+}
+
+/** An empty can rolling and rattling across the asphalt, slowing to a stop. */
+function can(r: () => number): Float32Array {
+  const out = buffer(1.8);
+  let t = 0.02;
+  while (t < 1.5) {
+    const at = Math.round(t * SYNTH_RATE);
+    for (let i = 0; i < 0.004 * SYNTH_RATE; i++) out[at + i] += (r() * 2 - 1) * (1 - t / 1.6);
+    t += (0.025 + r() * 0.03) * (1 + t * 1.5);
+  }
+  const tin = bandpass(out, 3200 + r() * 1200, 5);
+  return normalize(far(tin, 4500), 0.6);
+}
+
+/** A chain-link fence shaken by the wind: a shimmer of tiny metal clicks. */
+function fence(r: () => number): Float32Array {
+  const out = buffer(1.2);
+  for (let n = 0; n < 260; n++) {
+    const t = Math.pow(r(), 0.7) * 1.0;
+    const at = Math.round(t * SYNTH_RATE);
+    out[at] += (r() * 2 - 1) * (1 - t);
+  }
+  const a = bandpass(out, 1800 + r() * 600, 8);
+  const b = bandpass(out, 3400 + r() * 800, 8);
+  const mixed = new Float32Array(out.length);
+  for (let i = 0; i < out.length; i++) mixed[i] = a[i] + b[i];
+  return normalize(far(mixed, 4000), 0.6);
+}
+
+/** A car alarm going off streets away, its battery nearly dead. */
+function alarm(r: () => number): Float32Array {
+  const out = buffer(3.5);
+  const lo = 760 + r() * 80;
+  const hi = lo * 1.35;
+  let phase = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / SYNTH_RATE;
+    const f = Math.floor(t * 4) % 2 ? hi : lo;
+    phase += (2 * Math.PI * f) / SYNTH_RATE;
+    // A square-ish horn, sagging as the battery gives.
+    out[i] = Math.tanh(Math.sin(phase) * 3) * Math.min(1, t / 0.05) * (1 - t / 4);
+  }
+  return normalize(far(out, 1800), 0.6);
+}
+
+const MAKERS: Record<SynthSound, (r: () => number) => Float32Array> = {
+  chirp,
+  caw,
+  flutter,
+  bark,
+  squeak,
+  moan,
+  groan,
+  shuffle,
+  owl,
+  snap,
+  creak,
+  clang,
+  can,
+  fence,
+  alarm,
+};
 
 /** The samples of a one-shot sound, the same for the same seed. */
 export function synthSound(name: SynthSound, seed = 1): Float32Array {
@@ -372,5 +622,6 @@ export function synthBed(name: SynthBed, seed = 1): Float32Array {
   if (name === "crickets") return crickets();
   if (name === "frogs") return frogs(r);
   if (name === "wind") return wind(r);
+  if (name === "horde") return horde(r);
   return rain(r);
 }

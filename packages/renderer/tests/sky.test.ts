@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { CityMap } from "@afterfall/world";
-import { OUTSKIRTS_FAR, OUTSKIRTS_NEAR, placeOutskirts, skyColors, skyInView } from "../src/sky";
+import {
+  OUTSKIRTS_FAR,
+  OUTSKIRTS_NEAR,
+  buildOutskirts,
+  outskirtStreets,
+  placeOutskirts,
+  skyColors,
+  skyInView,
+  streetGrain,
+} from "../src/sky";
+import { generateVariedCity } from "@afterfall/world";
 import { WEATHER, easeWeather, rainBox, weatherFor } from "../src/weather";
 
 function city(): CityMap {
@@ -81,6 +91,66 @@ describe("outskirts", () => {
     // The street at x 48..56 leaves north and south: nothing may stand in its line there.
     const blocking = boxes.filter((b) => b.z < 0 && b.x + b.w / 2 > 48 && b.x - b.w / 2 < 56);
     expect(blocking).toEqual([]);
+  });
+
+  it("wears whole storeys of the map's facades, and towers step back at the top", () => {
+    for (const b of boxes) expect((b.h - 0.6) / 3.2).toBeCloseTo(Math.round((b.h - 0.6) / 3.2));
+    expect(new Set(boxes.map((b) => b.style))).toEqual(new Set(["residential", "office", "industrial"]));
+    expect(boxes.some((b) => b.top && !b.top.plant)).toBe(true);
+    expect(boxes.some((b) => b.top?.plant)).toBe(true);
+    const group = buildOutskirts(boxes);
+    expect(group.children.map((c) => c.name).sort()).toEqual([
+      "outskirts-industrial",
+      "outskirts-office",
+      "outskirts-plant",
+      "outskirts-residential",
+    ]);
+  });
+
+  it("carries a varied city's slanted streets on out, with nothing standing on them", () => {
+    const varied = generateVariedCity(1, { shape: "turned" });
+    const streets = outskirtStreets(varied);
+    expect(streets.length).toBeGreaterThan(8);
+    expect(streets.some((s) => Math.abs(s.dx) > 0.2 && Math.abs(s.dz) > 0.2)).toBe(true);
+    for (const b of placeOutskirts(varied, 3))
+      for (const s of streets) {
+        const t = (b.x - s.x) * s.dx + (b.z - s.z) * s.dz;
+        if (t < 0) continue;
+        const across = Math.abs((b.x - s.x) * s.dz - (b.z - s.z) * s.dx);
+        expect(across).toBeGreaterThan(s.width / 2);
+      }
+  });
+
+  it("lines its lots up with a turned city's streets, and keeps their corners off the map", () => {
+    const varied = generateVariedCity(1, { shape: "turned" });
+    const grain = streetGrain(varied);
+    expect(Math.abs(grain)).toBeGreaterThan(0.2);
+    const out = placeOutskirts(varied, 3);
+    expect(out.length).toBeGreaterThan(100);
+    for (const b of out) {
+      expect(b.yaw).toBeCloseTo(-grain);
+      const reach = Math.hypot(b.w, b.d) / 2;
+      expect(Math.hypot(Math.max(-b.x, b.x - varied.width, 0), Math.max(-b.z, b.z - varied.height, 0))).toBeGreaterThan(reach);
+    }
+    // Square to the map on the classic grid, as before.
+    expect(streetGrain(map)).toBeCloseTo(0);
+    expect(boxes.every((b) => b.yaw === undefined)).toBe(true);
+  });
+
+  it("stands past the ring of city drawn round a generated map, and leaves from its streets", () => {
+    const varied = generateVariedCity(1);
+    const ring = varied.decor!.ring;
+    for (const b of placeOutskirts(varied, 3)) {
+      const dx = Math.max(-ring - b.x, b.x - varied.width - ring, 0);
+      const dz = Math.max(-ring - b.z, b.z - varied.height - ring, 0);
+      expect(Math.hypot(dx, dz)).toBeGreaterThan(OUTSKIRTS_NEAR - 20);
+    }
+    const streets = outskirtStreets(varied);
+    expect(streets.length).toBeGreaterThan(8);
+    for (const s of streets) {
+      const onEdge = s.x < -ring + 1.5 || s.z < -ring + 1.5 || s.x > varied.width + ring - 1.5 || s.z > varied.height + ring - 1.5;
+      expect(onEdge).toBe(true);
+    }
   });
 
   it("is the same for the same seed and thins out with distance", () => {

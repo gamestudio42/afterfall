@@ -109,6 +109,27 @@ describe("the varied generated city", () => {
       }
   });
 
+  it("carries the city on past the map's edge, drawn but not played", () => {
+    for (const m of [...maps.values()].slice(0, 12)) {
+      const d = m.decor!;
+      expect(d.ring).toBeGreaterThan(0);
+      expect(d.buildings.length, `seed ${m.seed}`).toBeGreaterThan(80);
+      // A street of the ring ends on the map's edge, give or take rounding.
+      const inMap = (x: number, y: number) => x > 1e-6 && y > 1e-6 && x < m.width - 1e-6 && y < m.height - 1e-6;
+      const inRing = (x: number, y: number) =>
+        x >= -d.ring - 1 && y >= -d.ring - 1 && x <= m.width + d.ring + 1 && y <= m.height + d.ring + 1;
+      for (const b of d.buildings)
+        for (const p of b.footprint ?? [b.rect, { x: b.rect.x + b.rect.w, y: b.rect.y + b.rect.h }]) {
+          expect(inMap(p.x, p.y), `seed ${m.seed} ${b.id}`).toBe(false);
+          expect(inRing(p.x, p.y)).toBe(true);
+        }
+      for (const r of d.roads) for (const p of r.path!) expect(inMap(p.x, p.y)).toBe(false);
+      // Nothing of it reaches the simulation's grid: the map plays exactly as it did.
+      const without = NavGrid.fromCity({ ...m, decor: undefined });
+      expect(NavGrid.fromCity(m).kind).toEqual(without.kind);
+    }
+  });
+
   it("puts a river in a valley that only its bridges cross", () => {
     const valleys = [...maps.values()].filter((m) => m.generated!.site === "valley");
     expect(valleys.length).toBeGreaterThan(3);

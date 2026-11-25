@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CityMap } from "@afterfall/world";
+import { FLOOR, MODULE, type FacadeArt, type FacadeStyle } from "./buildingBatch";
 
 type RGB = [number, number, number];
 
@@ -178,8 +179,54 @@ export interface OutskirtBox {
   d: number;
   h: number;
   shade: number;
+  /** Which facade it wears, as the buildings on the map do. */
+  style: FacadeStyle;
+  /**
+   * What stands on its roof: a setback storey or more on a tower, a plant room on a lower
+   * block. Its footprint is a share of the block's, centred on it.
+   */
+  top?: { w: number; d: number; h: number; plant: boolean };
   /** Ground under the box: on a hillside, the map edge's own height, held. */
   y?: number;
+  /** Turn about the vertical, so the block lines up with the streets of the map. */
+  yaw?: number;
+}
+
+/**
+ * The way the map's streets run, folded into a quarter turn: a length-weighted mean of
+ * every segment's direction (on a grid, the grid's own angle; on an imported map, its
+ * main grain). The outskirts' lots are laid out along it.
+ */
+export function streetGrain(city: CityMap): number {
+  let sx = 0;
+  let sz = 0;
+  for (const r of city.roads) {
+    const p = r.path ?? [
+      { x: r.rect.x, y: r.rect.y },
+      r.horizontal ? { x: r.rect.x + r.rect.w, y: r.rect.y } : { x: r.rect.x, y: r.rect.y + r.rect.h },
+    ];
+    for (let i = 1; i < p.length; i++) {
+      const dx = p[i].x - p[i - 1].x;
+      const dz = p[i].y - p[i - 1].y;
+      const len = Math.hypot(dx, dz);
+      const a = Math.atan2(dz, dx) * 4;
+      sx += Math.cos(a) * len;
+      sz += Math.sin(a) * len;
+    }
+  }
+  const grain = Math.atan2(sz, sx) / 4;
+  // Within a twentieth of a degree of square, it is square.
+  return Math.abs(grain) < 1e-3 ? 0 : grain;
+}
+
+/** A street of the map carried on past its edge, so the city does not stop at a wall. */
+export interface OutskirtStreet {
+  x: number;
+  z: number;
+  /** Unit direction out of the map. */
+  dx: number;
+  dz: number;
+  width: number;
 }
 
 /** How far past the map's edge the outskirts start and end, in metres. */
@@ -187,29 +234,85 @@ export const OUTSKIRTS_NEAR = 26;
 export const OUTSKIRTS_FAR = 340;
 
 /**
- * The city beyond the playable map: blocks of plain volumes on a loose grid,
- * denser and taller near the edge and thinning out, so the map sits in a city
- * instead of on a lawn. Nothing is placed inside the map, nor in the corridor
- * where one of its streets leaves it, which is where hordes walk in.
+ * Where the map's streets leave it: each end on the border, with the street's own
+ * direction out of the map. A generated grid's streets are rectangles; an imported or a
+ * varied city's are centre lines at any angle.
+ */
+export function outskirtStreets(city: CityMap): OutskirtStreet[] {
+  const out: OutskirtStreet[] = [];
+  const edge = 1;
+  // With a ring of drawn city round the map (decor), its streets leave at the ring's edge.
+  const ring = city.decor?.ring ?? 0;
+  const roads = city.decor ? city.decor.roads : city.roads;
+  const onBorder = (x: number, z: number) =>
+    x < -ring + edge || z < -ring + edge || x > city.width + ring - edge || z > city.height + ring - edge;
+  const add = (x: number, z: number, fx: number, fz: number, width: number) => {
+    const len = Math.hypot(x - fx, z - fz) || 1;
+    if (!onBorder(x, z) || out.some((s) => Math.hypot(s.x - x, s.z - z) < 4)) return;
+    out.push({ x, z, dx: (x - fx) / len, dz: (z - fz) / len, width });
+  };
+  for (const r of roads) {
+    if (r.trail) continue;
+    if (r.path && r.path.length > 1) {
+      const p = r.path;
+      const w = r.width ?? 8;
+      add(p[0].x, p[0].y, p[1].x, p[1].y, w);
+      add(p[p.length - 1].x, p[p.length - 1].y, p[p.length - 2].x, p[p.length - 2].y, w);
+    } else if (r.horizontal) {
+      const z = r.rect.y + r.rect.h / 2;
+      add(r.rect.x, z, r.rect.x + 1, z, r.rect.h);
+      add(r.rect.x + r.rect.w, z, r.rect.x + r.rect.w - 1, z, r.rect.h);
+    } else {
+      const x = r.rect.x + r.rect.w / 2;
+      add(x, r.rect.y, x, r.rect.y + 1, r.rect.w);
+      add(x, r.rect.y + r.rect.h, x, r.rect.y + r.rect.h - 1, r.rect.w);
+    }
+  }
+  return out;
+}
+
+/**
+ * The city beyond the playable map: blocks on a loose grid, denser and taller near the
+ * edge and thinning out, so the map sits in a city instead of on a lawn. Each wears one of
+ * the map's facades in whole storeys; towers step back near the top, and lower blocks
+ * carry a plant room. Nothing is placed inside the map, nor along a street that leaves it
+ * (the street carries on out, and it is where hordes walk in).
  */
 export function placeOutskirts(city: CityMap, seed = 1): OutskirtBox[] {
   const out: OutskirtBox[] = [];
   const pitch = 34;
-  // Streets of a generated city are axis-aligned rectangles; keep their lines clear.
-  const vertical = city.roads.filter((r) => !r.path && !r.horizontal).map((r) => [r.rect.x - 3, r.rect.x + r.rect.w + 3]);
-  const horizontal = city.roads.filter((r) => !r.path && r.horizontal).map((r) => [r.rect.y - 3, r.rect.y + r.rect.h + 3]);
-  const overlaps = (lines: number[][], a: number, b: number) => lines.some(([lo, hi]) => a < hi && b > lo);
-  const x0 = -OUTSKIRTS_FAR;
-  const z0 = -OUTSKIRTS_FAR;
-  const nx = Math.ceil((city.width + OUTSKIRTS_FAR * 2) / pitch);
-  const nz = Math.ceil((city.height + OUTSKIRTS_FAR * 2) / pitch);
+  const streets = outskirtStreets(city);
+  const onStreet = (x: number, z: number, r: number) =>
+    streets.some((s) => {
+      const t = (x - s.x) * s.dx + (z - s.z) * s.dz;
+      if (t < -r) return false;
+      const across = Math.abs((x - s.x) * s.dz - (z - s.z) * s.dx);
+      return across < s.width / 2 + 3 + r;
+    });
+  // The lots run along the map's streets: square to the map, a turned city's outskirts
+  // stood askew to every street that left it (a playtest report).
+  const grain = streetGrain(city);
+  const ring = city.decor?.ring ?? 0;
+  const cos = Math.cos(grain);
+  const sin = Math.sin(grain);
+  const mx = city.width / 2;
+  const mz = city.height / 2;
+  // Square to the map, the lots start at its corner as they always did.
+  const far0 = OUTSKIRTS_FAR + ring;
+  const ox = grain ? -(Math.hypot(city.width, city.height) / 2 + far0) : -mx - far0;
+  const oz = grain ? ox : -mz - far0;
+  const nx = Math.ceil((grain ? -ox * 2 : city.width + far0 * 2) / pitch);
+  const nz = Math.ceil((grain ? -oz * 2 : city.height + far0 * 2) / pitch);
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
-      const cx = x0 + (i + 0.5) * pitch;
-      const cz = z0 + (j + 0.5) * pitch;
-      // Distance outside the map's rectangle; zero or less means inside it.
-      const dx = Math.max(-cx, cx - city.width, 0);
-      const dz = Math.max(-cz, cz - city.height, 0);
+      const pu = ox + (i + 0.5) * pitch;
+      const pv = oz + (j + 0.5) * pitch;
+      const cx = mx + pu * cos - pv * sin;
+      const cz = mz + pu * sin + pv * cos;
+      // Distance outside the map's rectangle (and the ring drawn round it); zero or less
+      // means inside it.
+      const dx = Math.max(-ring - cx, cx - city.width - ring, 0);
+      const dz = Math.max(-ring - cz, cz - city.height - ring, 0);
       const dist = Math.hypot(dx, dz);
       if (dist < OUTSKIRTS_NEAR || dist > OUTSKIRTS_FAR) continue;
       const far = (dist - OUTSKIRTS_NEAR) / (OUTSKIRTS_FAR - OUTSKIRTS_NEAR);
@@ -217,37 +320,183 @@ export function placeOutskirts(city: CityMap, seed = 1): OutskirtBox[] {
       if (hash(i, j, seed) > 0.92 - far * 0.6) continue;
       const w = 12 + hash(i, j, seed + 1) * 14;
       const d = 12 + hash(i, j, seed + 2) * 14;
-      const x = cx + (hash(i, j, seed + 3) - 0.5) * (pitch - w - 4);
-      const z = cz + (hash(i, j, seed + 4) - 0.5) * (pitch - d - 4);
-      if (overlaps(vertical, x - w / 2, x + w / 2) && dx === 0) continue;
-      if (overlaps(horizontal, z - d / 2, z + d / 2) && dz === 0) continue;
+      const ou = (hash(i, j, seed + 3) - 0.5) * (pitch - w - 4);
+      const ov = (hash(i, j, seed + 4) - 0.5) * (pitch - d - 4);
+      const x = cx + ou * cos - ov * sin;
+      const z = cz + ou * sin + ov * cos;
+      // Turned, a block's corner reaches past its half-width: keep it off the map.
+      if (grain) {
+        const reach = Math.hypot(w, d) / 2;
+        if (Math.hypot(Math.max(-ring - x, x - city.width - ring, 0), Math.max(-ring - z, z - city.height - ring, 0)) < reach + 6) continue;
+      }
+      if (onStreet(x, z, Math.hypot(w, d) / 2)) continue;
       const tall = hash(i, j, seed + 5);
-      const h = (7 + tall * tall * 44) * (1 - far * 0.45);
-      out.push({ x, z, w, d, h, shade: 0.75 + hash(i, j, seed + 6) * 0.25 });
+      // Whole storeys and a parapet band, as on the map, so the windows meet the roof.
+      const floors = Math.max(2, Math.round(((7 + tall * tall * 44) * (1 - far * 0.45)) / FLOOR));
+      const h = floors * FLOOR + 0.6;
+      const pick = hash(i, j, seed + 7);
+      // Mostly brick and plaster: from the game's camera the office glass reads as stripes.
+      const style: FacadeStyle =
+        floors >= 7 ? (pick < 0.25 ? "office" : "residential") : pick < 0.7 ? "residential" : pick < 0.82 ? "office" : "industrial";
+      const roof = hash(i, j, seed + 8);
+      let top: OutskirtBox["top"];
+      if (floors >= 7 && roof < 0.6) {
+        const k = 0.55 + roof * 0.3;
+        top = { w: w * k, d: d * k, h: (2 + Math.floor(roof * 6)) * FLOOR + 0.6, plant: false };
+      } else if (roof < 0.45) {
+        const k = 0.22 + roof * 0.2;
+        top = { w: w * k, d: d * k, h: 2.6, plant: true };
+      }
+      out.push({
+        x,
+        z,
+        w,
+        d,
+        h,
+        shade: 0.75 + hash(i, j, seed + 6) * 0.25,
+        style,
+        ...(top ? { top } : {}),
+        ...(grain ? { yaw: -grain } : {}),
+      });
     }
   }
   return out;
 }
 
-/** The outskirts as one instanced mesh of boxes: one draw call, no shadows, fogged. */
-export function buildOutskirts(boxes: OutskirtBox[]): THREE.InstancedMesh {
+/**
+ * Tints per facade, in the tone of the map's own buildings: brighter, under the Lambert
+ * light the outskirts use, they glared beside the city (a playtest report).
+ */
+const OUTSKIRT_TINT: Record<FacadeStyle, [number, number, number]> = {
+  residential: [0.7, 0.6, 0.52],
+  office: [0.6, 0.62, 0.66],
+  industrial: [0.64, 0.62, 0.58],
+};
+const OUTSKIRT_STYLES: FacadeStyle[] = ["residential", "office", "industrial"];
+
+/**
+ * World-scaled texture coordinates for a unit box stretched by its instance: a wall takes
+ * the facade module across and up (4 bays by 4 floors of 3.2 m), a roof the roof tile.
+ * Texture coordinates of a stretched unit box would squeeze a whole facade onto every wall.
+ */
+function worldUv(mat: THREE.Material, module: number): void {
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <uv_vertex>",
+      `#include <uv_vertex>
+      #ifdef USE_MAP
+        vec3 oskSize = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+        vec3 oskP = position * oskSize;
+        vec2 oskUv = abs(normal.x) > 0.5 ? vec2(oskP.z * sign(normal.x), oskP.y)
+          : abs(normal.z) > 0.5 ? vec2(-oskP.x * sign(normal.z), oskP.y) : oskP.xz;
+        vMapUv = oskUv / ${module.toFixed(2)};
+      #endif`,
+    );
+  };
+}
+
+/**
+ * The outskirts: one instanced box mesh per facade style (walls in the facade, roofs in
+ * the roof tile) and plant rooms in bare concrete. No shadows, fogged, a handful of draw
+ * calls. The streets out of the map are drawn with the map's own (cityMeshes.ts).
+ */
+export function buildOutskirts(boxes: OutskirtBox[]): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "outskirts";
   const geo = new THREE.BoxGeometry(1, 1, 1);
   geo.translate(0, 0.5, 0);
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, boxes.length));
   const m = new THREE.Matrix4();
   const c = new THREE.Color();
-  boxes.forEach((b, i) => {
-    m.makeScale(b.w, b.h, b.d).setPosition(b.x, b.y ?? 0, b.z);
-    mesh.setMatrixAt(i, m);
-    mesh.setColorAt(i, c.setRGB(0.42 * b.shade, 0.41 * b.shade, 0.4 * b.shade));
-  });
-  mesh.count = boxes.length;
+  const roofMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  worldUv(roofMat, 8);
+  roofMat.name = "outskirts-roof";
+  for (const style of OUTSKIRT_STYLES) {
+    const pieces: { x: number; y: number; z: number; w: number; d: number; h: number; shade: number; yaw: number }[] = [];
+    for (const b of boxes) {
+      if (b.style !== style) continue;
+      const y = b.y ?? 0;
+      const yaw = b.yaw ?? 0;
+      pieces.push({ x: b.x, y, z: b.z, w: b.w, d: b.d, h: b.h, shade: b.shade, yaw });
+      if (b.top && !b.top.plant) pieces.push({ x: b.x, y: y + b.h, z: b.z, w: b.top.w, d: b.top.d, h: b.top.h, shade: b.shade, yaw });
+    }
+    if (!pieces.length) continue;
+    const wall = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    wall.name = `outskirts-${style}`;
+    worldUv(wall, MODULE);
+    // Walls on the four sides, the roof tile on top and underneath.
+    const mesh = new THREE.InstancedMesh(geo, [wall, wall, roofMat, roofMat, wall, wall], pieces.length);
+    const [tr, tg, tb] = OUTSKIRT_TINT[style];
+    pieces.forEach((p, i) => {
+      place(m, p.x, p.y, p.z, p.w, p.h, p.d, p.yaw);
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, c.setRGB(tr * p.shade, tg * p.shade, tb * p.shade));
+    });
+    finish(mesh, `outskirts-${style}`);
+    mesh.userData.style = style;
+    group.add(mesh);
+  }
+  const plants = boxes.filter((b) => b.top?.plant);
+  if (plants.length) {
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const mesh = new THREE.InstancedMesh(geo, mat, plants.length);
+    plants.forEach((b, i) => {
+      place(m, b.x, (b.y ?? 0) + b.h, b.z, b.top!.w, b.top!.h, b.top!.d, b.yaw ?? 0);
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, c.setRGB(0.5 * b.shade, 0.49 * b.shade, 0.47 * b.shade));
+    });
+    finish(mesh, "outskirts-plant");
+    group.add(mesh);
+  }
+  return group;
+}
+
+function finish(mesh: THREE.InstancedMesh, name: string): void {
   mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  mesh.name = "outskirts";
+  mesh.name = name;
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.computeBoundingSphere();
-  return mesh;
+}
+
+const tmpQ = new THREE.Quaternion();
+const tmpP = new THREE.Vector3();
+const tmpS = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** A unit box's matrix: stretched, turned about the vertical, stood at a point. */
+function place(m: THREE.Matrix4, x: number, y: number, z: number, w: number, h: number, d: number, yaw: number): void {
+  m.compose(tmpP.set(x, y, z), tmpQ.setFromAxisAngle(UP, yaw), tmpS.set(w, h, d));
+}
+
+/** Puts the map's facade and roof textures on the outskirts once they have loaded. */
+export function setOutskirtsArt(group: THREE.Group, art: Partial<FacadeArt>): void {
+  group.traverse((o) => {
+    if (!(o instanceof THREE.InstancedMesh)) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const mat of mats) {
+      if (!(mat instanceof THREE.MeshLambertMaterial)) continue;
+      const tex = mat.name === "outskirts-roof" ? art.roof : art[`facade_${o.userData.style as FacadeStyle}` as keyof FacadeArt];
+      if (!tex || mat.map === tex) continue;
+      mat.map = tex;
+      mat.needsUpdate = true;
+    }
+  });
+}
+
+/** Frees the outskirts' geometry and materials. */
+export function disposeOutskirts(group: THREE.Group): void {
+  const seen = new Set<unknown>();
+  group.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    if (!seen.has(o.geometry)) {
+      seen.add(o.geometry);
+      o.geometry.dispose();
+    }
+    for (const mat of Array.isArray(o.material) ? o.material : [o.material])
+      if (!seen.has(mat)) {
+        seen.add(mat);
+        mat.dispose();
+      }
+  });
 }

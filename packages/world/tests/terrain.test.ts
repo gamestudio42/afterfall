@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { distToPolyline, pointInPolygon } from "@afterfall/shared";
-import { CellKind, NavGrid, cityFromOverpass, joinRings, overpassTerrainQuery, type CityMap } from "../src";
+import {
+  CellKind,
+  NavGrid,
+  cityFromOverpass,
+  cutBuildingPads,
+  heightAt,
+  joinRings,
+  overpassTerrainQuery,
+  type CityMap,
+  type TerrainDef,
+} from "../src";
 import { FIXTURE_CENTER, syntheticOverpass, syntheticTerrain } from "./fixtures/osm";
 
 const opts = { ...FIXTURE_CENTER, size: 480, label: "Test" };
@@ -339,5 +349,62 @@ describe("statues and monuments mapped as points", () => {
     const i = g.cellOf(m.x, m.y);
     // A building may stand there in the fixture; if not, the pedestal does.
     expect([CellKind.Rampart, CellKind.Building]).toContain(g.kind[i]);
+  });
+});
+
+describe("a building's site cut into the slope", () => {
+  // A slope rising 0.25 m a metre to the east, 160 m square, 4 m nodes.
+  const cell = 4;
+  const n = 41;
+  const slope: TerrainDef = {
+    cell,
+    cols: n,
+    rows: n,
+    heights: Array.from({ length: n * n }, (_, i) => Math.round((i % n) * cell * 0.25 * 10)),
+    scale: 1,
+    base: 0,
+  };
+  const house = {
+    outline: [
+      { x: 60, y: 60 },
+      { x: 84, y: 60 },
+      { x: 84, y: 80 },
+      { x: 60, y: 80 },
+    ],
+  };
+
+  it("brings the ground under and round it down to its base, so its uphill wall stands clear", () => {
+    const cut = cutBuildingPads(slope, [house], []);
+    const base = 60 * 0.25;
+    // Before: the uphill wall stood in 6 m of hill.
+    expect(heightAt(slope, 84, 70) - base).toBeCloseTo(6, 1);
+    for (const [x, y] of [
+      [60, 70],
+      [72, 70],
+      [84, 70],
+      [72, 60],
+      [72, 80],
+    ])
+      expect(heightAt(cut, x, y)).toBeCloseTo(base, 1);
+    // A metre out from the uphill wall it is barely above the base (the relief is drawn
+    // between nodes 4 m apart); well out, the hillside again.
+    expect(heightAt(cut, 85, 70) - base).toBeLessThan(0.6);
+    expect(heightAt(cut, 120, 70)).toBeCloseTo(heightAt(slope, 120, 70), 1);
+    // It only cuts: downhill nothing is raised, and the bank stays under a grade of 1.
+    for (let i = 0; i < slope.heights.length; i++) expect(cut.heights[i]).toBeLessThanOrEqual(slope.heights[i]);
+    for (let x = 84; x < 110; x++) expect(heightAt(cut, x + 1, 70) - heightAt(cut, x, 70)).toBeLessThan(1);
+  });
+
+  it("leaves a street alone", () => {
+    const street = {
+      path: [
+        { x: 90, y: 0 },
+        { x: 90, y: 160 },
+      ],
+      width: 8,
+      rect: { x: 86, y: 0, w: 8, h: 160 },
+    };
+    const cut = cutBuildingPads(slope, [house], [street]);
+    expect(heightAt(cut, 92, 72)).toBeCloseTo(heightAt(slope, 92, 72), 1);
   });
 });

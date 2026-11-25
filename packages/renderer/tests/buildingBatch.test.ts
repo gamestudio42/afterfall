@@ -72,18 +72,29 @@ describe("building batch", () => {
     expect(roof.every((v) => Math.abs(v[1] - b.height) < 1e-6)).toBe(true);
   });
 
-  it("runs facade UVs along the perimeter in module units, floors on whole numbers", () => {
-    const batch = new BuildingBatch([building(4, "house", 0, 2, 12.8, 6.4)]);
+  it("gives each wall of a facade whole bays, so no window is cut by a corner", () => {
+    // 13.1 by 5.9 m: neither wall is a whole number of 3.2 m bays as measured.
+    const batch = new BuildingBatch([building(4, "house", 0, 2, 13.1, 5.9)]);
     const g = groupOf(batch, "residential");
     const uv = batch.mesh.geometry.getAttribute("uv");
-    const us: number[] = [];
-    const vs: number[] = [];
-    for (let v = g.start; v < g.start + g.count; v++) {
-      us.push(uv.getX(v));
-      vs.push(uv.getY(v));
+    const pos = batch.mesh.geometry.getAttribute("position");
+    const starts = new Set<string>();
+    // Each wall is two triangles; read its U span and its length on the ground.
+    for (let v = g.start; v < g.start + g.count; v += 6) {
+      const us = [0, 1, 2, 3, 4, 5].map((k) => uv.getX(v + k));
+      const xs = [0, 1, 2, 3, 4, 5].map((k) => [pos.getX(v + k), pos.getZ(v + k)]);
+      const len = Math.max(...xs.map(([x, z]) => Math.hypot(x - xs[0][0], z - xs[0][1])));
+      const bays = ((Math.max(...us) - Math.min(...us)) * MODULE) / FLOOR;
+      expect(bays).toBeCloseTo(Math.round(bays), 5);
+      expect(bays).toBe(Math.round(len / FLOOR));
+      starts.add((Math.min(...us) * MODULE).toFixed(3));
     }
-    // Perimeter 38.4 m is three modules, so U spans exactly 3 from its start.
-    expect(Math.max(...us) - Math.min(...us)).toBeCloseTo(38.4 / MODULE, 5);
+    // Every wall starts on the same bay line, a whole number of bays in.
+    expect(starts.size).toBe(1);
+    const u0 = Number([...starts][0]);
+    expect(u0 / FLOOR).toBeCloseTo(Math.round(u0 / FLOOR), 5);
+    const vs: number[] = [];
+    for (let v = g.start; v < g.start + g.count; v++) vs.push(uv.getY(v));
     // The vertical shift is a whole number of floors.
     const v0 = Math.min(...vs) * MODULE;
     expect(v0 / FLOOR).toBeCloseTo(Math.round(v0 / FLOOR), 5);
@@ -353,6 +364,28 @@ describe("landmarks", () => {
     expect(spire[spire.length - 1]).toBeLessThan(spire[0] * 0.1);
     const obelisk = profile(tower("obelisk"), 330, 50, 50).filter((w) => w > 0);
     expect(obelisk[obelisk.length - 1]).toBeLessThan(obelisk[0] * 0.1);
+  });
+
+  it("a church is a nave under a roof, with no facade above its eaves", () => {
+    // Sé cathedral: 4,800 m², 26 m tall. It was the footprint drawn in to a point, in
+    // the facade, windows and all.
+    const batch = tower("spire", 26);
+    const facade = ["residential", "office", "industrial", "storefront"] as const;
+    const walls = facade.flatMap((g) => verticesIn(batch, g));
+    expect(walls.length).toBeGreaterThan(0);
+    const eave = Math.max(...walls.map((v) => v[1]));
+    expect(eave).toBeLessThan(26 * 0.5);
+    // Walls stand upright on the footprint's edge.
+    for (const [x, , z] of walls) expect(Math.min(x, z, 100 - x, 100 - z)).toBeLessThan(1e-6);
+    // The roof rises from the eaves to a ridge well inside, in the roof tile.
+    const roof = verticesIn(batch, "roof");
+    expect(Math.min(...roof.map((v) => v[1]))).toBeCloseTo(eave, 5);
+    expect(Math.max(...roof.map((v) => v[1]))).toBeGreaterThan(eave + 3);
+    // A tall church carries a tower and a spire to its tagged height.
+    const steeple = verticesIn(tower("spire", 70), "roof");
+    expect(Math.max(...steeple.map((v) => v[1]))).toBeCloseTo(70, 5);
+    const near = steeple.filter((v) => v[1] > 60);
+    for (const [x, , z] of near) expect(Math.hypot(x - 50, z - 50)).toBeLessThan(8);
   });
 
   it("a tall, slim building tapers even without a landmark tag", () => {

@@ -635,6 +635,21 @@ export function stampTerrain(
   if (t.terrain) stampRelief(g, t.terrain, road);
 }
 
+/**
+ * Within three cells of a building's wall the ground is the site cut into the slope for it
+ * (`cutBuildingPads`): a bank, but never a cliff, or the cut could shut a door off the
+ * street it opens onto.
+ */
+function nearBuilding(g: NavGrid, x: number, y: number): boolean {
+  for (let dy = -3; dy <= 3; dy++)
+    for (let dx = -3; dx <= 3; dx++) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx >= 0 && ny >= 0 && nx < g.cols && ny < g.rows && g.kind[ny * g.cols + nx] === CellKind.Building) return true;
+    }
+  return false;
+}
+
 /** Side of a monument's pedestal, in metres. */
 export function pedestalSide(m: MonumentDef): number {
   return m.kind === "open-arms" ? Math.max(4, m.pedestal) : Math.max(1.6, (m.height + m.pedestal) * 0.28);
@@ -662,7 +677,8 @@ function stampRelief(g: NavGrid, terrain: TerrainDef, road: Uint8Array): void {
         worst = Math.max(worst, Math.abs(elev[ny * g.cols + nx] - elev[i]) / (DC[d] * g.cell));
       }
       steep[i] = worst;
-      if (worst > BALANCE.terrainCliffGrade && !road[i] && g.kind[i] === CellKind.Free) g.kind[i] = CellKind.Cliff;
+      if (worst > BALANCE.terrainCliffGrade && !road[i] && g.kind[i] === CellKind.Free && !nearBuilding(g, x, y))
+        g.kind[i] = CellKind.Cliff;
     }
   g.elev = elev;
   g.steep = steep;

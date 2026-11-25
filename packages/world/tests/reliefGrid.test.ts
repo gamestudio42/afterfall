@@ -33,8 +33,9 @@ describe("relief on the navigation grid", () => {
       if (g.kind[i] !== CellKind.Cliff) continue;
       cliffs++;
       const c = g.centerOf(i);
+      // On the ridge, or on the bank where a building's site is cut into its top.
       expect(c.x).toBeGreaterThan(296);
-      expect(c.x).toBeLessThan(314);
+      expect(c.x).toBeLessThan(320);
       expect(g.steep![i]).toBeGreaterThan(BALANCE.terrainCliffGrade);
     }
     expect(cliffs).toBeGreaterThan(50);

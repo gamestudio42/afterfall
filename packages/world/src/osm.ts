@@ -15,7 +15,7 @@ import {
   type Vec2,
 } from "@afterfall/shared";
 import type { BridgeDef, BuildingDef, CityMap, Landmark, MonumentDef, ParkDef, RailDef, RoadDef, WallDef, WaterDef } from "./city";
-import type { TerrainDef } from "./terrain";
+import { cutBuildingPads, padOutlines, type TerrainDef } from "./terrain";
 import { framePoint, latticeFrame } from "./landmarks";
 import { climateAt } from "./climate";
 import { CellKind, NavGrid, isWalkableKind, stampTerrain } from "./navgrid";
@@ -648,7 +648,8 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
     ...(rawBridges.length ? { bridges: rawBridges } : {}),
     ...(rawWalls.length ? { walls: rawWalls } : {}),
     ...(rawMonuments.length ? { monuments: rawMonuments } : {}),
-    ...(opts.terrain ? { terrain: opts.terrain } : {}),
+    // Each building's site is cut into the slope it stands on.
+    ...(opts.terrain ? { terrain: cutBuildingPads(opts.terrain, padOutlines(buildings), roads) } : {}),
     ...(climateAt(opts.lat, opts.lon) ? { climate: "arid" as const } : {}),
     spawnPoints,
     source: { kind: "osm", label: opts.label, lat: opts.lat, lon: opts.lon, size, attribution: OSM_ATTRIBUTION },

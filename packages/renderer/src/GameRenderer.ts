@@ -29,7 +29,7 @@ import { placeLitter, type LitterKind } from "./litter";
 import type { ReclamationField } from "./reclamation";
 import { Doors } from "./doors";
 import { buildContactShadows } from "./contact";
-import { SkyDome, buildOutskirts, disposeOutskirts, outskirtStreets, placeOutskirts, setOutskirtsArt, skyColors, skyInView } from "./sky";
+import { SkyDome, buildOutskirts, disposeOutskirts, placeOutskirts, setOutskirtsArt, skyColors, skyInView } from "./sky";
 import { Rain, WEATHER, easeWeather, weatherFor, type WeatherKind, type WeatherState } from "./weather";
 import { CharacterBatch, CharacterMotion } from "./characters";
 import { structureMaterial } from "./structureMaterial";
@@ -889,8 +889,6 @@ export class GameRenderer {
     }
     this.outskirts = buildOutskirts(
       placeOutskirts(city, city.seed ?? 1).map((b) => (city.terrain ? { ...b, y: heightAt(city.terrain, b.x, b.z) } : b)),
-      outskirtStreets(city),
-      (x, z) => heightAt(city.terrain, x, z),
     );
     setOutskirtsArt(this.outskirts, this.art);
     this.scene.add(this.outskirts);

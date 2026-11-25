@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { heightAt, type CityMap } from "@afterfall/world";
 import { pointInPolygon } from "@afterfall/shared";
 import { drape, groundGrid } from "./terrainMesh";
+import { OUTSKIRTS_FAR, outskirtStreets, type OutskirtStreet } from "./sky";
 import { buildMonuments } from "./monuments";
 import { buildReclamation, reclaimSurface, reclaimUniforms, reclamationTexture, type ReclamationField } from "./reclamation";
 import { bridgeGeometry, quayGeometry, shoreTexture, waterLevel, waterMaterial, WATER_DEPTH } from "./water";
@@ -12,6 +13,16 @@ function plane(x: number, z: number, w: number, d: number, y: number): THREE.Buf
   g.rotateX(-Math.PI / 2);
   g.translate(x + w / 2, y, z + d / 2);
   return g;
+}
+
+/**
+ * A street's centre line carried out of the map to the end of the outskirts, from a metre
+ * inside the edge so it joins the street on the map, in 10 m steps the relief can drape.
+ */
+function outwardPath(s: OutskirtStreet): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (let t = -1; t <= OUTSKIRTS_FAR + 40; t += 10) out.push({ x: s.x + s.dx * t, y: s.z + s.dz * t });
+  return out;
 }
 
 /** A flat strip along a center line, with round joints, for imported roads. */
@@ -273,6 +284,12 @@ export function buildCityGround(city: CityMap): {
   // The gap is deliberately generous — at five millimetres the two surfaces fought in the
   // depth buffer at distance and the ribbon striped through the asphalt (playtest video).
   for (const r of city.roads) if (r.path && !r.trail) blocks.push(...sidewalk(r.path, r.width ?? 8, SIDEWALK_WIDTH, 0.02));
+  // The streets that leave the map carry on out into the outskirts in the map's own
+  // asphalt and sidewalk: drawn apart, in a flat grey of their own, they read as a second,
+  // fake city (a playtest report: at the very least the street should be the same style).
+  const streetsOut = outskirtStreets(city);
+  const outward = streetsOut.map((s) => outwardPath(s));
+  outward.forEach((path, i) => blocks.push(...sidewalk(path, streetsOut[i].width, SIDEWALK_WIDTH, 0.02)));
   if (blocks.length) {
     const blockGeo = mergeGeometries(blocks.map((g) => (g.index ? g.toNonIndexed() : g)));
     worldUv(blockGeo, SIDEWALK_TILE);
@@ -301,6 +318,7 @@ export function buildCityGround(city: CityMap): {
   const roads = city.roads
     .filter((r) => !r.trail)
     .flatMap((r) => (r.path ? ribbon(r.path, r.width ?? 8, 0.03) : [plane(r.rect.x, r.rect.y, r.rect.w, r.rect.h, 0.03)]));
+  streetsOut.forEach((s, i) => roads.push(...ribbon(outward[i], s.width, 0.03)));
   // A site's footpaths, walked as streets where it has none: packed earth and worn stone,
   // with no kerb, no sidewalk and no asphalt.
   const trails = city.roads.filter((r) => r.trail && r.path).flatMap((r) => ribbon(r.path!, r.width ?? 3, 0.045));

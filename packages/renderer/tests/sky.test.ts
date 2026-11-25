@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { CityMap } from "@afterfall/world";
-import { OUTSKIRTS_FAR, OUTSKIRTS_NEAR, buildOutskirts, outskirtStreets, placeOutskirts, skyColors, skyInView } from "../src/sky";
+import {
+  OUTSKIRTS_FAR,
+  OUTSKIRTS_NEAR,
+  buildOutskirts,
+  outskirtStreets,
+  placeOutskirts,
+  skyColors,
+  skyInView,
+  streetGrain,
+} from "../src/sky";
 import { generateVariedCity } from "@afterfall/world";
 import { WEATHER, easeWeather, rainBox, weatherFor } from "../src/weather";
 
@@ -89,10 +98,13 @@ describe("outskirts", () => {
     expect(new Set(boxes.map((b) => b.style))).toEqual(new Set(["residential", "office", "industrial"]));
     expect(boxes.some((b) => b.top && !b.top.plant)).toBe(true);
     expect(boxes.some((b) => b.top?.plant)).toBe(true);
-    const group = buildOutskirts(boxes, outskirtStreets(map));
-    expect(group.children.map((c) => c.name).sort()).toEqual(
-      ["outskirts-industrial", "outskirts-office", "outskirts-plant", "outskirts-residential", "outskirts-streets"].sort(),
-    );
+    const group = buildOutskirts(boxes);
+    expect(group.children.map((c) => c.name).sort()).toEqual([
+      "outskirts-industrial",
+      "outskirts-office",
+      "outskirts-plant",
+      "outskirts-residential",
+    ]);
   });
 
   it("carries a varied city's slanted streets on out, with nothing standing on them", () => {
@@ -107,6 +119,22 @@ describe("outskirts", () => {
         const across = Math.abs((b.x - s.x) * s.dz - (b.z - s.z) * s.dx);
         expect(across).toBeGreaterThan(s.width / 2);
       }
+  });
+
+  it("lines its lots up with a turned city's streets, and keeps their corners off the map", () => {
+    const varied = generateVariedCity(1, { shape: "turned" });
+    const grain = streetGrain(varied);
+    expect(Math.abs(grain)).toBeGreaterThan(0.2);
+    const out = placeOutskirts(varied, 3);
+    expect(out.length).toBeGreaterThan(100);
+    for (const b of out) {
+      expect(b.yaw).toBeCloseTo(-grain);
+      const reach = Math.hypot(b.w, b.d) / 2;
+      expect(Math.hypot(Math.max(-b.x, b.x - varied.width, 0), Math.max(-b.z, b.z - varied.height, 0))).toBeGreaterThan(reach);
+    }
+    // Square to the map on the classic grid, as before.
+    expect(streetGrain(map)).toBeCloseTo(0);
+    expect(boxes.every((b) => b.yaw === undefined)).toBe(true);
   });
 
   it("is the same for the same seed and thins out with distance", () => {

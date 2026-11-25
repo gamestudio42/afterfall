@@ -41,7 +41,7 @@ export const ARID_GROWTH = 0.4;
 
 /** Texels per side at most; a generated city fits at one metre a texel. */
 const MAX_TEXELS = 512;
-/** Margin past the map edge, so the ground under the outskirts is covered too. */
+/** Margin past the map edge, so the ground just beyond it is covered too. */
 const MARGIN = 24;
 
 export function hash2(ix: number, iz: number, seed: number): number {
@@ -328,18 +328,26 @@ float rcNoise(vec2 p) {
  * pavements: dark humus, moss, and the straw of grass that dried in place.
  */
 const BODY: Record<ReclaimKind, string> = {
-  sidewalk: `float rcDirtK = 1.0; float rcGreenK = 1.0; float rcSlabs = 1.0; float rcWearK = 1.0;`,
-  road: `float rcDirtK = 0.4; float rcGreenK = 0.9; float rcSlabs = 0.0; float rcWearK = 0.6;`,
-  ground: `float rcDirtK = 1.0; float rcGreenK = 1.0; float rcSlabs = 0.0; float rcWearK = 0.5;`,
-  curb: `float rcDirtK = 0.8; float rcGreenK = 0.55; float rcSlabs = 0.0; float rcWearK = 1.0;`,
-  park: `float rcDirtK = 0.0; float rcGreenK = 0.0; float rcSlabs = 0.0; float rcWearK = 0.0;`,
+  sidewalk: `float rcDirtK = 1.0; float rcGreenK = 1.0; float rcSlabs = 1.0; float rcWearK = 1.0; float rcWild = 0.3;`,
+  road: `float rcDirtK = 0.4; float rcGreenK = 0.9; float rcSlabs = 0.0; float rcWearK = 0.6; float rcWild = 0.28;`,
+  ground: `float rcDirtK = 1.0; float rcGreenK = 1.0; float rcSlabs = 0.0; float rcWearK = 0.5; float rcWild = 0.5;`,
+  curb: `float rcDirtK = 0.8; float rcGreenK = 0.55; float rcSlabs = 0.0; float rcWearK = 1.0; float rcWild = 0.3;`,
+  park: `float rcDirtK = 0.0; float rcGreenK = 0.0; float rcSlabs = 0.0; float rcWearK = 0.0; float rcWild = 0.5;`,
 };
 
 const FRAGMENT = (kind: ReclaimKind) => /* glsl */ `
 {
   ${BODY[kind]}
   vec2 rcP = vReclaimPos.xz;
-  vec4 rc = texture2D(uReclaim, (rcP - uReclaimRect.xy) * uReclaimRect.zw);
+  vec2 rcUv = (rcP - uReclaimRect.xy) * uReclaimRect.zw;
+  vec4 rc = texture2D(uReclaim, rcUv);
+  // Past the field's edge the texture would repeat its last texels outward in straight
+  // stripes: there the ground is wild land instead, growth varying over a few hundred
+  // metres. The streets carried on out of the map stay streets, worn as the map's are:
+  // taken by the same wild growth they read as strips of bare earth (a playtest report).
+  float rcOut = length(max(max(-rcUv, rcUv - 1.0), 0.0) / uReclaimRect.zw);
+  float rcVary = (rcNoise(rcP * 0.012) - 0.5) * 2.0;
+  rc = mix(rc, vec4(rcWild + rcVary * (rcWild > 0.4 ? 0.3 : 0.08), 0.7, 0.0, 1.0), smoothstep(0.0, 30.0, rcOut));
   float rcGrain = rcNoise(rcP * 0.85) * 0.6 + rcNoise(rcP * 3.3) * 0.4;
   float rcField = rc.r + (rcGrain - 0.5) * 0.38;
   // Regional wear: one stretch of paving greyer and dirtier than the next.

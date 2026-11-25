@@ -45,7 +45,31 @@ export const SOUNDS: Record<string, SoundSpec> = {
   dawn: { file: "alert_dawn.wav", gain: 0.7, maxVoices: 1, minGapMs: 2000, detune: 0 },
   defeat: { file: "death.wav", gain: 0.9, maxVoices: 1, minGapMs: 3000, detune: 0 },
   ui: { file: "ui_click.wav", gain: 0.5, maxVoices: 2, minGapMs: 40, detune: 0 },
+  // The city's wildlife (synth.ts): made when the director starts, not loaded from a file.
+  chirp: { file: "synth:chirp", gain: 0.3, maxVoices: 4, minGapMs: 140, detune: 300 },
+  caw: { file: "synth:caw", gain: 0.42, maxVoices: 2, minGapMs: 500, detune: 120 },
+  flutter: { file: "synth:flutter", gain: 0.45, maxVoices: 3, minGapMs: 250, detune: 200 },
+  bark: { file: "synth:bark", gain: 0.55, maxVoices: 2, minGapMs: 350, detune: 150 },
+  squeak: { file: "synth:squeak", gain: 0.22, maxVoices: 2, minGapMs: 400, detune: 250 },
 };
+
+/**
+ * Looping beds the soundscape mixes under everything, each at its own ceiling: crickets at
+ * night, frogs near water at night, the wind, the rain (synth.ts).
+ */
+export const BEDS: Record<"crickets" | "frogs" | "wind" | "rain", { gain: number }> = {
+  crickets: { gain: 0.16 },
+  frogs: { gain: 0.22 },
+  wind: { gain: 0.28 },
+  rain: { gain: 0.45 },
+};
+
+export type SoundscapeLevels = Partial<Record<keyof typeof BEDS, number>>;
+
+/** Whether a sound is made by the synthesizer rather than loaded. */
+export function isSynth(file: string): boolean {
+  return file.startsWith("synth:");
+}
 
 const FX_SOUND: Record<string, string> = {
   shot: "shot",

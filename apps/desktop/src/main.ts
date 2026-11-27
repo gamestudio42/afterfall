@@ -1,11 +1,13 @@
 import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { smokeReady, type SmokeProbe } from "./smoke.js";
 
 /**
  * Desktop shell: serves the built web game from `app://game/` in a sandboxed window with a minimal
  * preload. The fixed origin keeps saves and settings in place across versions; everything works
- * offline except an explicit real-map download. `--smoke` starts a generated city and reports on stdout.
+ * offline except an explicit real-map download. The packaged copy has no GoatCounter tag.
+ * `--smoke` starts a generated city and reports on stdout.
  * It does not touch `window.__afterfall`: that hook stays out of production builds.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -108,7 +110,7 @@ const clickWhenReady = (win: BrowserWindow, testId: string): Promise<boolean | n
     `(() => { const b = document.querySelector('[data-testid="${testId}"]'); if (!b) return false; b.click(); return true; })()`,
   );
 
-/** `--smoke`: hidden window, starts a generated city, checks the shell, storage and the desktop bridge. */
+/** `--smoke`: hidden window, starts a generated city, checks the shell, storage, the quit bridge and that analytics is absent. */
 async function runSmoke(win: BrowserWindow): Promise<void> {
   const errors: string[] = [];
   win.webContents.on("console-message", (event) => {
@@ -119,12 +121,12 @@ async function runSmoke(win: BrowserWindow): Promise<void> {
     (await clickWhenReady(win, "new-game")) &&
     (await clickWhenReady(win, "start")) &&
     (await until(win, "!!document.querySelector('[data-testid=\"topbar\"]')"));
-  const result = await win.webContents
+  const result = (await win.webContents
     .executeJavaScript(
-      `({ href: location.href, storage: (localStorage.setItem('afterfall:smoke', '1'), localStorage.getItem('afterfall:smoke') === '1'), desktop: !!window.afterfallDesktop, screen: document.querySelector('[data-testid="topbar"]') ? 'game' : 'menu' })`,
+      `({ href: location.href, storage: (localStorage.setItem('afterfall:smoke', '1'), localStorage.getItem('afterfall:smoke') === '1'), desktop: !!window.afterfallDesktop, screen: document.querySelector('[data-testid="topbar"]') ? 'game' : 'menu', analytics: !!document.querySelector('script[data-goatcounter],script[src*="gc.zgo.at"]') })`,
     )
-    .catch(() => null);
-  const ready = !!started && !!result?.storage && !!result?.desktop && result?.screen === "game" && !errors.length;
+    .catch(() => null)) as SmokeProbe | null;
+  const ready = smokeReady(!!started, result, errors);
   console.log(`SMOKE ${JSON.stringify({ ready, errors, ...result })}`);
   app.exit(ready ? 0 : 1);
 }

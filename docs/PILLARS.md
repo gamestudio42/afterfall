@@ -76,7 +76,7 @@ the thing being moved.
 | Walls, gates, towers and gunfire noise | 2, 3 | Build / hold |
 | Beds, food, water, medicine, morale and skills | 4 | Dawn / hold |
 | Refugees, trader, radio cache, storm and accident | 4 | Day / dawn |
-| OpenStreetMap places and real footprints | 1 | Choose |
+| OpenStreetMap places, 400 to 800 m (480 m default), and real footprints | 1 | Choose |
 | Dawn autosave, the ledger and the twenty-night campaign | 4 | Count |
 | Research, the laboratory and the cure | 1, 4 | Choose / build / count |
 

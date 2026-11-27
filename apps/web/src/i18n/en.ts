@@ -113,6 +113,7 @@ export const en: Record<string, string> = {
   "osm.searchFailed": "Search failed. Check your connection and try again.",
   "osm.selected": "Place",
   "osm.area": "Area",
+  "osm.areaSlow": "A larger area takes longer to download.",
   "osm.downloadFailed": "Could not download the map. Try again or pick another place.",
   "osm.step.map": "Streets and buildings",
   "osm.step.water": "Water, bridges, walls and monuments",

@@ -37,9 +37,9 @@ export type Layout = "grid" | "river";
 const RELIEF_CELL = 4;
 const CELL = 2;
 /**
- * The sizes a player can ask for: about how many metres the map runs across. The biggest
- * real place loads at 600 m; 800 m is a generated city's own, about 3.5 times the area of
- * the 420 by 352 m classic grid.
+ * The sizes a player can ask for: about how many metres the map runs across. A real place
+ * loads at up to 800 m too; a huge generated city is about 3.5 times the area of the
+ * 420 by 352 m classic grid.
  */
 export const CITY_SIZES = { small: 350, medium: 450, large: 600, huge: 800 } as const;
 export type CitySize = keyof typeof CITY_SIZES;

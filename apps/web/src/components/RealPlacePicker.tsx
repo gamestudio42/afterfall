@@ -1,7 +1,16 @@
 import { OsmImportError, type CityMap } from "@afterfall/world";
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../app/hooks";
-import { AREA_SIZES, LOAD_STEPS, PLACE_PRESETS, loadPlaceMap, searchPlaces, type LoadProgress, type Place } from "../app/osm";
+import {
+  AREA_SIZES,
+  DEFAULT_AREA_SIZE,
+  LOAD_STEPS,
+  PLACE_PRESETS,
+  loadPlaceMap,
+  searchPlaces,
+  type LoadProgress,
+  type Place,
+} from "../app/osm";
 import { useUi } from "../app/store";
 
 type Status = { kind: "idle" } | { kind: "busy"; key: string } | { kind: "loading" } | { kind: "error"; key: string };
@@ -20,7 +29,7 @@ export function RealPlacePicker({ onStart }: { onStart: (map: CityMap) => void }
   const t = useT();
   const lang = useUi((s) => s.lang);
   const [place, setPlace] = useState<Place>(PLACE_PRESETS[0]);
-  const [size, setSize] = useState(AREA_SIZES[1]);
+  const [size, setSize] = useState(DEFAULT_AREA_SIZE);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Place[] | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -141,11 +150,22 @@ export function RealPlacePicker({ onStart }: { onStart: (map: CityMap) => void }
       <div className="row">
         <span className="muted">{t("osm.area")}</span>
         {AREA_SIZES.map((s) => (
-          <button key={s} className={s === size ? "chip active" : "chip"} onClick={() => setSize(s)} disabled={busy}>
+          <button
+            key={s}
+            className={s === size ? "chip active" : "chip"}
+            onClick={() => setSize(s)}
+            disabled={busy}
+            data-testid={`area-${s}`}
+          >
             {s} m
           </button>
         ))}
       </div>
+      {size > 600 && (
+        <p className="muted small" data-testid="area-slow">
+          {t("osm.areaSlow")}
+        </p>
+      )}
       {(loading || (status.kind === "error" && Object.keys(steps).length > 0)) && (
         <ol className="load-steps" data-testid="load-steps" aria-live="polite">
           {STEPS.map((step) => {

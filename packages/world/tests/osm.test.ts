@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { pointInPolygon, polygonCentroid } from "@afterfall/shared";
-import { CellKind, MIN_BUILDINGS, NavGrid, OsmImportError, cityFromOverpass, overpassQuery } from "../src";
+import {
+  CellKind,
+  MIN_BUILDINGS,
+  NavGrid,
+  OsmImportError,
+  buildTerrain,
+  buildingCap,
+  cityFromOverpass,
+  overpassQuery,
+  overpassTerrainQuery,
+  overpassTimeout,
+} from "../src";
 import { FIXTURE_CENTER, syntheticOverpass } from "./fixtures/osm";
 
 const opts = { ...FIXTURE_CENTER, size: 480, label: "Test" };
@@ -459,5 +470,109 @@ describe("a building with a courtyard", () => {
     // And the ring around it is solid.
     const wall = { x: block.footprint![0].x + 1, y: block.footprint![0].y + 1 };
     expect(g.kind[g.index(Math.floor(wall.x / g.cell), Math.floor(wall.y / g.cell))]).toBe(CellKind.Building);
+  });
+});
+
+/** South, west, north, east of the first bbox in an Overpass query. */
+function firstBox(query: string): [number, number, number, number] {
+  const m = query.match(/\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)/);
+  if (!m) throw new Error(query);
+  return [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])];
+}
+
+/**
+ * A tight grid of houses around the fixture centre, all inside a 600 m square, so the
+ * building cap is the only reason a 600 m import would keep fewer than an 800 m one.
+ */
+function denseOverpass() {
+  const { lat, lon } = FIXTURE_CENTER;
+  const kLon = 111_320 * Math.cos((lat * Math.PI) / 180);
+  const geo = (x: number, y: number) => ({ lat: lat - y / 111_132, lon: lon + x / kLon });
+  const elements: { type: "way"; id: number; tags: Record<string, string>; geometry: { lat: number; lon: number }[] }[] = [];
+  let id = 1;
+  const way = (pts: [number, number][], tags: Record<string, string>, closed = false) => {
+    const g = pts.map(([x, y]) => geo(x, y));
+    if (closed) g.push({ ...g[0] });
+    elements.push({ type: "way", id: id++, tags, geometry: g });
+  };
+  const n = 29;
+  const step = 20;
+  const origin = -((n * step) / 2);
+  const far = origin + n * step;
+  for (let i = 0; i <= n; i++) {
+    const v = origin + i * step;
+    way(
+      [
+        [origin, v],
+        [far, v],
+      ],
+      { highway: "residential" },
+    );
+    way(
+      [
+        [v, origin],
+        [v, far],
+      ],
+      { highway: "residential" },
+    );
+  }
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++) {
+      const x = origin + i * step + 6;
+      const y = origin + j * step + 6;
+      way(
+        [
+          [x, y],
+          [x + 8, y],
+          [x + 8, y + 8],
+          [x, y + 8],
+        ],
+        { building: "house" },
+        true,
+      );
+    }
+  return { elements };
+}
+
+describe("an 800 m real place", () => {
+  it("keeps the 40 s timeout and the 700 building cap through 600 m, then grows both", () => {
+    expect(overpassTimeout(400)).toBe(40);
+    expect(overpassTimeout(480)).toBe(40);
+    expect(overpassTimeout(600)).toBe(40);
+    expect(overpassTimeout(800)).toBe(71);
+    expect(buildingCap(400)).toBe(700);
+    expect(buildingCap(600)).toBe(700);
+    expect(buildingCap(800)).toBe(1244);
+    for (const size of [400, 600, 800]) {
+      const q = overpassQuery(FIXTURE_CENTER.lat, FIXTURE_CENTER.lon, size);
+      expect(q).toContain(`[timeout:${overpassTimeout(size)}]`);
+      expect(overpassTerrainQuery(FIXTURE_CENTER.lat, FIXTURE_CENTER.lon, size)).toContain(`[timeout:${overpassTimeout(size)}]`);
+    }
+    const small = firstBox(overpassQuery(FIXTURE_CENTER.lat, FIXTURE_CENTER.lon, 600));
+    const large = firstBox(overpassQuery(FIXTURE_CENTER.lat, FIXTURE_CENTER.lon, 800));
+    expect(large[2] - large[0]).toBeGreaterThan(small[2] - small[0]);
+    expect(large[3] - large[1]).toBeGreaterThan(small[3] - small[1]);
+  });
+
+  it("samples relief every 4 m across the whole 800 m square", () => {
+    const relief = buildTerrain({ lat: 0, lon: 0 }, 800, (lat) => lat * 1e6);
+    expect(relief).not.toBeNull();
+    expect(relief!.cell).toBe(4);
+    expect(relief!.cols).toBe(201);
+    expect(relief!.rows).toBe(201);
+    expect(relief!.heights).toHaveLength(201 * 201);
+  });
+
+  it("imports an 800 m map and keeps more of a dense centre than the 600 m cap", () => {
+    const data = denseOverpass();
+    const at600 = cityFromOverpass(data, { ...FIXTURE_CENTER, size: 600, label: "Dense" });
+    const at800 = cityFromOverpass(data, { ...FIXTURE_CENTER, size: 800, label: "Dense" });
+    expect(at600.width).toBe(600);
+    expect(at800.width).toBe(800);
+    expect(at800.height).toBe(800);
+    expect(at600.buildings.length).toBeLessThanOrEqual(700);
+    expect(at800.buildings.length).toBeLessThanOrEqual(buildingCap(800));
+    expect(at800.buildings.length).toBeGreaterThan(700);
+    expect(at800.buildings.length).toBeGreaterThan(at600.buildings.length);
   });
 });

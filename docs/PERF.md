@@ -122,8 +122,8 @@ Measured after the fix, one renderer per page load, eighteen blocks by eighteen:
 | --- | --- | --- | --- | --- |
 | 1,553 | 845 ms | 19 | 132,884 | 4.8 ms |
 
-That is a 1.2 km square with more buildings than any imported map the game accepts (the
-importer stays under a 600 m square). The renderer still batches everything into 19 draw
+That is a 1.2 km square with more buildings than any imported map the game accepts (an
+imported area is at most 800 m, and its building cap stays under this 1,553). The renderer still batches everything into 19 draw
 calls and 133k triangles, and the frame time does not move between six blocks and eighteen.
 
 **So chunk streaming and level of detail are deferred, on measurement rather than on

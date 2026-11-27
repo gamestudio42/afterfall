@@ -27,7 +27,10 @@ export const PLACE_PRESETS: Place[] = [
   { label: "Tokyo · Shibuya", lat: 35.6595, lon: 139.7005 },
 ];
 
-export const AREA_SIZES = [400, 480, 600];
+/** Sides offered for a real place, in metres. 800 is opt-in: it covers more city and loads slower. */
+export const AREA_SIZES = [400, 480, 600, 800];
+/** The size selected when the picker opens. 480 m has been the default since the list was three sizes. */
+export const DEFAULT_AREA_SIZE = 480;
 
 /**
  * Public Overpass servers, tried in order. The main one answers 502 when it is busy, and
@@ -40,12 +43,27 @@ const OVERPASS = [
   "https://overpass.private.coffee/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
 ];
-/**
- * How long one server gets before the next is asked. A server that hangs (kumi.systems and
- * private.coffee took over a minute without a byte) must not hold the whole queue.
- */
-const SERVER_TIMEOUT_MS = 45_000;
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
+
+/**
+ * IndexedDB key for one downloaded layer. The side in metres is part of it, so an 800 m
+ * area never reuses a 600 m answer.
+ */
+export function placeCacheKey(lat: number, lon: number, size: number, prefix = ""): string {
+  return `${prefix}${lat.toFixed(4)},${lon.toFixed(4)},${size}`;
+}
+
+/**
+ * How long one Overpass server gets before the next is asked: five seconds past the
+ * query's own `[timeout]`, so a timeout page still arrives. A server that hangs
+ * (kumi.systems and private.coffee took over a minute without a byte) must not hold the
+ * queue past that. An 800 m query asks for longer than a 600 m one.
+ */
+export function serverTimeoutMs(query: string): number {
+  const match = /\[timeout:(\d+)\]/.exec(query);
+  const seconds = match ? Number(match[1]) : 40;
+  return (seconds + 5) * 1000;
+}
 
 /** Finds places by name (OpenStreetMap Nominatim). Call only on an explicit search. */
 export async function searchPlaces(query: string, lang: string, signal?: AbortSignal): Promise<Place[]> {
@@ -83,7 +101,7 @@ const host = (url: string) => new URL(url).host;
  * step: which server is being asked, a retry, a step served from the cache.
  */
 export async function loadPlaceMap(place: Place, size: number, signal?: AbortSignal, onProgress: OnProgress = () => {}): Promise<CityMap> {
-  const key = `${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
+  const key = placeCacheKey(place.lat, place.lon, size);
   let data = await cacheGet(key);
   if (data) onProgress({ step: "map", state: "cached" });
   else {
@@ -138,7 +156,7 @@ async function loadRelief(place: Place, size: number, signal: AbortSignal | unde
     onProgress({ step: "relief", state: "skipped" });
     return null;
   }
-  const key = `relief:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
+  const key = placeCacheKey(place.lat, place.lon, size, "relief:");
   const cached = (await cacheGet(key)) as unknown as { terrain: TerrainDef | null } | null;
   if (cached) {
     onProgress({ step: "relief", state: "cached" });
@@ -169,7 +187,7 @@ async function loadTerrain(
   // The version goes up whenever the request asks for more: "terrain2" added bridge decks,
   // "terrain3" city walls, "terrain4" statues and monuments. An answer cached before that
   // would keep a place without them.
-  const key = `terrain4:${place.lat.toFixed(4)},${place.lon.toFixed(4)},${size}`;
+  const key = placeCacheKey(place.lat, place.lon, size, "terrain4:");
   const cached = await cacheGet(key);
   if (cached) {
     onProgress({ step: "water", state: "cached" });
@@ -221,7 +239,7 @@ async function fetchRound(
   for (const [k, url] of servers.entries()) {
     asking(url, k);
     try {
-      const timeout = AbortSignal.timeout(SERVER_TIMEOUT_MS);
+      const timeout = AbortSignal.timeout(serverTimeoutMs(query));
       const res = await fetch(url, {
         method: "POST",
         body: new URLSearchParams({ data: query }),

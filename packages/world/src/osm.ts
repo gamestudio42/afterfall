@@ -175,10 +175,33 @@ function insideFraction(poly: Vec2[], other: Vec2[]): number {
   return total > 0 ? inside / total : 0;
 }
 
+/**
+ * Seconds a public Overpass server may spend on one query.
+ *
+ * 40 s covers every size up to 600 m. An 800 m square is about 1.8 times that area, so a
+ * dense centre is given longer; 90 s is as long as one server may hold the fallback queue.
+ */
+export function overpassTimeout(size: number): number {
+  if (size <= 600) return 40;
+  return Math.min(90, Math.round(40 * (size / 600) ** 2));
+}
+
+/**
+ * Buildings kept, nearest the centre first.
+ *
+ * 700 is the cap a 600 m square was tuned with. Past that it grows with the area and stops
+ * at 1,500, under the 1,553 buildings a map was measured at, so an 800 m centre keeps its
+ * edges instead of emptying them.
+ */
+export function buildingCap(size: number): number {
+  if (size <= 600) return 700;
+  return Math.min(1500, Math.round(700 * (size / 600) ** 2));
+}
+
 export function overpassQuery(lat: number, lon: number, size: number): string {
   const b = bbox(lat, lon, size / 2 + 40);
   const box = `${b.south.toFixed(6)},${b.west.toFixed(6)},${b.north.toFixed(6)},${b.east.toFixed(6)}`;
-  return `[out:json][timeout:40];
+  return `[out:json][timeout:${overpassTimeout(size)}];
 (
   way["building"](${box});
   relation["building"](${box});
@@ -203,7 +226,7 @@ out geom;`;
 export function overpassTerrainQuery(lat: number, lon: number, size: number): string {
   const b = bbox(lat, lon, size / 2 + 40);
   const box = `${b.south.toFixed(6)},${b.west.toFixed(6)},${b.north.toFixed(6)},${b.east.toFixed(6)}`;
-  return `[out:json][timeout:40];
+  return `[out:json][timeout:${overpassTimeout(size)}];
 (
   way["natural"="water"](${box});
   relation["natural"="water"](${box});
@@ -540,13 +563,14 @@ export function cityFromOverpass(data: OverpassResponse, opts: OsmMapOptions): C
   rawBuildings.length = 0;
   rawBuildings.push(...onStreet);
 
-  // Nearest to the center first, so a cap keeps the heart of the area.
+  // Nearest to the center first, so a cap keeps the heart of the area. Past 600 m the cap
+  // grows with the area, or an 800 m centre would lose the blocks at its edge.
   rawBuildings.sort(
     (a, b) =>
       Math.hypot(a.centroid.x - size / 2, a.centroid.y - size / 2) - Math.hypot(b.centroid.x - size / 2, b.centroid.y - size / 2) ||
       a.osmId - b.osmId,
   );
-  rawBuildings.splice(opts.maxBuildings ?? 700);
+  rawBuildings.splice(opts.maxBuildings ?? buildingCap(size));
 
   const roads: RoadDef[] = rawRoads.map((r, i) => {
     const b = polygonBounds(r.line);

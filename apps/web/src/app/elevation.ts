@@ -3,7 +3,7 @@ import { buildTerrain, decodeTerrarium, mapToLatLon, tileXY, type TerrainDef } f
 /**
  * Open elevation tiles (AWS Terrain Tiles, Terrarium encoding): public, no key, served
  * with CORS, about 4.5 m a pixel at zoom 15 and 50 KB a tile. A 480 m area needs two to
- * four of them.
+ * four of them. An 800 m area at a high latitude can touch a 5×5 block, which is the cap.
  */
 const TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium";
 const ZOOM = 15;
@@ -40,7 +40,9 @@ export async function fetchTerrain(
   const x1 = Math.floor(Math.max(corners[0].x, corners[1].x) + pad);
   const y0 = Math.floor(Math.min(corners[0].y, corners[1].y) - pad);
   const y1 = Math.floor(Math.max(corners[0].y, corners[1].y) + pad);
-  if ((x1 - x0 + 1) * (y1 - y0 + 1) > 16) return null;
+  // Above this the request is treated as a bug and the map stays flat. 25 covers an 800 m
+  // square at a high latitude (5×5 zoom-15 tiles); 16 was enough only through 600 m.
+  if ((x1 - x0 + 1) * (y1 - y0 + 1) > 25) return null;
   const tiles = new Map<string, Uint8ClampedArray>();
   const total = (x1 - x0 + 1) * (y1 - y0 + 1);
   onTile(0, total);

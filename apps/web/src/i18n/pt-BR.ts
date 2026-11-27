@@ -118,6 +118,7 @@ export const ptBR: Record<string, string> = {
   "osm.searchFailed": "A busca falhou. Verifique a conexão e tente de novo.",
   "osm.selected": "Lugar",
   "osm.area": "Área",
+  "osm.areaSlow": "Uma área maior demora mais para baixar.",
   "osm.downloadFailed": "Não foi possível baixar o mapa. Tente de novo ou escolha outro lugar.",
   "osm.step.map": "Ruas e prédios",
   "osm.step.water": "Água, pontes, muralhas e monumentos",

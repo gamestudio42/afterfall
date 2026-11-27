@@ -94,7 +94,7 @@ See the [roadmap](docs/ROADMAP.md).
 Open **[gamestudio42.github.io/afterfall](https://gamestudio42.github.io/afterfall/)** and choose
 **Novo jogo**. **Cidade gerada** builds a procedural city from a seed; **Lugar real** lets you pick a
 shortcut (São Paulo, Rio, Porto Alegre, Curitiba, Lisbon, New York, London, Tokyo) or search an
-address, then turns that area's streets and buildings into the map. Buildings keep their real shapes,
+address, choose an area of 400, 480, 600 or 800 m (480 m is the default; 800 m takes longer to download), then turns that area's streets and buildings into the map. Buildings keep their real shapes,
 and hospitals, police stations, schools, supermarkets and shops come from the map data.
 The interface is in Portuguese by default; English is on the main menu.
 
